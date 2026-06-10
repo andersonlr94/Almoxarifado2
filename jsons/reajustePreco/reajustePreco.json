@@ -1,0 +1,22 @@
+[
+  {
+    "Fornecedor": "SMX",
+    "Kardex": "111",
+    "Item": "agulhla",
+    "Descrição": "cc",
+    "Preço antigo": "8",
+    "Data pedido reajuste": "12/04/2026",
+    "Status": "Pendente",
+    "Observação": ""
+  },
+  {
+    "Fornecedor": "SMX",
+    "Kardex": "sdf",
+    "Item": "sdf",
+    "Descrição": "f",
+    "Preço antigo": "f",
+    "Data pedido reajuste": "12/04/2026",
+    "Status": "Pendente",
+    "Observação": ""
+  }
+]
