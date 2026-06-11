@@ -178,6 +178,14 @@ class ItensZeroPage(QWidget):
 
         card_layout.addLayout(linha_top)
 
+        info_linha = QHBoxLayout()
+        info_linha.setSpacing(16)
+        info_linha.addStretch()
+        self.label_contador = QLabel("0 itens")
+        self.label_contador.setObjectName("statusLabel")
+        info_linha.addWidget(self.label_contador)
+        card_layout.addLayout(info_linha)
+
         self.tabela = TabelaReordenavel(0, len(self.COLUNAS))
         self.tabela.setHorizontalHeaderLabels(self.COLUNAS)
         header = self.tabela.horizontalHeader()
@@ -195,7 +203,8 @@ class ItensZeroPage(QWidget):
         header.resizeSection(4, 80)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(5, 80)
-        self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
+        self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.tabela.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
         self.tabela.setAlternatingRowColors(False)
         self.tabela.verticalHeader().setDefaultSectionSize(36)
@@ -232,6 +241,7 @@ class ItensZeroPage(QWidget):
                     cell.setData(Qt.BackgroundRole, QBrush(QColor(cor_hex)))
                 self.tabela.setItem(row, col, cell)
         self.tabela.blockSignals(False)
+        self._atualizar_contador()
 
     def _aplicar_cor(self, nome_cor):
         selection_model = self.tabela.selectionModel()
@@ -266,6 +276,11 @@ class ItensZeroPage(QWidget):
         self._salvar_json()
         self._popular_tabela()
         self.tabela.selectRow(nova_row)
+        self._atualizar_contador()
+
+    def _atualizar_contador(self):
+        total = self.tabela.rowCount()
+        self.label_contador.setText(f"{total} itens")
 
     def _sincronizar_ordem(self, origem, destino):
         if origem == destino:

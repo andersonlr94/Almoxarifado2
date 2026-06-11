@@ -4,12 +4,15 @@ from datetime import datetime
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
+    QPushButton, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QStyledItemDelegate, QStyleOptionViewItem,
     QStyle,
 )
-from PySide6.QtCore import Qt, QSize, QRect, Signal
-from PySide6.QtGui import QPainter, QMouseEvent
+from PySide6.QtCore import Qt, QSize, QSizeF, QRect, Signal
+from PySide6.QtGui import QPainter, QMouseEvent, QTextDocument, QPageSize
+from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
+from PySide6.QtWidgets import QMessageBox
+import socket
 
 
 class EditorDelegate(QStyledItemDelegate):
@@ -124,6 +127,36 @@ def _buscar_item_por_codigo(codigo):
     return None
 
 
+def _buscar_item_por_kardex(kardex):
+    try:
+        with open(_caminho_itens(), "r", encoding="utf-8") as f:
+            itens = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+    chaves_kardex = ["kardex", "Kardex", "KARDEX"]
+
+    def _extrair(item):
+        if not isinstance(item, dict):
+            return None
+        valor = _chave_flexivel(item, *chaves_kardex)
+        if valor and valor == kardex:
+            return item
+        return None
+
+    if isinstance(itens, list):
+        for item in itens:
+            resultado = _extrair(item)
+            if resultado:
+                return resultado
+    elif isinstance(itens, dict):
+        for item in itens.values():
+            resultado = _extrair(item)
+            if resultado:
+                return resultado
+    return None
+
+
 class ProgramacaoAgulhasPage(QWidget):
     def __init__(self):
         super().__init__()
@@ -137,6 +170,13 @@ class ProgramacaoAgulhasPage(QWidget):
         }
         self._setup_ui()
         self._carregar_dados()
+
+    def _lista_impressoras(self):
+        try:
+            disponiveis = QPrinterInfo.availablePrinters()
+            return [printer.printerName() for printer in disponiveis]
+        except Exception:
+            return []
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -225,9 +265,24 @@ class ProgramacaoAgulhasPage(QWidget):
         self.btn_entregar.setObjectName("btnPrimary")
         self.btn_entregar.setFixedHeight(30)
         self.btn_entregar.clicked.connect(self._entregar)
+
+        self.combo_impressoras = QComboBox()
+        self.combo_impressoras.setFixedHeight(30)
+        self.combo_impressoras.setFixedWidth(220)
+        self.combo_impressoras.setToolTip("Selecione a impressora Zebra para impressão")
+        self.combo_impressoras.setVisible(False)
+
+        self.btn_imprimir = QPushButton("Imprimir")
+        self.btn_imprimir.setObjectName("btnPrimary")
+        self.btn_imprimir.setFixedHeight(30)
+        self.btn_imprimir.clicked.connect(self._imprimir_zebra)
+        self.btn_imprimir.setVisible(False)
+
         linha_top.addWidget(self.btn_mover_programado)
         linha_top.addWidget(self.btn_mover_separando)
         linha_top.addWidget(self.btn_entregar)
+        linha_top.addWidget(self.combo_impressoras)
+        linha_top.addWidget(self.btn_imprimir)
 
         card_layout.addLayout(linha_top)
 
@@ -278,6 +333,7 @@ class ProgramacaoAgulhasPage(QWidget):
         self.tabela.cellClicked.connect(self._linha_clicada)
         card_layout.addWidget(self.tabela)
 
+        self._preencher_impressoras()
         layout.addWidget(card)
 
     def _carregar_dados(self):
@@ -340,6 +396,8 @@ class ProgramacaoAgulhasPage(QWidget):
         self.btn_mover_programado.setVisible(False)
         self.btn_mover_separando.setVisible(False)
         self.btn_entregar.setVisible(False)
+        self.combo_impressoras.setVisible(False)
+        self.btn_imprimir.setVisible(False)
         if self.filtro_status == "Pendentes":
             self.btn_mover_programado.setVisible(True)
             self.btn_mover_separando.setVisible(True)
@@ -347,6 +405,8 @@ class ProgramacaoAgulhasPage(QWidget):
             self.btn_mover_separando.setVisible(True)
         elif self.filtro_status == "Separando":
             self.btn_entregar.setVisible(True)
+            self.combo_impressoras.setVisible(True)
+            self.btn_imprimir.setVisible(True)
 
     def _atualizar_contador(self):
         total = self.tabela.rowCount()
@@ -514,6 +574,95 @@ class ProgramacaoAgulhasPage(QWidget):
             self.tabela.horizontalHeader().setState(True, True)
         else:
             self.tabela.horizontalHeader().setState(False, False)
+
+    def _preencher_impressoras(self):
+        self.combo_impressoras.clear()
+        impressoras = self._lista_impressoras()
+        if impressoras:
+            self.combo_impressoras.addItems(impressoras)
+        else:
+            self.combo_impressoras.addItem("Nenhuma impressora encontrada")
+            self.combo_impressoras.setEnabled(False)
+
+    def _imprimir_zebra(self):
+        impressora = self.combo_impressoras.currentText().strip()
+        if not impressora or impressora == "Nenhuma impressora encontrada":
+            return
+        # Helper: convert millimeters to printer dots (assuming 203 dpi)
+        def mm_to_dots(mm, dpi=203):
+            return int(mm * dpi / 25.4)
+
+        zpl_jobs = []
+        for row in range(self.tabela.rowCount()):
+            chk = self.tabela.item(row, 0)
+            if chk and chk.checkState() == Qt.CheckState.Checked:
+                pedido = self.tabela.item(row, 1).text() if self.tabela.item(row, 1) else ""
+                kardex = self.tabela.item(row, 2).text() if self.tabela.item(row, 2) else ""
+                codigo = self.tabela.item(row, 3).text() if self.tabela.item(row, 3) else ""
+                qtde = self.tabela.item(row, 4).text() if self.tabela.item(row, 4) else ""
+                requisitante = self.tabela.item(row, 6).text() if self.tabela.item(row, 6) else ""
+
+                item_interno = _buscar_item_por_kardex(kardex)
+                loc_novo = _chave_flexivel(item_interno, "Loc novo") if item_interno else ""
+                loc_display = loc_novo or ""
+
+                dpi = 203
+                width = mm_to_dots(100, dpi)
+                height = mm_to_dots(40, dpi)
+
+                zpl = [
+                    "^XA",
+                    "^PON",
+                    f"^PW{width}",
+                    f"^LL{height}",
+                    "^LH0,0",
+                    f"^FO{mm_to_dots(2, dpi)},{mm_to_dots(2, dpi)}^GB{width - mm_to_dots(4, dpi)},{height - mm_to_dots(4, dpi)},2^FS",
+                    f"^FO{mm_to_dots(5, dpi)},{mm_to_dots(5, dpi)}^A0N,40,40^FD{codigo}^FS",
+                    f"^FO{mm_to_dots(5, dpi)},{mm_to_dots(12, dpi)}^A0N,30,30^FD{kardex}^FS",
+                    f"^FO{mm_to_dots(5, dpi)},{mm_to_dots(20, dpi)}^A0N,25,25^FDPed: {pedido}^FS",
+                    f"^FO{mm_to_dots(50, dpi)},{mm_to_dots(20, dpi)}^A0N,25,25^FDReq: {requisitante}^FS",
+                    f"^FO{mm_to_dots(5, dpi)},{mm_to_dots(30, dpi)}^A0N,30,30^FDQtde: {qtde}^FS",
+                    f"^FO{mm_to_dots(50, dpi)},{mm_to_dots(30, dpi)}^A0N,30,30^FDLOC: {loc_display}^FS",
+                    "^PQ1",
+                    "^XZ",
+                ]
+                zpl_jobs.append("\n".join(zpl))
+
+        if not zpl_jobs:
+            return
+
+        # Send ZPL to printer using Windows API (pywin32). If not available, prompt user.
+        def _send_zpl_to_printer(printer_name, zpl_data):
+            try:
+                import win32print
+                import win32api
+            except Exception:
+                QMessageBox.warning(self, "Impressão Zebra", "Envio direto de ZPL requer a biblioteca pywin32 (win32print). Instale-a e tente novamente.")
+                return False
+
+            try:
+                hPrinter = win32print.OpenPrinter(printer_name)
+                try:
+                    # Start a raw print job
+                    hJob = win32print.StartDocPrinter(hPrinter, 1, ("ZPL Print", None, "RAW"))
+                    try:
+                        win32print.StartPagePrinter(hPrinter)
+                        win32print.WritePrinter(hPrinter, zpl_data.encode('utf-8'))
+                        win32print.EndPagePrinter(hPrinter)
+                    finally:
+                        win32print.EndDocPrinter(hPrinter)
+                finally:
+                    win32print.ClosePrinter(hPrinter)
+                return True
+            except Exception as e:
+                QMessageBox.critical(self, "Erro de Impressão", f"Falha ao enviar ZPL para a impressora: {e}")
+                return False
+
+        # Send each ZPL job
+        for zpl in zpl_jobs:
+            ok = _send_zpl_to_printer(impressora, zpl)
+            if not ok:
+                break
 
     def _linha_clicada(self, row, col):
         item_codigo = self.tabela.item(row, 3)
