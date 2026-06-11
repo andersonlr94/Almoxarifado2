@@ -90,7 +90,7 @@ QLabel#statusLabel {
 }
 
 /* ── Form Inputs ── */
-QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit {
     background-color: #f8fafc;
     color: #1e293b;
     border: 1px solid #e2e8f0;
@@ -100,12 +100,12 @@ QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
     selection-background-color: #3b82f6;
 }
 
-QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
+QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus, QPlainTextEdit:focus {
     border: 1px solid #3b82f6;
     background-color: #ffffff;
 }
 
-QLineEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover {
+QLineEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover, QPlainTextEdit:hover {
     border: 1px solid #94a3b8;
 }
 
@@ -130,6 +130,52 @@ QComboBox::down-arrow {
 
 QComboBox:hover {
     border: 1px solid #94a3b8;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 4px;
+    selection-background-color: #eff6ff;
+    selection-color: #1e293b;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 6px 12px;
+    border-radius: 4px;
+    min-height: 24px;
+}
+
+QComboBox QAbstractItemView::item:hover {
+    background-color: #f1f5f9;
+}
+
+QComboBox QAbstractItemView::item:selected {
+    background-color: #dbeafe;
+    color: #2563eb;
+    font-weight: 600;
+}
+
+QComboBox QListView {
+    border-radius: 8px;
+}
+
+QComboBox QAbstractItemView QScrollBar:vertical {
+    width: 6px;
+    border-radius: 3px;
+}
+
+QComboBox QAbstractItemView QScrollBar::handle:vertical {
+    background: #cbd5e1;
+    border-radius: 3px;
+    min-height: 20px;
+}
+
+QComboBox QAbstractItemView QScrollBar::add-line:vertical,
+QComboBox QAbstractItemView QScrollBar::sub-line:vertical {
+    height: 0;
 }
 
 /* ── Buttons ── */

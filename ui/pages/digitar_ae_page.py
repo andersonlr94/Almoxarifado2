@@ -99,8 +99,8 @@ class DigitarAEPage(QWidget):
         self.combo_ae = QComboBox()
         for chave in DADOS_AE:
             self.combo_ae.addItem(chave)
-        self.combo_ae.setMinimumWidth(130)
-        self.combo_ae.setFixedHeight(34)
+        self.combo_ae.setMinimumWidth(137)
+        self.combo_ae.setFixedHeight(36)
         self.combo_ae.currentIndexChanged.connect(self._preencher_dados_ae)
         linha_campos.addWidget(self.combo_ae)
 
@@ -121,8 +121,8 @@ class DigitarAEPage(QWidget):
 
         self.combo_fornecedor = QComboBox()
         self.combo_fornecedor.addItems(["Pinhal", "Ouros", "Itajuba"])
-        self.combo_fornecedor.setMinimumWidth(110)
-        self.combo_fornecedor.setFixedHeight(34)
+        self.combo_fornecedor.setMinimumWidth(116)
+        self.combo_fornecedor.setFixedHeight(36)
         linha_campos.addWidget(self.combo_fornecedor)
 
         card_layout.addLayout(linha_campos)
@@ -133,6 +133,7 @@ class DigitarAEPage(QWidget):
         btn_colar = QPushButton("Colar")
         btn_colar.setObjectName("btnSecondary")
         btn_colar.setFixedHeight(34)
+        btn_colar.setStyleSheet("background-color: #3b82f6; color: #fff; border: none; border-radius: 8px; padding: 7px 20px; font-size: 13px; font-weight: 600;")
         btn_colar.clicked.connect(self._colar)
         linha_botoes.addWidget(btn_colar)
 
@@ -140,12 +141,14 @@ class DigitarAEPage(QWidget):
         btn_executar.setObjectName("btnPrimary")
         btn_executar.setFixedHeight(34)
         btn_executar.setDefault(True)
+        btn_executar.setStyleSheet("background-color: #16a34a; color: #fff; border: none; border-radius: 8px; padding: 7px 20px; font-size: 13px; font-weight: 600;")
         btn_executar.clicked.connect(self._executar)
         linha_botoes.addWidget(btn_executar)
 
         btn_limpar = QPushButton("Limpar")
         btn_limpar.setObjectName("btnSecondary")
         btn_limpar.setFixedHeight(34)
+        btn_limpar.setStyleSheet("background-color: #ef4444; color: #fff; border: none; border-radius: 8px; padding: 7px 20px; font-size: 13px; font-weight: 600;")
         btn_limpar.clicked.connect(self._limpar)
         linha_botoes.addWidget(btn_limpar)
 
@@ -155,7 +158,7 @@ class DigitarAEPage(QWidget):
         self.tabela = QTableWidget(0, len(HEADERS_TABELA))
         self.tabela.setHorizontalHeaderLabels(HEADERS_TABELA)
         header = self.tabela.horizontalHeader()
-        percentuais = [0.17, 0.30, 0.10, 0.05, 0.10, 0.10, 0.10, 0.08]
+        percentuais = [0.17, 0.30, 0.10, 0.05, 0.10, 0.11, 0.09, 0.08]
         for c in range(self.tabela.columnCount()):
             header.setSectionResizeMode(c, QHeaderView.ResizeMode.Interactive)
         self._ajustar_colunas = lambda: None
@@ -194,13 +197,14 @@ class DigitarAEPage(QWidget):
 
         titulo_anotacoes = QLabel("Anotações")
         titulo_anotacoes.setObjectName("pageTitle")
+        titulo_anotacoes.setStyleSheet("font-size: 16px;")
         linha_titulo_anotacoes.addWidget(titulo_anotacoes)
 
         linha_titulo_anotacoes.addStretch()
 
         self.combo_abrir_anotacao = QComboBox()
-        self.combo_abrir_anotacao.setMinimumWidth(160)
-        self.combo_abrir_anotacao.setFixedHeight(30)
+        self.combo_abrir_anotacao.setMinimumWidth(84)
+        self.combo_abrir_anotacao.setFixedHeight(32)
         self.combo_abrir_anotacao.setPlaceholderText("Abrir...")
         self.combo_abrir_anotacao.currentIndexChanged.connect(self._carregar_anotacao_arquivo)
         linha_titulo_anotacoes.addWidget(self.combo_abrir_anotacao)
@@ -215,8 +219,8 @@ class DigitarAEPage(QWidget):
         pagina_direita_layout.addWidget(card_anotacoes)
         splitter.addWidget(pagina_direita)
 
-        splitter.setStretchFactor(0, 39)
-        splitter.setStretchFactor(1, 28)
+        splitter.setStretchFactor(0, 20)
+        splitter.setStretchFactor(1, 12)
 
         layout.addWidget(splitter)
         self._preencher_dados_ae()
@@ -350,11 +354,15 @@ class DigitarAEPage(QWidget):
                         dados_linha[col_dest] = row[col_src].strip().upper()
                 agrupados[item] = {"dados": dados_linha, "qtde": qtde}
 
-        self.tabela.setRowCount(0)
-        for item_key, grupo in agrupados.items():
-            row_idx = self.tabela.rowCount()
-            self.tabela.insertRow(row_idx)
+        # Map existing items in the current table
+        existing_items = {}
+        for r in range(self.tabela.rowCount()):
+            item_obj = self.tabela.item(r, INDICE_ITEM)
+            if item_obj:
+                existing_items[item_obj.text().strip().upper()] = r
 
+        # Add new rows or update quantities for duplicates
+        for item_key, grupo in agrupados.items():
             dados = grupo["dados"]
             dados[INDICE_ITEM] = item_key
             qtde_val = grupo["qtde"]
@@ -363,9 +371,23 @@ class DigitarAEPage(QWidget):
             if not dados[C_M_COL].strip():
                 dados[C_M_COL] = "C"
 
-            for col, valor in enumerate(dados):
-                item_widget = QTableWidgetItem(valor)
-                self.tabela.setItem(row_idx, col, item_widget)
+            if item_key in existing_items:
+                row_idx = existing_items[item_key]
+                # Update quantity cell
+                qty_item = self.tabela.item(row_idx, INDICE_QTDE)
+                try:
+                    current_qty = float(qty_item.text().replace(",", "."))
+                except (AttributeError, ValueError):
+                    current_qty = 0.0
+                new_qty = current_qty + qtde_val
+                new_qty_int = int(new_qty) if new_qty == int(new_qty) else new_qty
+                self.tabela.setItem(row_idx, INDICE_QTDE, QTableWidgetItem(str(new_qty_int)))
+                # Keep other columns unchanged
+            else:
+                row_idx = self.tabela.rowCount()
+                self.tabela.insertRow(row_idx)
+                for col, valor in enumerate(dados):
+                    self.tabela.setItem(row_idx, col, QTableWidgetItem(valor))
 
     def _limpar(self):
         self.tabela.setRowCount(0)
