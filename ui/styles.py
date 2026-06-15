@@ -178,6 +178,101 @@ QComboBox QAbstractItemView QScrollBar::sub-line:vertical {
     height: 0;
 }
 
+/* ── Date Edit ── */
+QDateEdit {
+    background-color: #f8fafc;
+    color: #1e293b;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 13px;
+    selection-background-color: #3b82f6;
+}
+
+QDateEdit:focus {
+    border: 1px solid #3b82f6;
+    background-color: #ffffff;
+}
+
+QDateEdit:hover {
+    border: 1px solid #94a3b8;
+}
+
+QDateEdit::drop-down {
+    border: none;
+    padding-right: 4px;
+    width: 20px;
+}
+
+QDateEdit::down-arrow {
+    width: 10px;
+    height: 10px;
+}
+
+/* ── Calendar Popup ── */
+QCalendarWidget {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+QCalendarWidget QToolButton {
+    color: #1e293b;
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QCalendarWidget QToolButton:hover {
+    background-color: #f1f5f9;
+}
+
+QCalendarWidget QToolButton::menu-indicator {
+    image: none;
+}
+
+QCalendarWidget QAbstractItemView {
+    background-color: #ffffff;
+    selection-background-color: #3b82f6;
+    selection-color: #ffffff;
+    color: #1e293b;
+    font-size: 12px;
+    outline: none;
+}
+
+QCalendarWidget QAbstractItemView:disabled {
+    color: #cbd5e1;
+}
+
+QCalendarWidget QAbstractItemView:alternate {
+    background-color: #f8fafc;
+}
+
+/* ── Clear Button ── */
+QPushButton#btnClear {
+    background-color: #f1f5f9;
+    color: #94a3b8;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 0;
+}
+
+QPushButton#btnClear:hover {
+    background-color: #fee2e2;
+    color: #ef4444;
+    border-color: #fecaca;
+}
+
+QPushButton#btnClear:pressed {
+    background-color: #fecaca;
+    color: #dc2626;
+}
+
 /* ── Buttons ── */
 QPushButton#btnPrimary {
     background-color: #2563eb;

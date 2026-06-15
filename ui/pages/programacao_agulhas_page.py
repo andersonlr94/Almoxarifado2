@@ -1,14 +1,20 @@
 import json
 import os
 from datetime import datetime
+from collections import Counter
+
+import matplotlib
+matplotlib.use("QtAgg")
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QStyledItemDelegate, QStyleOptionViewItem,
-    QStyle,
+    QStyle, QDialog, QFrame, QDateEdit,
 )
-from PySide6.QtCore import Qt, QSize, QSizeF, QRect, Signal
+from PySide6.QtCore import Qt, QSize, QSizeF, QRect, Signal, QDate
 from PySide6.QtGui import QPainter, QMouseEvent, QTextDocument, QPageSize
 from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
 from PySide6.QtWidgets import QMessageBox
@@ -79,6 +85,14 @@ def _caminho_json():
     if not base:
         base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
     return os.path.normpath(os.path.join(base, "Almox", "ProgramacaoAgulhasManutencao", "pedidos.json"))
+
+
+def _caminho_entregues(ano):
+    import config
+    base = config.obter_caminho_jsons()
+    if not base:
+        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+    return os.path.normpath(os.path.join(base, "Almox", "ProgramacaoAgulhasManutencao", f"{ano}-Entregues.json"))
 
 
 def _caminho_itens():
@@ -161,6 +175,7 @@ class ProgramacaoAgulhasPage(QWidget):
     def __init__(self):
         super().__init__()
         self.dados = []
+        self.dados_entregues = []
         self.filtro_status = "Pendentes"
         self.campo_data_por_filtro = {
             "Pendentes": "data_inserido",
@@ -180,14 +195,14 @@ class ProgramacaoAgulhasPage(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 32, 32, 32)
-        layout.setSpacing(16)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
 
         card = QWidget()
         card.setObjectName("pageCard")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(28, 28, 28, 28)
-        card_layout.setSpacing(16)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(12)
 
         titulo = QLabel("Programação de agulhas para manutenção")
         titulo.setObjectName("pageTitle")
@@ -247,17 +262,65 @@ class ProgramacaoAgulhasPage(QWidget):
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("Pesquisar...")
         self.campo_filtro.setFixedHeight(30)
-        self.campo_filtro.setFixedWidth(200)
+        self.campo_filtro.setFixedWidth(140)
         self.campo_filtro.textChanged.connect(self._aplicar_filtro)
         linha_top.addWidget(self.campo_filtro)
 
+        self.widget_filtro_data = QWidget()
+        layout_filtro_data = QHBoxLayout()
+        layout_filtro_data.setContentsMargins(0, 0, 0, 0)
+        layout_filtro_data.setSpacing(4)
+
+        lbl_data_ini = QLabel("De")
+        lbl_data_ini.setFixedHeight(30)
+        layout_filtro_data.addWidget(lbl_data_ini)
+
+        self.data_inicio = QDateEdit()
+        self.data_inicio.setCalendarPopup(True)
+        self.data_inicio.setDisplayFormat("dd/MM/yyyy")
+        self.data_inicio.setDate(QDate.currentDate().addMonths(-6))
+        self.data_inicio.setFixedHeight(30)
+        self.data_inicio.setFixedWidth(115)
+        self.data_inicio.editingFinished.connect(self._aplicar_filtro)
+        layout_filtro_data.addWidget(self.data_inicio)
+
+        lbl_data_fim = QLabel("até")
+        lbl_data_fim.setFixedHeight(30)
+        layout_filtro_data.addWidget(lbl_data_fim)
+
+        self.data_fim = QDateEdit()
+        self.data_fim.setCalendarPopup(True)
+        self.data_fim.setDisplayFormat("dd/MM/yyyy")
+        self.data_fim.setDate(QDate.currentDate())
+        self.data_fim.setFixedHeight(30)
+        self.data_fim.setFixedWidth(115)
+        self.data_fim.editingFinished.connect(self._aplicar_filtro)
+        layout_filtro_data.addWidget(self.data_fim)
+
+        self.btn_limpar_filtro_data = QPushButton("✕")
+        self.btn_limpar_filtro_data.setObjectName("btnClear")
+        self.btn_limpar_filtro_data.setFixedSize(30, 30)
+        self.btn_limpar_filtro_data.setToolTip("Limpar filtro de período")
+        self.btn_limpar_filtro_data.clicked.connect(self._limpar_filtro_data)
+        layout_filtro_data.addWidget(self.btn_limpar_filtro_data)
+
+        self.btn_grafico = QPushButton("Gráfico")
+        self.btn_grafico.setFixedHeight(30)
+        self.btn_grafico.setObjectName("btnPrimary")
+        self.btn_grafico.clicked.connect(self._abrir_grafico)
+        layout_filtro_data.addWidget(self.btn_grafico)
+
+        self.widget_filtro_data.setLayout(layout_filtro_data)
+        self.widget_filtro_data.setVisible(False)
+        linha_top.addWidget(self.widget_filtro_data)
+
         linha_top.addStretch()
 
-        self.btn_mover_programado = QPushButton("Mover para Programado")
+        self.btn_mover_programado = QPushButton("Programar")
         self.btn_mover_programado.setObjectName("btnPrimary")
         self.btn_mover_programado.setFixedHeight(30)
         self.btn_mover_programado.clicked.connect(self._mover_programado)
-        self.btn_mover_separando = QPushButton("Mover para Separando")
+        self.btn_mover_separando = QPushButton("Separar")
         self.btn_mover_separando.setObjectName("btnPrimary")
         self.btn_mover_separando.setFixedHeight(30)
         self.btn_mover_separando.clicked.connect(self._mover_separando)
@@ -265,10 +328,18 @@ class ProgramacaoAgulhasPage(QWidget):
         self.btn_entregar.setObjectName("btnPrimary")
         self.btn_entregar.setFixedHeight(30)
         self.btn_entregar.clicked.connect(self._entregar)
+        self.btn_excluir = QPushButton("Excluir")
+        self.btn_excluir.setObjectName("btnDanger")
+        self.btn_excluir.setFixedHeight(30)
+        self.btn_excluir.clicked.connect(self._excluir)
+        self.btn_dividir = QPushButton("Dividir")
+        self.btn_dividir.setObjectName("btnPrimary")
+        self.btn_dividir.setFixedHeight(30)
+        self.btn_dividir.clicked.connect(self._dividir)
 
         self.combo_impressoras = QComboBox()
         self.combo_impressoras.setFixedHeight(30)
-        self.combo_impressoras.setFixedWidth(220)
+        self.combo_impressoras.setFixedWidth(160)
         self.combo_impressoras.setToolTip("Selecione a impressora Zebra para impressão")
         self.combo_impressoras.setVisible(False)
 
@@ -280,6 +351,8 @@ class ProgramacaoAgulhasPage(QWidget):
 
         linha_top.addWidget(self.btn_mover_programado)
         linha_top.addWidget(self.btn_mover_separando)
+        linha_top.addWidget(self.btn_excluir)
+        linha_top.addWidget(self.btn_dividir)
         linha_top.addWidget(self.btn_entregar)
         linha_top.addWidget(self.combo_impressoras)
         linha_top.addWidget(self.btn_imprimir)
@@ -336,21 +409,48 @@ class ProgramacaoAgulhasPage(QWidget):
         self._preencher_impressoras()
         layout.addWidget(card)
 
+    def _proximo_id(self):
+        max_id = 0
+        for d in self.dados:
+            try:
+                max_id = max(max_id, int(d.get("id", 0)))
+            except (ValueError, TypeError):
+                pass
+        return max_id + 1
+
     def _carregar_dados(self):
         try:
             with open(_caminho_json(), "r", encoding="utf-8") as f:
-                self.dados = json.load(f)
+                todos = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
-            self.dados = []
+            todos = []
+        self.dados = [d for d in todos if d.get("status") != "Entregue"]
+        entregues = [d for d in todos if d.get("status") == "Entregue"]
+        if entregues:
+            ano_atual = datetime.now().strftime("%Y")
+            try:
+                with open(_caminho_entregues(ano_atual), "r", encoding="utf-8") as f:
+                    existentes = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                existentes = []
+            existentes.extend(entregues)
+            os.makedirs(os.path.dirname(_caminho_entregues(ano_atual)), exist_ok=True)
+            with open(_caminho_entregues(ano_atual), "w", encoding="utf-8") as f:
+                json.dump(existentes, f, ensure_ascii=False, indent=2)
+        for d in self.dados:
+            if "id" not in d or not d["id"]:
+                d["id"] = self._proximo_id()
         self._popular_tabela()
 
     def _popular_tabela(self):
         self.tabela.blockSignals(True)
         self.tabela.setRowCount(0)
 
+        fonte = self._fonte_dados()
+
         filtro_texto = self.campo_filtro.text().strip().lower()
         dados_filtrados = []
-        for item in self.dados:
+        for item in fonte:
             status_item = item.get("status", "")
             if self.filtro_status == "Pendentes" and status_item != "Pendente":
                 continue
@@ -364,6 +464,17 @@ class ProgramacaoAgulhasPage(QWidget):
                 texto = " ".join(str(v) for v in item.values()).lower()
                 if filtro_texto not in texto:
                     continue
+            chave_data = self.campo_data_por_filtro.get(self.filtro_status, "status")
+            valor_data = item.get(chave_data, "")
+            if valor_data:
+                try:
+                    data_item = datetime.strptime(valor_data, "%d/%m/%Y").date()
+                    data_ini = self.data_inicio.date().toPython()
+                    data_fim = self.data_fim.date().toPython()
+                    if not (data_ini <= data_item <= data_fim):
+                        continue
+                except ValueError:
+                    pass
             dados_filtrados.append(item)
 
         for item in dados_filtrados:
@@ -375,16 +486,19 @@ class ProgramacaoAgulhasPage(QWidget):
             chk.setCheckState(Qt.CheckState.Unchecked if not item.get("selecionado") else Qt.CheckState.Checked)
             self.tabela.setItem(row, 0, chk)
 
+            editavel = self.filtro_status != "Entregues"
             for col, chave in enumerate(["pedido", "kardex", "codigo", "qtde", "fornecedor", "requisitante"], 1):
                 valor = str(item.get(chave, ""))
                 cell = QTableWidgetItem(valor)
-                cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
+                if editavel:
+                    cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
                 self.tabela.setItem(row, col, cell)
 
             chave_data = self.campo_data_por_filtro.get(self.filtro_status, "status")
             valor_data = str(item.get(chave_data, ""))
             cell_data = QTableWidgetItem(valor_data)
-            cell_data.setFlags(cell_data.flags() | Qt.ItemFlag.ItemIsEditable)
+            if editavel:
+                cell_data.setFlags(cell_data.flags() | Qt.ItemFlag.ItemIsEditable)
             self.tabela.setItem(row, 7, cell_data)
 
         self.tabela.blockSignals(False)
@@ -396,13 +510,18 @@ class ProgramacaoAgulhasPage(QWidget):
         self.btn_mover_programado.setVisible(False)
         self.btn_mover_separando.setVisible(False)
         self.btn_entregar.setVisible(False)
+        self.btn_excluir.setVisible(False)
+        self.btn_dividir.setVisible(False)
         self.combo_impressoras.setVisible(False)
         self.btn_imprimir.setVisible(False)
         if self.filtro_status == "Pendentes":
             self.btn_mover_programado.setVisible(True)
             self.btn_mover_separando.setVisible(True)
+            self.btn_excluir.setVisible(True)
+            self.btn_dividir.setVisible(True)
         elif self.filtro_status == "Programados":
             self.btn_mover_separando.setVisible(True)
+            self.btn_dividir.setVisible(True)
         elif self.filtro_status == "Separando":
             self.btn_entregar.setVisible(True)
             self.combo_impressoras.setVisible(True)
@@ -424,6 +543,34 @@ class ProgramacaoAgulhasPage(QWidget):
             "Separando": "data_separando",
             "Entregue": "data_entregue",
         }.get(novo_status)
+        if novo_status == "Entregue":
+            entregues = []
+            restantes = []
+            for d in self.dados:
+                if d.get("selecionado"):
+                    d["status"] = "Entregue"
+                    if campo_data:
+                        d[campo_data] = hoje
+                    d["selecionado"] = False
+                    entregues.append(d)
+                else:
+                    restantes.append(d)
+            self.dados = restantes
+            if entregues:
+                ano = datetime.now().strftime("%Y")
+                caminho = _caminho_entregues(ano)
+                os.makedirs(os.path.dirname(caminho), exist_ok=True)
+                try:
+                    with open(caminho, "r", encoding="utf-8") as f:
+                        existentes = json.load(f)
+                except (FileNotFoundError, json.JSONDecodeError):
+                    existentes = []
+                existentes.extend(entregues)
+                with open(caminho, "w", encoding="utf-8") as f:
+                    json.dump(existentes, f, ensure_ascii=False, indent=2)
+            self._salvar_json()
+            self._filtrar_por_status(self.filtro_status)
+            return
         for dado in self.dados:
             if dado.get("selecionado"):
                 dado["status"] = novo_status
@@ -442,15 +589,275 @@ class ProgramacaoAgulhasPage(QWidget):
     def _entregar(self):
         self._mover_status("Entregue")
 
+    def _excluir(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Excluir")
+        dialog.setFixedSize(400, 160)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(20, 20, 20, 16)
+        layout.setSpacing(16)
+
+        msg = QLabel("Tem certeza que deseja excluir os itens selecionados?")
+        msg.setStyleSheet("font-size: 13px; color: #1e293b;")
+        msg.setWordWrap(True)
+        layout.addWidget(msg)
+
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
+        line.setStyleSheet("color: #e2e8f0;")
+        layout.addWidget(line)
+
+        btn_ok = QPushButton("Sim")
+        btn_ok.setObjectName("btnDanger")
+        btn_ok.setFixedHeight(30)
+        btn_ok.clicked.connect(dialog.accept)
+        btn_ok.setDefault(True)
+        btn_cancel = QPushButton("Não")
+        btn_cancel.setObjectName("btnSecondary")
+        btn_cancel.setFixedHeight(30)
+        btn_cancel.clicked.connect(dialog.reject)
+        botoes = QHBoxLayout()
+        botoes.addStretch()
+        botoes.addWidget(btn_cancel)
+        botoes.addWidget(btn_ok)
+        layout.addLayout(botoes)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self.dados = [
+            d for d in self.dados
+            if not d.get("selecionado")
+        ]
+        self._salvar_json()
+        self._filtrar_por_status(self.filtro_status)
+
+    def _dividir(self):
+        selecionados = [d for d in self.dados if d.get("selecionado")]
+        if len(selecionados) == 0:
+            QMessageBox.information(self, "Dividir", "Selecione um item para dividir.")
+            return
+        if len(selecionados) > 1:
+            QMessageBox.information(self, "Dividir", "Selecione apenas um item para dividir.")
+            return
+        dado = selecionados[0]
+        pedido_original = dado.get("pedido", "")
+        codigo = dado.get("codigo", "")
+        qtde_atual = dado.get("qtde", "1")
+        try:
+            qtde_int = int(qtde_atual)
+        except ValueError:
+            QMessageBox.information(self, "Dividir", "Quantidade inválida para divisão.")
+            return
+        if qtde_int <= 1:
+            QMessageBox.information(self, "Dividir", "Quantidade deve ser maior que 1 para dividir.")
+            return
+        qtde_a = (qtde_int // 2) + (qtde_int % 2)
+        qtde_b = qtde_int // 2
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Dividir Pedido")
+        dialog.setFixedSize(500, 200)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(14)
+
+        grid = QGridLayout()
+        grid.setSpacing(8)
+        grid.setContentsMargins(4, 0, 4, 0)
+
+        grid.addWidget(QLabel(""), 0, 0)
+        lbl_pedido = QLabel("Pedido")
+        lbl_pedido.setFixedWidth(160)
+        lbl_pedido.setStyleSheet("font-size: 11px; font-weight: 600; color: #64748b;")
+        grid.addWidget(lbl_pedido, 0, 1)
+        lbl_qtde = QLabel("Qtde")
+        lbl_qtde.setFixedWidth(60)
+        lbl_qtde.setStyleSheet("font-size: 11px; font-weight: 600; color: #64748b;")
+        grid.addWidget(lbl_qtde, 0, 2)
+        lbl_item = QLabel("Código")
+        lbl_item.setStyleSheet("font-size: 11px; font-weight: 600; color: #64748b;")
+        grid.addWidget(lbl_item, 0, 3)
+
+        grid.addWidget(QLabel("1"), 1, 0)
+        pedido_a = QLineEdit(f"{pedido_original}-A")
+        pedido_a.setFixedWidth(160)
+        qtde_a_edit = QLineEdit(str(qtde_a))
+        qtde_a_edit.setFixedWidth(60)
+        qtde_a_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        codigo_edit = QLineEdit(codigo)
+        codigo_edit.setReadOnly(True)
+        grid.addWidget(pedido_a, 1, 1)
+        grid.addWidget(qtde_a_edit, 1, 2)
+        grid.addWidget(codigo_edit, 1, 3)
+
+        grid.addWidget(QLabel("2"), 2, 0)
+        pedido_b = QLineEdit(f"{pedido_original}-B")
+        pedido_b.setFixedWidth(160)
+        qtde_b_edit = QLineEdit(str(qtde_b))
+        qtde_b_edit.setFixedWidth(60)
+        qtde_b_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        codigo_b_edit = QLineEdit(codigo)
+        codigo_b_edit.setReadOnly(True)
+        grid.addWidget(pedido_b, 2, 1)
+        grid.addWidget(qtde_b_edit, 2, 2)
+        grid.addWidget(codigo_b_edit, 2, 3)
+
+        layout.addLayout(grid)
+
+        def _recalcular(origem):
+            try:
+                val = int(origem.text())
+            except ValueError:
+                return
+            outro = qtde_b_edit if origem is qtde_a_edit else qtde_a_edit
+            resto = qtde_int - val
+            if resto < 0:
+                resto = 0
+            outro.setText(str(resto))
+
+        qtde_a_edit.editingFinished.connect(lambda: _recalcular(qtde_a_edit))
+        qtde_b_edit.editingFinished.connect(lambda: _recalcular(qtde_b_edit))
+
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
+        line.setStyleSheet("color: #e2e8f0;")
+        layout.addWidget(line)
+
+        btn_ok = QPushButton("Confirmar")
+        btn_ok.setObjectName("btnPrimary")
+        btn_ok.setFixedHeight(30)
+        btn_ok.clicked.connect(dialog.accept)
+        btn_ok.setDefault(True)
+        btn_cancel = QPushButton("Cancelar")
+        btn_cancel.setObjectName("btnSecondary")
+        btn_cancel.setFixedHeight(30)
+        btn_cancel.clicked.connect(dialog.reject)
+        botoes = QHBoxLayout()
+        botoes.addStretch()
+        botoes.addWidget(btn_cancel)
+        botoes.addWidget(btn_ok)
+        layout.addLayout(botoes)
+
+        qtde_a_edit.setFocus()
+        qtde_a_edit.selectAll()
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        dado["pedido"] = pedido_a.text().strip()
+        dado["qtde"] = qtde_a_edit.text().strip()
+
+        novo = dict(dado)
+        novo["id"] = self._proximo_id()
+        novo["pedido"] = pedido_b.text().strip()
+        novo["qtde"] = qtde_b_edit.text().strip()
+        novo["selecionado"] = False
+        idx = self.dados.index(dado) + 1
+        self.dados.insert(idx, novo)
+        self._salvar_json()
+        self._filtrar_por_status(self.filtro_status)
+
     def _filtrar_por_status(self, status):
         for s, btn in self.botoes_status.items():
             btn.setChecked(s == status)
         self.filtro_status = status
+        self.widget_filtro_data.setVisible(status == "Entregues")
+        for d in self.dados:
+            d["selecionado"] = False
         self._popular_tabela()
 
     def _aplicar_filtro(self):
         self._popular_tabela()
         self._atualizar_botoes_acao()
+
+    def _limpar_filtro_data(self):
+        self.data_inicio.setDate(QDate.currentDate().addMonths(-6))
+        self.data_fim.setDate(QDate.currentDate())
+        self._aplicar_filtro()
+
+    def _abrir_grafico(self):
+        chave_data = self.campo_data_por_filtro.get(self.filtro_status, "status")
+        dados_validos = []
+        for item in self._fonte_dados():
+            status_item = item.get("status", "")
+            if self.filtro_status == "Pendentes" and status_item != "Pendente":
+                continue
+            if self.filtro_status == "Programados" and "Programado" not in status_item:
+                continue
+            if self.filtro_status == "Separando" and "Separando" not in status_item:
+                continue
+            if self.filtro_status == "Entregues" and "Entregue" not in status_item:
+                continue
+            filtro_texto = self.campo_filtro.text().strip().lower()
+            if filtro_texto:
+                texto = " ".join(str(v) for v in item.values()).lower()
+                if filtro_texto not in texto:
+                    continue
+            valor_data = item.get(chave_data, "")
+            if valor_data:
+                try:
+                    data_item = datetime.strptime(valor_data, "%d/%m/%Y").date()
+                    data_ini = self.data_inicio.date().toPython()
+                    data_fim = self.data_fim.date().toPython()
+                    if not (data_ini <= data_item <= data_fim):
+                        continue
+                except ValueError:
+                    continue
+            dados_validos.append(item)
+
+        meses = Counter()
+        for item in dados_validos:
+            valor_data = item.get(chave_data, "")
+            if valor_data:
+                try:
+                    dt = datetime.strptime(valor_data, "%d/%m/%Y")
+                    chave = dt.strftime("%Y-%m")
+                    meses[chave] += 1
+                except ValueError:
+                    pass
+
+        if not meses:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle("Gráfico")
+            msg.setText("Nenhum dado encontrado no período.")
+            msg.exec()
+            return
+
+        sorted_meses = sorted(meses.keys())
+        valores = [meses[m] for m in sorted_meses]
+        rotulos = [datetime.strptime(m, "%Y-%m").strftime("%b/%Y") for m in sorted_meses]
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Itens por Mês")
+        dialog.resize(700, 450)
+
+        layout = QVBoxLayout(dialog)
+        canvas = FigureCanvas(Figure(figsize=(7, 4)))
+        layout.addWidget(canvas)
+
+        ax = canvas.figure.subplots()
+        ax.bar(range(len(rotulos)), valores, color="#4A90D9")
+        ax.set_xticks(range(len(rotulos)))
+        ax.set_xticklabels(rotulos, rotation=45, ha="right")
+        ax.set_ylabel("Quantidade de Itens")
+        ax.set_title(f"Itens por Mês - {self.filtro_status}")
+        ax.margins(y=0.1)
+        canvas.figure.tight_layout()
+
+        dialog.exec()
+
+    def _fonte_dados(self):
+        if self.filtro_status == "Entregues":
+            ano = datetime.now().strftime("%Y")
+            try:
+                with open(_caminho_entregues(ano), "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                return []
+        return self.dados
 
     def _mapear_requisitante(self, texto):
         mapa = {"1": "Almoxarifado PARAISO", "2": "PLANTA DE OUROS", "3": "PLANTA DE ITAJUBA"}
@@ -476,6 +883,7 @@ class ProgramacaoAgulhasPage(QWidget):
 
         hoje = datetime.now().strftime("%d/%m/%Y")
         novo = {
+            "id": self._proximo_id(),
             "pedido": pedido,
             "codigo": codigo,
             "kardex": kardex.upper() if kardex else kardex,
@@ -687,7 +1095,8 @@ class ProgramacaoAgulhasPage(QWidget):
     def _salvar_json(self):
         try:
             os.makedirs(os.path.dirname(_caminho_json()), exist_ok=True)
+            ativos = [d for d in self.dados if d.get("status") != "Entregue"]
             with open(_caminho_json(), "w", encoding="utf-8") as f:
-                json.dump(self.dados, f, ensure_ascii=False, indent=2)
+                json.dump(ativos, f, ensure_ascii=False, indent=2)
         except OSError:
             pass

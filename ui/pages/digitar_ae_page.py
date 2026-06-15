@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import datetime, timedelta
 
 from PySide6.QtWidgets import (
@@ -30,6 +31,15 @@ def _caminho_pasta_anotacoes():
     if not base:
         base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
     return os.path.normpath(os.path.join(base, "Almox", "aeAnotacoes"))
+
+
+def _parse_br_number(texto):
+    texto = texto.strip()
+    if not texto:
+        return 0.0
+    if "," in texto or re.search(r"\.\d{3}", texto):
+        texto = texto.replace(".", "").replace(",", ".")
+    return float(texto)
 
 
 def limpar_arquivos_antigos(pasta, dias=30):
@@ -339,7 +349,7 @@ class DigitarAEPage(QWidget):
             if src_qtde is not None and src_qtde < len(row):
                 qtde_texto = row[src_qtde].strip()
                 try:
-                    qtde = float(qtde_texto.replace(",", "."))
+                    qtde = _parse_br_number(qtde_texto)
                 except ValueError:
                     qtde = 1.0
             else:
@@ -376,7 +386,7 @@ class DigitarAEPage(QWidget):
                 # Update quantity cell
                 qty_item = self.tabela.item(row_idx, INDICE_QTDE)
                 try:
-                    current_qty = float(qty_item.text().replace(",", "."))
+                    current_qty = _parse_br_number(qty_item.text())
                 except (AttributeError, ValueError):
                     current_qty = 0.0
                 new_qty = current_qty + qtde_val
