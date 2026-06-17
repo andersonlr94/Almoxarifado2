@@ -111,6 +111,14 @@ def _caminho_json():
     return os.path.normpath(os.path.join(base, "Almox", "ItensZero", "itensZero.json"))
 
 
+def _caminho_itens_almoxarifado_json():
+    import config
+    base = config.obter_caminho_jsons()
+    if not base:
+        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+    return os.path.normpath(os.path.join(base, "Almox", "ItensAlmoxarifado", "ItensAlmoxarifado.json"))
+
+
 class ItensZeroPage(QWidget):
     COLUNAS = ["Kardex", "Código", "Descrição", "Cons Med", "Qtde prog", "DPP", "Observação"]
     CHAVES = ["kardex", "codigo", "descricao", "consumo_medio", "qtde_prog", "dpp", "observacao"]
@@ -146,11 +154,17 @@ class ItensZeroPage(QWidget):
         linha_top = QHBoxLayout()
         linha_top.setSpacing(8)
 
-        btn_atualizar = QPushButton("Atualizar")
-        btn_atualizar.setObjectName("btnPrimary")
-        btn_atualizar.setFixedHeight(34)
-        btn_atualizar.clicked.connect(self._atualizar)
-        linha_top.addWidget(btn_atualizar)
+        btn_colar = QPushButton("Colar")
+        btn_colar.setObjectName("btnPrimary")
+        btn_colar.setFixedHeight(34)
+        btn_colar.clicked.connect(self._colar)
+        linha_top.addWidget(btn_colar)
+
+        btn_sincronizar = QPushButton("Atualizar")
+        btn_sincronizar.setObjectName("btnPrimary")
+        btn_sincronizar.setFixedHeight(34)
+        btn_sincronizar.clicked.connect(self._sincronizar)
+        linha_top.addWidget(btn_sincronizar)
 
         linha_top.addStretch()
 
@@ -291,7 +305,7 @@ class ItensZeroPage(QWidget):
         self._popular_tabela()
         self.tabela.selectRow(destino)
 
-    def _atualizar(self):
+    def _colar(self):
         clipboard = QGuiApplication.clipboard()
         texto = clipboard.text()
         if not texto.strip():
@@ -328,6 +342,49 @@ class ItensZeroPage(QWidget):
             if item["kardex"] not in kardex_existentes:
                 self.dados.append(item)
                 kardex_existentes.add(item["kardex"])
+
+        self._salvar_json()
+        self._popular_tabela()
+
+    def _sincronizar(self):
+        try:
+            with open(_caminho_itens_almoxarifado_json(), "r", encoding="utf-8") as f:
+                itens_almox = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            itens_almox = []
+
+        kardex_zero = set()
+        novos_itens = []
+
+        for item in itens_almox:
+            if (
+                item.get("Qtde novo", "0") == "0"
+                and item.get("Qtde retorno", "0") == "0"
+                and item.get("Item de estoque", "false") == "true"
+            ):
+                kard = item.get("Kardex", "").strip()
+                if not kard:
+                    continue
+                kardex_zero.add(kard)
+                novos_itens.append({
+                    "kardex": kard,
+                    "codigo": item.get("Código", ""),
+                    "descricao": item.get("Descrição", ""),
+                    "consumo_medio": item.get("Consumo médio", ""),
+                    "qtde_prog": "",
+                    "dpp": "",
+                    "observacao": "",
+                    "cor": "",
+                })
+
+        self.dados = [
+            d for d in self.dados if d.get("kardex") in kardex_zero
+        ]
+
+        kardex_existentes = {d.get("kardex") for d in self.dados}
+        for item in novos_itens:
+            if item["kardex"] not in kardex_existentes:
+                self.dados.append(item)
 
         self._salvar_json()
         self._popular_tabela()

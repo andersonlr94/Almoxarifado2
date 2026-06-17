@@ -7,6 +7,7 @@ from ui.pages.digitar_ae_page import DigitarAEPage
 from ui.pages.transferencia_page import TransferenciaPage
 from ui.pages.estoque_page import EstoquePage
 from ui.pages.itens_zero_page import ItensZeroPage
+from ui.pages.controle_pedidos_page import ControlePedidosPage
 from ui.pages.reajuste_precos_page import ReajustePrecosPage
 from ui.pages.settings_page import SettingsPage
 
@@ -20,6 +21,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Almoxarifado")
         self.resize(1200, 750)
         self.setStyleSheet(FUSION_QSS)
+        self._collapsed = False
 
         container = QWidget()
         self.setCentralWidget(container)
@@ -34,29 +36,42 @@ class MainWindow(QMainWindow):
             self._switch_tab("inicio")
 
     def _build_sidebar(self, root_layout):
-        sidebar = QWidget()
-        sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(SIDEBAR_WIDTH)
-        sidebar_layout = QVBoxLayout(sidebar)
+        self.sidebar = QWidget()
+        self.sidebar.setObjectName("sidebar")
+        self._sidebar_expanded_width = SIDEBAR_WIDTH
+        self.sidebar.setFixedWidth(self._sidebar_expanded_width)
+        sidebar_layout = QVBoxLayout(self.sidebar)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(0)
 
         header = QWidget()
         header.setObjectName("sidebarHeader")
         header.setFixedHeight(72)
-        header_layout = QVBoxLayout(header)
-        header_layout.setContentsMargins(16, 14, 16, 14)
-        header_layout.setSpacing(2)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(16, 14, 12, 14)
+        header_layout.setSpacing(8)
 
-        titulo = QLabel("Almoxarifado")
-        titulo.setObjectName("sidebarTitle")
-        titulo.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        header_layout.addWidget(titulo)
+        header_texts = QVBoxLayout()
+        header_texts.setSpacing(2)
+        self.titulo = QLabel("Almoxarifado")
+        self.titulo.setObjectName("sidebarTitle")
+        self.titulo.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        header_texts.addWidget(self.titulo)
 
-        subtitulo = QLabel("Sistema de Gestão")
-        subtitulo.setObjectName("sidebarSubtitle")
-        subtitulo.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        header_layout.addWidget(subtitulo)
+        self.subtitulo = QLabel("Sistema de Gestão")
+        self.subtitulo.setObjectName("sidebarSubtitle")
+        self.subtitulo.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        header_texts.addWidget(self.subtitulo)
+        header_layout.addLayout(header_texts)
+
+        header_layout.addStretch()
+
+        self.btn_toggle = QPushButton("≣")
+        self.btn_toggle.setObjectName("tabButton")
+        self.btn_toggle.setFixedSize(28, 28)
+        self.btn_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_toggle.clicked.connect(self._toggle_sidebar)
+        header_layout.addWidget(self.btn_toggle)
 
         sidebar_layout.addWidget(header)
 
@@ -66,19 +81,21 @@ class MainWindow(QMainWindow):
         nav_layout.setSpacing(0)
 
         tab_data = [
-            ("inicio", "Início"),
-            ("programacao_agulhas", "Programação de Agulhas"),
-            ("digitar_ae", "Digitar AE"),
-            ("transferencia", "Transferência"),
-            ("estoque", "Estoque"),
-            ("itens_zero", "Itens 0"),
-            ("reajuste_precos", "Reajuste de Preços"),
-            ("configuracoes", "Configurações"),
+            ("inicio", "Início", "⌂"),
+            ("programacao_agulhas", "Programação de Agulhas", "⊞"),
+            ("digitar_ae", "Digitar AE", "✎"),
+            ("transferencia", "Transferência", "⇄"),
+            ("estoque", "Estoque", "▣"),
+            ("itens_zero", "Itens 0", "○"),
+            ("controle_pedidos", "Controle de Pedidos", "☐"),
+            ("reajuste_precos", "Reajuste de Preços", "♯"),
+            ("configuracoes", "Configurações", "⚙"),
         ]
         self.tabs = {}
         self.buttons = []
-        for key, label in tab_data:
-            btn = QPushButton(label)
+        self.tab_data = tab_data
+        for key, label, icon in tab_data:
+            btn = QPushButton(f"{icon}  {label}")
             btn.setObjectName("tabButton")
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -90,7 +107,7 @@ class MainWindow(QMainWindow):
 
         nav_layout.addStretch()
         sidebar_layout.addWidget(nav_scroll)
-        root_layout.addWidget(sidebar)
+        root_layout.addWidget(self.sidebar)
 
     def _build_content(self, root_layout):
         content = QWidget()
@@ -109,6 +126,7 @@ class MainWindow(QMainWindow):
             ("transferencia", TransferenciaPage),
             ("estoque", EstoquePage),
             ("itens_zero", ItensZeroPage),
+            ("controle_pedidos", ControlePedidosPage),
             ("reajuste_precos", ReajustePrecosPage),
             ("configuracoes", SettingsPage),
         ]
@@ -125,3 +143,18 @@ class MainWindow(QMainWindow):
             btn.setChecked(False)
         self.tabs[key].setChecked(True)
         self.stacked.setCurrentWidget(self.pages[key])
+
+    def _toggle_sidebar(self):
+        self._collapsed = not self._collapsed
+        if self._collapsed:
+            self.sidebar.setFixedWidth(55)
+            self.titulo.setVisible(False)
+            self.subtitulo.setVisible(False)
+            for btn, (_key, label, icon) in zip(self.buttons, self.tab_data):
+                btn.setText(icon)
+        else:
+            self.sidebar.setFixedWidth(self._sidebar_expanded_width)
+            self.titulo.setVisible(True)
+            self.subtitulo.setVisible(True)
+            for btn, (_key, label, icon) in zip(self.buttons, self.tab_data):
+                btn.setText(f"{icon}  {label}")
