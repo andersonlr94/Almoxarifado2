@@ -4,7 +4,7 @@ import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QStyledItemDelegate,
+    QAbstractItemView, QStyledItemDelegate, QMessageBox,
 )
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QGuiApplication
@@ -151,20 +151,53 @@ class EstoquePage(QWidget):
         clipboard = QGuiApplication.clipboard()
         texto = clipboard.text()
         if not texto.strip():
+            QMessageBox.warning(self, "Aviso", "A área de transferência está vazia.")
             return
 
         linhas = [l.strip() for l in texto.replace("\r\n", "\n").split("\n") if l.strip()]
         if not linhas:
             return
 
-        linha_inicial = 0
-        if linhas[0].startswith("Id\t") or linhas[0].startswith("Id\""):
-            linha_inicial = 1
+        header, dados_linha = self._separar_cabecalho(linhas)
+        if not dados_linha:
+            QMessageBox.warning(self, "Aviso", "Não há dados válidos para atualizar.")
+            return
 
+        colunas = len(dados_linha[0].split("\t"))
+
+        if colunas == 40:
+            resposta = QMessageBox.question(
+                self,
+                "Confirmação",
+                "Atualizar completamente o estoque?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if resposta != QMessageBox.StandardButton.Yes:
+                return
+
+            self._fazer_atualizacao_completa(dados_linha)
+        elif colunas == 24:
+            self._fazer_atualizacao_parcial(dados_linha, header)
+        else:
+            QMessageBox.warning(
+                self,
+                "Formato inválido",
+                "A tabela copiada deve ter 40 ou 24 colunas."
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Sucesso",
+            "Estoque atualizado com sucesso!"
+        )
+
+    def _fazer_atualizacao_completa(self, linhas):
         self.dados.clear()
 
-        for i in range(linha_inicial, len(linhas)):
-            partes = linhas[i].split("\t")
+        for linha in linhas:
+            partes = linha.split("\t")
             if len(partes) < 2:
                 continue
             item = {}
@@ -174,6 +207,92 @@ class EstoquePage(QWidget):
 
         self._salvar_json()
         self._popular_tabela()
+
+    def _fazer_atualizacao_parcial(self, linhas, header):
+        # Não exige cabeçalho: usar ordem fixa de colunas nas 24 colunas copiadas
+        # Kardex = coluna 1 -> índice 0
+        # Qtde novo = coluna 7 -> índice 6
+        # Qtde retorno = coluna 5 -> índice 4
+        # Consumo médio = coluna 19 -> índice 18
+        kardex_idx = 0
+        qtde_novo_idx = 6
+        qtde_retorno_idx = 4
+        consumo_medio_idx = 18
+
+        dados_por_kardex = {
+            str(item.get("Kardex", "")).strip(): item
+            for item in self.dados
+            if str(item.get("Kardex", "")).strip()
+        }
+
+        atualizou = False
+        for linha in linhas:
+            partes = linha.split("\t")
+            if len(partes) <= max(kardex_idx, qtde_novo_idx, qtde_retorno_idx, consumo_medio_idx):
+                continue
+
+            chave_kardex = partes[kardex_idx].strip()
+            item = dados_por_kardex.get(chave_kardex)
+            if not item:
+                continue
+
+            item["Qtde novo"] = partes[qtde_novo_idx].strip()
+            item["Qtde retorno"] = partes[qtde_retorno_idx].strip()
+            item["Consumo médio"] = partes[consumo_medio_idx].strip()
+            atualizou = True
+
+        if atualizou:
+            self._salvar_json()
+            self._popular_tabela()
+
+    def _separar_cabecalho(self, linhas):
+        if not linhas:
+            return None, []
+
+        primeiras_partes = linhas[0].split("\t")
+        if self._eh_linha_cabecalho(primeiras_partes):
+            return [p.strip() for p in primeiras_partes], linhas[1:]
+
+        return None, linhas
+
+    def _normalizar_coluna(self, texto):
+        texto = texto.strip().lower()
+        for original, substituicao in {
+            "á": "a",
+            "é": "e",
+            "í": "i",
+            "ó": "o",
+            "ú": "u",
+            "ã": "a",
+            "õ": "o",
+            "â": "a",
+            "ê": "e",
+            "ô": "o",
+            "ç": "c",
+        }.items():
+            texto = texto.replace(original, substituicao)
+        return "".join(ch for ch in texto if ch.isalnum())
+
+    def _eh_linha_cabecalho(self, partes):
+        if not partes:
+            return False
+        nome_normalizado = self._normalizar_coluna(partes[0])
+        return nome_normalizado in {"id", "kardex", "codigo", "descricao"}
+
+    def _obter_indices_parciais(self, header):
+        mapa = {}
+        nomes_esperados = ["Kardex", "Qtde novo", "Qtde retorno", "Consumo médio"]
+        normalizados_esperados = {self._normalizar_coluna(nome): nome for nome in nomes_esperados}
+
+        for indice, coluna in enumerate(header):
+            chave = self._normalizar_coluna(coluna)
+            if chave in normalizados_esperados:
+                mapa[normalizados_esperados[chave]] = indice
+
+        if len(mapa) != len(nomes_esperados):
+            return None
+
+        return mapa
 
     def _aplicar_filtro(self):
         self._popular_tabela()
