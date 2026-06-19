@@ -117,14 +117,18 @@ class ControlePedidosPage(QWidget):
         self.tabela.setHorizontalHeaderLabels(self.COLUNAS)
         header = self.tabela.horizontalHeader()
         header.setStretchLastSection(True)
-        for c in range(1, self.tabela.columnCount()):
-            header.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(0, 100)
+        header.resizeSection(0, 75) #data
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(1, 120) #fornecedores
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(2, 120) #nome
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(3, 80)
+        header.resizeSection(3, 100) #requisição
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(4, 80)
+        header.resizeSection(4, 100) #dpp      
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(5, 75) #observação    
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabela.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.CurrentChanged)

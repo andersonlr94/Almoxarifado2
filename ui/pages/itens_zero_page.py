@@ -357,10 +357,21 @@ class ItensZeroPage(QWidget):
         novos_itens = []
 
         for item in itens_almox:
+            try:
+                # Formato brasileiro: 1.800,00 -> remove ponto (milhar) e substitui vírgula por ponto
+                qtde_novo_str = str(item.get("Qtde novo", "0")).replace(".", "").replace(",", ".")
+                qtde_retorno_str = str(item.get("Qtde retorno", "0")).replace(".", "").replace(",", ".")
+                qtde_novo = float(qtde_novo_str)
+                qtde_retorno = float(qtde_retorno_str)
+            except (ValueError, TypeError):
+                qtde_novo = 0.0
+                qtde_retorno = 0.0
+            
             if (
-                item.get("Qtde novo", "0") == "0"
-                and item.get("Qtde retorno", "0") == "0"
+                qtde_novo == 0
+                and qtde_retorno == 0
                 and item.get("Item de estoque", "false") == "true"
+                and item.get("Ativo/Obsol.", "").upper() == "ATIVO"
             ):
                 kard = item.get("Kardex", "").strip()
                 if not kard:
@@ -371,16 +382,31 @@ class ItensZeroPage(QWidget):
                     "codigo": item.get("Código", ""),
                     "descricao": item.get("Descrição", ""),
                     "consumo_medio": item.get("Consumo médio", ""),
-                    "qtde_prog": "",
+                    "qtde_prog": item.get("Pend. entrega compras", ""),
                     "dpp": "",
                     "observacao": "",
                     "cor": "",
                 })
 
+        # Criar mapa para lookup dos novos dados
+        mapa_novos = {item["kardex"]: item for item in novos_itens}
+
+        # Manter apenas dados que ainda estão em kardex_zero
         self.dados = [
             d for d in self.dados if d.get("kardex") in kardex_zero
         ]
 
+        # Atualizar campos nos itens existentes
+        for dado in self.dados:
+            kardex = dado.get("kardex")
+            if kardex in mapa_novos:
+                novo_item = mapa_novos[kardex]
+                dado["codigo"] = novo_item["codigo"]
+                dado["descricao"] = novo_item["descricao"]
+                dado["consumo_medio"] = novo_item["consumo_medio"]
+                dado["qtde_prog"] = novo_item["qtde_prog"]
+
+        # Adicionar novos itens
         kardex_existentes = {d.get("kardex") for d in self.dados}
         for item in novos_itens:
             if item["kardex"] not in kardex_existentes:
