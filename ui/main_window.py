@@ -10,6 +10,7 @@ from ui.pages.itens_zero_page import ItensZeroPage
 from ui.pages.controle_pedidos_page import ControlePedidosPage
 from ui.pages.reajuste_precos_page import ReajustePrecosPage
 from ui.pages.settings_page import SettingsPage
+from ui.pages.fornecedores_page import FornecedoresPage
 
 
 SIDEBAR_WIDTH = 220
@@ -87,6 +88,7 @@ class MainWindow(QMainWindow):
             ("transferencia", "Transferência", "⇄"),
             ("estoque", "Estoque", "▣"),
             ("itens_zero", "Itens 0", "○"),
+            ("fornecedores", "Fornecedores", "⚑"),
             ("controle_pedidos", "Controle de Pedidos", "☐"),
             ("reajuste_precos", "Reajuste de Preços", "♯"),
             ("configuracoes", "Configurações", "⚙"),
@@ -126,6 +128,7 @@ class MainWindow(QMainWindow):
             ("transferencia", TransferenciaPage),
             ("estoque", EstoquePage),
             ("itens_zero", ItensZeroPage),
+            ("fornecedores", FornecedoresPage),
             ("controle_pedidos", ControlePedidosPage),
             ("reajuste_precos", ReajustePrecosPage),
             ("configuracoes", SettingsPage),

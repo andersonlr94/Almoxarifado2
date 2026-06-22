@@ -398,6 +398,8 @@ class ProgramacaoAgulhasPage(QWidget):
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
         self.tabela.setAlternatingRowColors(True)
+        self.tabela.setWordWrap(False)
+        self.tabela.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.tabela.verticalHeader().setDefaultSectionSize(36)
         self.tabela.verticalHeader().setMinimumSectionSize(28)
         self.tabela.verticalHeader().setVisible(False)
@@ -489,7 +491,13 @@ class ProgramacaoAgulhasPage(QWidget):
             editavel = self.filtro_status != "Entregues"
             for col, chave in enumerate(["pedido", "kardex", "codigo", "qtde", "fornecedor", "requisitante"], 1):
                 valor = str(item.get(chave, ""))
-                cell = QTableWidgetItem(valor)
+                if chave == "fornecedor":
+                    valor_exibido = valor if len(valor) <= 20 else valor[:20] + "..."
+                    cell = QTableWidgetItem(valor_exibido)
+                    cell.setToolTip(valor)
+                    cell.setData(Qt.EditRole, valor)
+                else:
+                    cell = QTableWidgetItem(valor)
                 if editavel:
                     cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
                 self.tabela.setItem(row, col, cell)
