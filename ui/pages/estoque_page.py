@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QStyledItemDelegate, QMessageBox,
 )
 from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QFont
 from PySide6.QtGui import QGuiApplication
 
 
@@ -32,6 +33,9 @@ def _caminho_json():
 
 
 class EstoquePage(QWidget):
+    COLUNAS_RESUMIDAS = [1, 2, 3, 4, 5, 6, 7, 8, 20, 22]
+    HEADERS_RESUMIDOS = ["Kardex", "Código", "Descrição", "Loc novo", "Qtde novo", "Loc retorno", "Qtde retorno", "Fornecedor", "Custo", "Consumo médio"]
+
     COLUNAS = [
         "Id", "Kardex", "Código", "Descrição", "Loc novo", "Qtde novo",
         "Loc retorno", "Qtde retorno", "Fornecedor", "Provável fornecedor",
@@ -60,6 +64,7 @@ class EstoquePage(QWidget):
     def __init__(self):
         super().__init__()
         self.dados = []
+        self.modo_resumido = False
         self._setup_ui()
         self._carregar_dados()
 
@@ -99,15 +104,36 @@ class EstoquePage(QWidget):
         linha_top.addWidget(self.label_contador)
 
         linha_top.addStretch()
+
+        self.btn_toggle = QPushButton("Visão resumida")
+        self.btn_toggle.setObjectName("btnSecondary")
+        self.btn_toggle.setFixedHeight(34)
+        self.btn_toggle.setCheckable(True)
+        self.btn_toggle.clicked.connect(self._alternar_modo)
+        linha_top.addWidget(self.btn_toggle)
         card_layout.addLayout(linha_top)
 
         self.tabela = QTableWidget(0, len(self.COLUNAS))
         self.tabela.setHorizontalHeaderLabels(self.COLUNAS)
         header = self.tabela.horizontalHeader()
+        header.setStyleSheet(
+            "QHeaderView::section {"
+            "  font-size: 9px;"
+            "  font-weight: 600;"
+            "  background-color: #f8fafc;"
+            "  color: #64748b;"
+            "  text-transform: uppercase;"
+            "  letter-spacing: 0.5px;"
+            "  padding: 8px 12px;"
+            "  border: none;"
+            "  border-bottom: 2px solid #e2e8f0;"
+            "}"
+        )
         header.setStretchLastSection(False)
         for c in range(self.tabela.columnCount()):
             header.setSectionResizeMode(c, QHeaderView.ResizeMode.Interactive)
-            header.resizeSection(c, 100)
+            largura = 150 if c == 1 else 180 if c == 2 else 250 if c == 3 else 100
+            header.resizeSection(c, largura)
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
         self.tabela.setAlternatingRowColors(False)
@@ -133,6 +159,10 @@ class EstoquePage(QWidget):
         self.tabela.setRowCount(0)
         filtro_texto = self.campo_filtro.text().strip().lower()
         for item in self.dados:
+            if self.modo_resumido:
+                ativo = str(item.get("Ativo/Obsol.", "")).strip().lower()
+                if "ativo" not in ativo:
+                    continue
             if filtro_texto:
                 texto = " ".join(str(v) for v in item.values()).lower()
                 if filtro_texto not in texto:
@@ -144,23 +174,37 @@ class EstoquePage(QWidget):
                 cell = QTableWidgetItem(valor)
                 cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self.tabela.setItem(row, col, cell)
+        if self.modo_resumido:
+            for c in range(len(self.COLUNAS)):
+                self.tabela.setColumnHidden(c, c not in self.COLUNAS_RESUMIDAS)
+        else:
+            for c in range(len(self.COLUNAS)):
+                self.tabela.setColumnHidden(c, False)
         self.tabela.blockSignals(False)
         self.label_contador.setText(f"{self.tabela.rowCount()} itens")
 
     def _atualizar(self):
+        modo_anterior = self.modo_resumido
+        if self.modo_resumido:
+            self.modo_resumido = False
+            self.btn_toggle.setText("Visão resumida")
+
         clipboard = QGuiApplication.clipboard()
         texto = clipboard.text()
         if not texto.strip():
             QMessageBox.warning(self, "Aviso", "A área de transferência está vazia.")
+            self.modo_resumido = modo_anterior
             return
 
         linhas = [l.strip() for l in texto.replace("\r\n", "\n").split("\n") if l.strip()]
         if not linhas:
+            self.modo_resumido = modo_anterior
             return
 
         header, dados_linha = self._separar_cabecalho(linhas)
         if not dados_linha:
             QMessageBox.warning(self, "Aviso", "Não há dados válidos para atualizar.")
+            self.modo_resumido = modo_anterior
             return
 
         colunas = len(dados_linha[0].split("\t"))
@@ -174,6 +218,7 @@ class EstoquePage(QWidget):
                 QMessageBox.StandardButton.No
             )
             if resposta != QMessageBox.StandardButton.Yes:
+                self.modo_resumido = modo_anterior
                 return
 
             self._fazer_atualizacao_completa(dados_linha)
@@ -185,7 +230,13 @@ class EstoquePage(QWidget):
                 "Formato inválido",
                 "A tabela copiada deve ter 40 ou 24 colunas."
             )
+            self.modo_resumido = modo_anterior
             return
+
+        self.modo_resumido = modo_anterior
+        if modo_anterior:
+            self.btn_toggle.setText("Visão completa")
+        self._popular_tabela()
 
         QMessageBox.information(
             self,
@@ -209,11 +260,6 @@ class EstoquePage(QWidget):
         self._popular_tabela()
 
     def _fazer_atualizacao_parcial(self, linhas, header):
-        # Não exige cabeçalho: usar ordem fixa de colunas nas 24 colunas copiadas
-        # Kardex = coluna 1 -> índice 0
-        # Qtde novo = coluna 7 -> índice 6
-        # Qtde retorno = coluna 5 -> índice 4
-        # Consumo médio = coluna 19 -> índice 18
         kardex_idx = 0
         qtde_novo_idx = 6
         qtde_retorno_idx = 4
@@ -295,6 +341,14 @@ class EstoquePage(QWidget):
         return mapa
 
     def _aplicar_filtro(self):
+        self._popular_tabela()
+
+    def _alternar_modo(self):
+        self.modo_resumido = not self.modo_resumido
+        if self.modo_resumido:
+            self.btn_toggle.setText("Visão completa")
+        else:
+            self.btn_toggle.setText("Visão resumida")
         self._popular_tabela()
 
     def _salvar_json(self):

@@ -33,6 +33,14 @@ def _caminho_pasta_anotacoes():
     return os.path.normpath(os.path.join(base, "Almox", "aeAnotacoes"))
 
 
+def _caminho_fornecedores_json():
+    import config
+    base = config.obter_caminho_jsons()
+    if not base:
+        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+    return os.path.normpath(os.path.join(base, "Almox", "Fornecedores", "fornecedores.json"))
+
+
 def _parse_br_number(texto):
     texto = texto.strip()
     if not texto:
@@ -98,10 +106,20 @@ class DigitarAEPage(QWidget):
         titulo.setObjectName("pageTitle")
         card_layout.addWidget(titulo)
 
+        linha_descricao = QHBoxLayout()
+        linha_descricao.setSpacing(8)
+
         self.label_descricao_ae = QLabel("")
         self.label_descricao_ae.setObjectName("pageSubtitle")
         self.label_descricao_ae.setStyleSheet("font-size: 13px; font-weight: 600; color: #a0a0a0; margin-bottom: 4px;")
-        card_layout.addWidget(self.label_descricao_ae)
+        linha_descricao.addWidget(self.label_descricao_ae)
+
+        linha_descricao.addStretch()
+
+        self.label_duns = QLabel("DUNS: ---")
+        self.label_duns.setStyleSheet("font-size: 11px; color: #888;")
+        linha_descricao.addWidget(self.label_duns)
+        card_layout.addLayout(linha_descricao)
 
         linha_campos = QHBoxLayout()
         linha_campos.setSpacing(8)
@@ -117,23 +135,39 @@ class DigitarAEPage(QWidget):
         self.campo_conta = QLineEdit()
         self.campo_conta.setPlaceholderText("Conta")
         self.campo_conta.setFixedHeight(34)
+        self.campo_conta.setFixedWidth(170)
         linha_campos.addWidget(self.campo_conta)
 
         self.campo_subconta = QLineEdit()
         self.campo_subconta.setPlaceholderText("Subconta")
         self.campo_subconta.setFixedHeight(34)
+        self.campo_subconta.setFixedWidth(170)
         linha_campos.addWidget(self.campo_subconta)
 
         self.campo_centro_custo = QLineEdit()
         self.campo_centro_custo.setPlaceholderText("Centro de custo")
         self.campo_centro_custo.setFixedHeight(34)
+        self.campo_centro_custo.setFixedWidth(170)
         linha_campos.addWidget(self.campo_centro_custo)
 
         self.combo_fornecedor = QComboBox()
-        self.combo_fornecedor.addItems(["Pinhal", "Ouros", "Itajuba"])
+        caminho_fornecedores = _caminho_fornecedores_json()
+        self.fornecedores = []
+        try:
+            with open(caminho_fornecedores, "r", encoding="utf-8") as f:
+                self.fornecedores = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+        for f in self.fornecedores:
+            nome = f.get("fornecedor", "")
+            duns = f.get("duns", "")
+            self.combo_fornecedor.addItem(f"{nome} {duns}", duns)
         self.combo_fornecedor.setMinimumWidth(116)
         self.combo_fornecedor.setFixedHeight(36)
+        self.combo_fornecedor.currentIndexChanged.connect(self._atualizar_label_duns)
         linha_campos.addWidget(self.combo_fornecedor)
+
+        self._atualizar_label_duns()
 
         card_layout.addLayout(linha_campos)
 
@@ -243,6 +277,13 @@ class DigitarAEPage(QWidget):
             self.campo_conta.setText(dados[1] if len(dados) > 1 else "")
             self.campo_subconta.setText(dados[2] if len(dados) > 2 else "")
             self.campo_centro_custo.setText(dados[3] if len(dados) > 3 else "")
+
+    def _atualizar_label_duns(self):
+        duns = self.combo_fornecedor.currentData()
+        if duns:
+            self.label_duns.setText(f"DUNS: {duns}")
+        else:
+            self.label_duns.setText("DUNS: ---")
 
     def _executar(self):
         esperar_inicio()
