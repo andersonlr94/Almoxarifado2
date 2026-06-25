@@ -163,6 +163,7 @@ class PedidosPendentesPage(QWidget):
             self.dados.append(item)
 
         self._popular_tabela()
+        self._salvar_pedidos_pendentes()
 
         QMessageBox.information(
             self,
@@ -195,6 +196,17 @@ class PedidosPendentesPage(QWidget):
             return False
         nome_normalizado = self._normalizar_coluna(partes[0])
         return nome_normalizado in {"npedido", "ndopedido", "pedido", "kardex", "codigo", "fornecedor"}
+
+    def _salvar_pedidos_pendentes(self):
+        import config
+        base = config.obter_caminho_jsons()
+        if not base:
+            base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+        pasta_json = os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "PedidosPendentes"))
+        os.makedirs(pasta_json, exist_ok=True)
+        caminho_arquivo = os.path.join(pasta_json, "PedidosPendentes.json")
+        with open(caminho_arquivo, "w", encoding="utf-8") as f:
+            json.dump(self.dados, f, ensure_ascii=False, indent=2)
 
     def _aplicar_filtro(self):
         self._popular_tabela()

@@ -57,9 +57,17 @@ def _caminho_json():
     return os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "controlePedidos.json"))
 
 
+def _caminho_pedidos_pendentes():
+    import config
+    base = config.obter_caminho_jsons()
+    if not base:
+        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+    return os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "PedidosPendentes", "PedidosPendentes.json"))
+
+
 class ControlePedidosPage(QWidget):
-    COLUNAS = ["Data", "Fornecedores", "Nome", "Requisição", "DPP", "Observação"]
-    CHAVES = ["data", "fornecedores", "nome", "requisicao", "dpp", "observacao"]
+    COLUNAS = ["Data", "Fornecedores", "Nome", "Requisição", "DPP", "Observação", "Status"]
+    CHAVES = ["data", "fornecedores", "nome", "requisicao", "dpp", "observacao", "status"]
     CORES = {"Amarelo": "#FFFF00", "Verde": "#00FF00", "Vermelho": "#FF0000"}
 
     def __init__(self):
@@ -86,7 +94,7 @@ class ControlePedidosPage(QWidget):
         linha_top = QHBoxLayout()
         linha_top.setSpacing(8)
 
-        btn_adicionar = QPushButton("Adicionar")
+        btn_adicionar = QPushButton("Atualizar")
         btn_adicionar.setObjectName("btnPrimary")
         btn_adicionar.setFixedHeight(34)
         btn_adicionar.clicked.connect(self._adicionar_linha)
@@ -128,7 +136,9 @@ class ControlePedidosPage(QWidget):
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(4, 100) #dpp      
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(5, 75) #observação    
+        header.resizeSection(5, 75) #observação
+        header.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(6, 100) #status
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabela.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.CurrentChanged)
@@ -152,7 +162,66 @@ class ControlePedidosPage(QWidget):
             self.dados = []
         for item in self.dados:
             item.setdefault("cor", "")
+            item.setdefault("status", "")
         self._popular_tabela()
+
+    def _extrair_codigo_pedido(self, nome):
+        """Extrai o código PC do nome (ex: 'PC16971 - Esofer' -> 'PC16971')"""
+        if not nome:
+            return nome
+        partes = nome.split(" ")
+        return partes[0].strip()
+
+    def _carregar_pedidos_pendentes(self):
+        """Carrega os dados de pedidos pendentes"""
+        try:
+            caminho = _caminho_pedidos_pendentes()
+            if os.path.exists(caminho):
+                with open(caminho, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+        return []
+
+    def _verificar_status_pedidos(self):
+        """Verifica o status dos pedidos com base em pedidos pendentes"""
+        pedidos_pendentes = self._carregar_pedidos_pendentes()
+        if not pedidos_pendentes:
+            return
+        
+        # Extrair números de pedidos pendentes da coluna "N do pedido"
+        pedidos_pendentes_nums = set()
+        for item in pedidos_pendentes:
+            if isinstance(item, dict):
+                n_pedido = item.get("N do pedido", "").strip()
+                if n_pedido:
+                    pedidos_pendentes_nums.add(n_pedido)
+        
+        # Verificar cada pedido no controle
+        for item in self.dados:
+            if not isinstance(item, dict):
+                continue
+            nome = item.get("nome", "").strip()
+            if not nome:
+                continue
+            
+            # Extrair o código PC
+            codigo = self._extrair_codigo_pedido(nome)
+            
+            # Se o código não começa com "PC", manter status "Em andamento"
+            if not codigo.startswith("PC"):
+                if not item.get("status"):
+                    item["status"] = "Em andamento"
+                continue
+            
+            # Verificar se existe nos pedidos pendentes
+            if codigo in pedidos_pendentes_nums:
+                # Se EXISTE, mudar status para "Entregue"
+                item["status"] = "Entregue"
+            else:
+                # Se NÃO existe, manter status "Em andamento" ou o que estava
+                if not item.get("status"):
+                    item["status"] = "Em andamento"
 
     def _popular_tabela(self):
         self.tabela.blockSignals(True)
@@ -165,7 +234,11 @@ class ControlePedidosPage(QWidget):
             for col, chave in enumerate(self.CHAVES):
                 valor = str(item.get(chave, ""))
                 cell = QTableWidgetItem(valor)
-                cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
+                # Não permitir edição da coluna de status
+                if chave == "status":
+                    cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                else:
+                    cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
                 if cor_hex and col == 4:
                     cell.setData(Qt.BackgroundRole, QBrush(QColor(cor_hex)))
                 self.tabela.setItem(row, col, cell)
@@ -186,9 +259,7 @@ class ControlePedidosPage(QWidget):
         self.label_contador.setText(f"{total} itens")
 
     def _adicionar_linha(self):
-        item = {chave: "" for chave in self.CHAVES}
-        item["cor"] = ""
-        self.dados.append(item)
+        self._verificar_status_pedidos()
         self._salvar_json()
         self._popular_tabela()
         self.tabela.selectRow(self.tabela.rowCount() - 2)
@@ -251,6 +322,7 @@ class ControlePedidosPage(QWidget):
                     valor = celula.text().strip() if celula else ""
                     novo_item[ch] = valor
                 novo_item["cor"] = ""
+                novo_item["status"] = ""
                 self.dados.append(novo_item)
                 self._salvar_json()
                 self.tabela.blockSignals(True)
