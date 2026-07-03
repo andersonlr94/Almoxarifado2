@@ -1,12 +1,14 @@
 import json
 import os
 from datetime import datetime
+import urllib.parse
+import webbrowser
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QStyledItemDelegate, QMenu, QInputDialog,
-    QDialog, QDialogButtonBox, QComboBox,
+    QDialog, QDialogButtonBox, QComboBox, QPlainTextEdit,
 )
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QColor, QBrush, QPainter, QPalette, QCursor, QShortcut, QKeySequence
@@ -50,6 +52,8 @@ class EditorDelegate(QStyledItemDelegate):
         return QSize(base.width(), max(base.height(), 34))
 
     def createEditor(self, parent, option, index):
+        if index.column() == 5:
+            return None
         if index.column() == 1 and self.fornecedores:
             editor = QComboBox(parent)
             editor.setEditable(True)
@@ -109,9 +113,113 @@ def _caminho_pedidos_entregues():
     return os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", f"{nome_arquivo}.json"))
 
 
+class ConfigEmailDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Configurar Modelo de E-mail")
+        self.setMinimumWidth(450)
+        self.setMinimumHeight(350)
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        info = QLabel(
+            "Defina o modelo de mensagem para o novo e-mail.<br/>"
+            "Use o termo <b>{DPP}</b> onde deseja inserir a data limite (DPP) do pedido."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet("color: #475569; font-size: 13px; line-height: 1.4;")
+        layout.addWidget(info)
+
+        self.txt_template = QPlainTextEdit()
+        self.txt_template.setPlaceholderText("Escreva aqui o corpo do email...")
+        self.txt_template.setStyleSheet("""
+            QPlainTextEdit {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 13px;
+                font-family: inherit;
+            }
+            QPlainTextEdit:focus {
+                border: 1px solid #3b82f6;
+                background-color: #ffffff;
+            }
+        """)
+        
+        # Carregar template existente
+        import config
+        dados = config._carregar()
+        default_template = "Bom dia!\nPoderia confirmar o recebimento do pedido {DPP}?"
+        template = dados.get("template_email_controle_pedidos", default_template)
+        self.txt_template.setPlainText(template)
+        layout.addWidget(self.txt_template)
+
+        # Botões
+        btn_box = QHBoxLayout()
+        btn_box.setSpacing(8)
+        
+        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.setFixedHeight(34)
+        btn_cancelar.setStyleSheet("""
+            QPushButton {
+                background-color: #f1f5f9;
+                color: #475569;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 0 16px;
+                font-weight: 500;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: #e2e8f0;
+            }
+        """)
+        btn_cancelar.clicked.connect(self.reject)
+        
+        btn_salvar = QPushButton("Salvar")
+        btn_salvar.setFixedHeight(34)
+        btn_salvar.setStyleSheet("""
+            QPushButton {
+                background-color: #2563eb;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 0 16px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: #1d4ed8;
+            }
+            QPushButton:pressed {
+                background-color: #1e40af;
+            }
+        """)
+        btn_salvar.clicked.connect(self._salvar_template)
+
+        btn_box.addStretch()
+        btn_box.addWidget(btn_cancelar)
+        btn_box.addWidget(btn_salvar)
+        
+        layout.addLayout(btn_box)
+
+    def _salvar_template(self):
+        import config
+        dados = config._carregar()
+        dados["template_email_controle_pedidos"] = self.txt_template.toPlainText()
+        config._salvar(dados)
+        self.accept()
+
+
 class ControlePedidosPage(QWidget):
-    COLUNAS = ["Data", "Fornecedores", "Nome", "Requisição", "DPP", "Observação"]
-    CHAVES = ["data", "fornecedores", "nome", "requisicao", "dpp", "observacao"]
+    COLUNAS = ["Data", "Fornecedores", "Nome", "Requisição", "DPP", "Email", "Observação"]
+    CHAVES = ["data", "fornecedores", "nome", "requisicao", "dpp", "email", "observacao"]
     CORES = {"Amarelo": "#FFFF00", "Verde": "#00FF00", "Vermelho": "#FF0000"}
 
     def __init__(self):
@@ -163,6 +271,28 @@ class ControlePedidosPage(QWidget):
         self.label_contador.setObjectName("statusLabel")
         linha_top.addWidget(self.label_contador)
 
+        self.btn_config = QPushButton("⚙")
+        self.btn_config.setFixedSize(34, 34)
+        self.btn_config.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_config.setStyleSheet("""
+            QPushButton {
+                font-size: 18px;
+                background-color: #f1f5f9;
+                color: #475569;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #e2e8f0;
+                color: #1e293b;
+            }
+            QPushButton:pressed {
+                background-color: #cbd5e1;
+            }
+        """)
+        self.btn_config.clicked.connect(self._abrir_config_email)
+        linha_top.addWidget(self.btn_config)
+
         card_layout.addLayout(linha_top)
 
         self.tabela = QTableWidget(0, len(self.COLUNAS))
@@ -195,7 +325,9 @@ class ControlePedidosPage(QWidget):
         header.resizeSection(3, 100) #requisição
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(4, 100) #dpp      
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(5, 100) #email
+        header.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabela.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.CurrentChanged)
@@ -287,14 +419,42 @@ class ControlePedidosPage(QWidget):
             cor_hex = self.CORES.get(cor_nome, "")
             status_val = item.get("status", "")
             for col, chave in enumerate(self.CHAVES):
-                valor = str(item.get(chave, ""))
-                cell = QTableWidgetItem(valor)
-                cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
-                if status_val == "Entregue":
-                    cell.setData(Qt.BackgroundRole, QBrush(QColor("#C8E6C9")))
-                if cor_hex and col == 4:
-                    cell.setData(Qt.BackgroundRole, QBrush(QColor(cor_hex)))
-                self.tabela.setItem(row, col, cell)
+                if col == 5:
+                    btn = QPushButton("Enviar")
+                    btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #2563eb;
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            font-weight: 600;
+                            font-size: 11px;
+                            margin: 4px;
+                        }
+                        QPushButton:hover {
+                            background-color: #1d4ed8;
+                        }
+                        QPushButton:pressed {
+                            background-color: #1e40af;
+                        }
+                    """)
+                    btn.clicked.connect(self._on_enviar_clicado)
+                    self.tabela.setCellWidget(row, col, btn)
+                    
+                    cell = QTableWidgetItem("")
+                    cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    if status_val == "Entregue":
+                        cell.setData(Qt.BackgroundRole, QBrush(QColor("#C8E6C9")))
+                    self.tabela.setItem(row, col, cell)
+                else:
+                    valor = str(item.get(chave, ""))
+                    cell = QTableWidgetItem(valor)
+                    cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
+                    if status_val == "Entregue":
+                        cell.setData(Qt.BackgroundRole, QBrush(QColor("#C8E6C9")))
+                    if cor_hex and col == 4:
+                        cell.setData(Qt.BackgroundRole, QBrush(QColor(cor_hex)))
+                    self.tabela.setItem(row, col, cell)
         self._inserir_linha_vazia()
         self.tabela.blockSignals(False)
         self._atualizar_contador()
@@ -304,7 +464,10 @@ class ControlePedidosPage(QWidget):
         self.tabela.insertRow(row)
         for col in range(len(self.COLUNAS)):
             cell = QTableWidgetItem("")
-            cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
+            if col == 5:
+                cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            else:
+                cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
             self.tabela.setItem(row, col, cell)
 
     def _atualizar_contador(self):
@@ -355,9 +518,35 @@ class ControlePedidosPage(QWidget):
         tabela = QTableWidget(1, len(self.COLUNAS))
         tabela.setHorizontalHeaderLabels(self.COLUNAS)
         for col, chave in enumerate(self.CHAVES):
-            celula = QTableWidgetItem(str(item.get(chave, "")))
-            celula.setFlags(celula.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            tabela.setItem(0, col, celula)
+            if col == 5:
+                btn = QPushButton("Enviar")
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #2563eb;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        font-weight: 600;
+                        font-size: 11px;
+                        margin: 4px;
+                    }
+                    QPushButton:hover {
+                        background-color: #1d4ed8;
+                    }
+                    QPushButton:pressed {
+                        background-color: #1e40af;
+                    }
+                """)
+                btn.clicked.connect(lambda checked=False, tbl=tabela: self._enviar_email_dialog(tbl))
+                tabela.setCellWidget(0, col, btn)
+                
+                celula = QTableWidgetItem("")
+                celula.setFlags(celula.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                tabela.setItem(0, col, celula)
+            else:
+                celula = QTableWidgetItem(str(item.get(chave, "")))
+                celula.setFlags(celula.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                tabela.setItem(0, col, celula)
         header = tabela.horizontalHeader()
         header.setStretchLastSection(True)
         header.setStyleSheet(
@@ -519,10 +708,36 @@ class ControlePedidosPage(QWidget):
                     self._auto_preencher_nome(row)
                 self._salvar_json()
                 self.tabela.blockSignals(True)
+                
+                # Add the "Enviar" button to the newly added row
+                btn = QPushButton("Enviar")
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #2563eb;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        font-weight: 600;
+                        font-size: 11px;
+                        margin: 4px;
+                    }
+                    QPushButton:hover {
+                        background-color: #1d4ed8;
+                    }
+                    QPushButton:pressed {
+                        background-color: #1e40af;
+                    }
+                """)
+                btn.clicked.connect(self._on_enviar_clicado)
+                self.tabela.setCellWidget(row, 5, btn)
+                
                 self.tabela.insertRow(row + 1)
                 for c in range(len(self.COLUNAS)):
                     celula = QTableWidgetItem("")
-                    celula.setFlags(celula.flags() | Qt.ItemFlag.ItemIsEditable)
+                    if c == 5:
+                        celula.setFlags(celula.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    else:
+                        celula.setFlags(celula.flags() | Qt.ItemFlag.ItemIsEditable)
                     self.tabela.setItem(row + 1, c, celula)
                 self.tabela.blockSignals(False)
                 self._atualizar_contador()
@@ -540,3 +755,95 @@ class ControlePedidosPage(QWidget):
                 json.dump(self.dados, f, ensure_ascii=False, indent=2)
         except OSError:
             pass
+
+    def _on_enviar_clicado(self):
+        button = self.sender()
+        if not button:
+            return
+        index = self.tabela.indexAt(button.pos())
+        row = index.row()
+        if row < 0:
+            return
+        self._enviar_email(row)
+
+    def _obter_email_fornecedor(self, fornecedor_nome):
+        if not fornecedor_nome:
+            return ""
+        fornecedor_nome = fornecedor_nome.strip().upper()
+        try:
+            with open(_caminho_fornecedores_json(), "r", encoding="utf-8") as f:
+                dados = json.load(f)
+            for item in dados:
+                f_nome = item.get("fornecedor", "").strip().upper()
+                if f_nome == fornecedor_nome:
+                    return item.get("email", "").strip()
+        except Exception:
+            pass
+        return ""
+
+    def _obter_corpo_email(self, dpp_val):
+        import config
+        dados = config._carregar()
+        default_template = "Bom dia!\nPoderia confirmar o recebimento do pedido {DPP}?"
+        template = dados.get("template_email_controle_pedidos", default_template)
+        corpo = template
+        for placeholder in ["{DPP}", "{dpp}", "{Dpp}", "{dPP}"]:
+            corpo = corpo.replace(placeholder, dpp_val)
+        return corpo
+
+    def _enviar_email(self, row):
+        # Obtain supplier name and look up its email
+        fornecedor_item = self.tabela.item(row, 1)
+        fornecedor_val = fornecedor_item.text().strip() if fornecedor_item else ""
+        destinatario = self._obter_email_fornecedor(fornecedor_val)
+
+        # Get DPP value
+        dpp_item = self.tabela.item(row, 4)
+        dpp_val = dpp_item.text().strip() if dpp_item else ""
+        corpo = self._obter_corpo_email(dpp_val)
+        
+        # Build mailto URL
+        if destinatario:
+            url = f"mailto:{destinatario}?body={urllib.parse.quote(corpo)}"
+        else:
+            url = f"mailto:?body={urllib.parse.quote(corpo)}"
+        
+        # Open in email client
+        webbrowser.open(url)
+
+        # Change DPP cell color to yellow in the UI
+        if dpp_item:
+            dpp_item.setData(Qt.BackgroundRole, QBrush(QColor("#FFFF00")))
+
+        # Update and save the color in the JSON data model
+        if 0 <= row < len(self.dados):
+            self.dados[row]["cor"] = "Amarelo"
+            self._salvar_json()
+
+    def _enviar_email_dialog(self, tabela):
+        # Obtain supplier name and look up its email
+        fornecedor_item = tabela.item(0, 1)
+        fornecedor_val = fornecedor_item.text().strip() if fornecedor_item else ""
+        destinatario = self._obter_email_fornecedor(fornecedor_val)
+
+        # Get DPP value
+        dpp_item = tabela.item(0, 4)
+        dpp_val = dpp_item.text().strip() if dpp_item else ""
+        corpo = self._obter_corpo_email(dpp_val)
+        
+        # Build mailto URL
+        if destinatario:
+            url = f"mailto:{destinatario}?body={urllib.parse.quote(corpo)}"
+        else:
+            url = f"mailto:?body={urllib.parse.quote(corpo)}"
+        
+        # Open in email client
+        webbrowser.open(url)
+
+        # Change DPP cell color to yellow in the dialog UI
+        if dpp_item:
+            dpp_item.setData(Qt.BackgroundRole, QBrush(QColor("#FFFF00")))
+
+    def _abrir_config_email(self):
+        dialog = ConfigEmailDialog(self)
+        dialog.exec()

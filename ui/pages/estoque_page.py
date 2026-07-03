@@ -114,6 +114,7 @@ class EstoquePage(QWidget):
         card_layout.addLayout(linha_top)
 
         self.tabela = QTableWidget(0, len(self.COLUNAS))
+        self.tabela.setStyleSheet("font-size: 11px;")
         self.tabela.setHorizontalHeaderLabels(self.COLUNAS)
         header = self.tabela.horizontalHeader()
         header.setStyleSheet(
