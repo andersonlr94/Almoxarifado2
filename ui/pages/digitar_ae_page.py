@@ -135,19 +135,19 @@ class DigitarAEPage(QWidget):
         self.campo_conta = QLineEdit()
         self.campo_conta.setPlaceholderText("Conta")
         self.campo_conta.setFixedHeight(34)
-        self.campo_conta.setFixedWidth(170)
+        self.campo_conta.setFixedWidth(153)
         linha_campos.addWidget(self.campo_conta)
 
         self.campo_subconta = QLineEdit()
         self.campo_subconta.setPlaceholderText("Subconta")
         self.campo_subconta.setFixedHeight(34)
-        self.campo_subconta.setFixedWidth(170)
+        self.campo_subconta.setFixedWidth(153)
         linha_campos.addWidget(self.campo_subconta)
 
         self.campo_centro_custo = QLineEdit()
         self.campo_centro_custo.setPlaceholderText("Centro de custo")
         self.campo_centro_custo.setFixedHeight(34)
-        self.campo_centro_custo.setFixedWidth(170)
+        self.campo_centro_custo.setFixedWidth(153)
         linha_campos.addWidget(self.campo_centro_custo)
 
         self.combo_fornecedor = QComboBox()
@@ -264,7 +264,7 @@ class DigitarAEPage(QWidget):
         splitter.addWidget(pagina_direita)
 
         splitter.setStretchFactor(0, 20)
-        splitter.setStretchFactor(1, 12)
+        splitter.setStretchFactor(1, 15)
 
         layout.addWidget(splitter)
         self._preencher_dados_ae()

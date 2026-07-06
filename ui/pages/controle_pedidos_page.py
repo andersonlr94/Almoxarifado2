@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QStyledItemDelegate, QMenu, QInputDialog,
     QDialog, QDialogButtonBox, QComboBox, QPlainTextEdit,
 )
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QTimer
 from PySide6.QtGui import QColor, QBrush, QPainter, QPalette, QCursor, QShortcut, QKeySequence
 
 
@@ -420,26 +420,28 @@ class ControlePedidosPage(QWidget):
             status_val = item.get("status", "")
             for col, chave in enumerate(self.CHAVES):
                 if col == 5:
-                    btn = QPushButton("Enviar")
-                    btn.setStyleSheet("""
-                        QPushButton {
-                            background-color: #2563eb;
-                            color: white;
-                            border: none;
-                            border-radius: 4px;
-                            font-weight: 600;
-                            font-size: 11px;
-                            margin: 4px;
-                        }
-                        QPushButton:hover {
-                            background-color: #1d4ed8;
-                        }
-                        QPushButton:pressed {
-                            background-color: #1e40af;
-                        }
-                    """)
-                    btn.clicked.connect(self._on_enviar_clicado)
-                    self.tabela.setCellWidget(row, col, btn)
+                    dpp_val = item.get("dpp", "").strip()
+                    if dpp_val:
+                        btn = QPushButton("Enviar")
+                        btn.setStyleSheet("""
+                            QPushButton {
+                                background-color: #2563eb;
+                                color: white;
+                                border: none;
+                                border-radius: 4px;
+                                font-weight: 600;
+                                font-size: 11px;
+                                margin: 4px;
+                            }
+                            QPushButton:hover {
+                                background-color: #1d4ed8;
+                            }
+                            QPushButton:pressed {
+                                background-color: #1e40af;
+                            }
+                        """)
+                        btn.clicked.connect(self._on_enviar_clicado)
+                        self.tabela.setCellWidget(row, col, btn)
                     
                     cell = QTableWidgetItem("")
                     cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -670,7 +672,7 @@ class ControlePedidosPage(QWidget):
         self._salvar_json()
         self._popular_tabela()
 
-    def _auto_preencher_nome(self, row):
+    def _auto_preencher_nome(self, row, sufixo=""):
         nome_anterior = self.dados[row - 1].get("nome", "").strip()
         if not nome_anterior.startswith("PC"):
             return
@@ -680,7 +682,7 @@ class ControlePedidosPage(QWidget):
         if not match:
             return
         numero = int(match.group(1)) + 1
-        novo_nome = f"PC{numero}"
+        novo_nome = f"PC{numero}{sufixo}"
         self.dados[row]["nome"] = novo_nome
         self.tabela.blockSignals(True)
         celula_nome = self.tabela.item(row, 2)
@@ -705,31 +707,33 @@ class ControlePedidosPage(QWidget):
                 novo_item["status"] = "Em andamento"
                 self.dados.append(novo_item)
                 if chave == "requisicao" and row > 0:
-                    self._auto_preencher_nome(row)
+                    self._auto_preencher_nome(row, " | Capex")
+                    QTimer.singleShot(0, lambda r=row: self.tabela.setCurrentCell(r, 1))
                 self._salvar_json()
                 self.tabela.blockSignals(True)
                 
-                # Add the "Enviar" button to the newly added row
-                btn = QPushButton("Enviar")
-                btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #2563eb;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        font-weight: 600;
-                        font-size: 11px;
-                        margin: 4px;
-                    }
-                    QPushButton:hover {
-                        background-color: #1d4ed8;
-                    }
-                    QPushButton:pressed {
-                        background-color: #1e40af;
-                    }
-                """)
-                btn.clicked.connect(self._on_enviar_clicado)
-                self.tabela.setCellWidget(row, 5, btn)
+                # Add the "Enviar" button to the newly added row if DPP is filled
+                if novo_item.get("dpp", "").strip():
+                    btn = QPushButton("Enviar")
+                    btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #2563eb;
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            font-weight: 600;
+                            font-size: 11px;
+                            margin: 4px;
+                        }
+                        QPushButton:hover {
+                            background-color: #1d4ed8;
+                        }
+                        QPushButton:pressed {
+                            background-color: #1e40af;
+                        }
+                    """)
+                    btn.clicked.connect(self._on_enviar_clicado)
+                    self.tabela.setCellWidget(row, 5, btn)
                 
                 self.tabela.insertRow(row + 1)
                 for c in range(len(self.COLUNAS)):
@@ -745,7 +749,33 @@ class ControlePedidosPage(QWidget):
             old_val = self.dados[row].get(chave, "")
             self.dados[row][chave] = item.text()
             if chave == "requisicao" and not old_val and item.text().strip() and row > 0:
-                self._auto_preencher_nome(row)
+                self._auto_preencher_nome(row, " | Capex")
+                QTimer.singleShot(0, lambda r=row: self.tabela.setCurrentCell(r, 1))
+            if chave == "dpp":
+                if item.text().strip():
+                    if not self.tabela.cellWidget(row, 5):
+                        btn = QPushButton("Enviar")
+                        btn.setStyleSheet("""
+                            QPushButton {
+                                background-color: #2563eb;
+                                color: white;
+                                border: none;
+                                border-radius: 4px;
+                                font-weight: 600;
+                                font-size: 11px;
+                                margin: 4px;
+                            }
+                            QPushButton:hover {
+                                background-color: #1d4ed8;
+                            }
+                            QPushButton:pressed {
+                                background-color: #1e40af;
+                            }
+                        """)
+                        btn.clicked.connect(self._on_enviar_clicado)
+                        self.tabela.setCellWidget(row, 5, btn)
+                else:
+                    self.tabela.removeCellWidget(row, 5)
             self._salvar_json()
 
     def _salvar_json(self):
@@ -803,10 +833,11 @@ class ControlePedidosPage(QWidget):
         corpo = self._obter_corpo_email(dpp_val)
         
         # Build mailto URL
+        assunto = f"Confirmação de recebimento do pedido {dpp_val}"
         if destinatario:
-            url = f"mailto:{destinatario}?body={urllib.parse.quote(corpo)}"
+            url = f"mailto:{destinatario}?subject={urllib.parse.quote(assunto)}&body={urllib.parse.quote(corpo)}"
         else:
-            url = f"mailto:?body={urllib.parse.quote(corpo)}"
+            url = f"mailto:?subject={urllib.parse.quote(assunto)}&body={urllib.parse.quote(corpo)}"
         
         # Open in email client
         webbrowser.open(url)
@@ -832,10 +863,11 @@ class ControlePedidosPage(QWidget):
         corpo = self._obter_corpo_email(dpp_val)
         
         # Build mailto URL
+        assunto = f"Confirmação de recebimento do pedido {dpp_val}"
         if destinatario:
-            url = f"mailto:{destinatario}?body={urllib.parse.quote(corpo)}"
+            url = f"mailto:{destinatario}?subject={urllib.parse.quote(assunto)}&body={urllib.parse.quote(corpo)}"
         else:
-            url = f"mailto:?body={urllib.parse.quote(corpo)}"
+            url = f"mailto:?subject={urllib.parse.quote(assunto)}&body={urllib.parse.quote(corpo)}"
         
         # Open in email client
         webbrowser.open(url)
