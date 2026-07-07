@@ -3,12 +3,12 @@ import os
 from datetime import datetime
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QStyledItemDelegate,
+    QAbstractItemView, QStyledItemDelegate, QInputDialog,
 )
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QColor, QBrush
+from PySide6.QtGui import QColor, QBrush, QShortcut, QKeySequence
 
 
 class EditorDelegate(QStyledItemDelegate):
@@ -56,6 +56,7 @@ class FornecedoresPage(QWidget):
         super().__init__()
         self.dados = []
         self._setup_ui()
+        self._setup_search_shortcuts()
         self._carregar_dados()
 
     def _setup_ui(self):
@@ -89,6 +90,13 @@ class FornecedoresPage(QWidget):
         linha_top.addWidget(btn_excluir)
 
         linha_top.addStretch()
+
+        self.campo_busca = QLineEdit()
+        self.campo_busca.setPlaceholderText("Pesquisar...")
+        self.campo_busca.setFixedHeight(30)
+        self.campo_busca.setFixedWidth(200)
+        self.campo_busca.textChanged.connect(self._aplicar_filtro)
+        linha_top.addWidget(self.campo_busca)
         card_layout.addLayout(linha_top)
 
         info_linha = QHBoxLayout()
@@ -133,12 +141,48 @@ class FornecedoresPage(QWidget):
                 self.dados = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             self.dados = []
+        self.dados.sort(key=lambda x: x.get("fornecedor", "").strip().lower())
+        self._popular_tabela()
+
+    def _setup_search_shortcuts(self):
+        QShortcut(QKeySequence("Ctrl+F"), self, self._buscar_item)
+        QShortcut(QKeySequence("Ctrl+L"), self, self._buscar_item)
+
+    def _buscar_item(self):
+        texto, ok = QInputDialog.getText(self, "Pesquisar", "Digite o texto para buscar:")
+        if not ok or not texto.strip():
+            return
+        busca = texto.strip().lower()
+        for row in range(self.tabela.rowCount()):
+            for col in range(self.tabela.columnCount()):
+                item = self.tabela.item(row, col)
+                if item and busca in item.text().lower():
+                    self.tabela.selectRow(row)
+                    self.tabela.scrollToItem(item)
+                    return
+        msg = QLabel("Texto não encontrado!", self)
+        msg.setStyleSheet("background-color: #f8d7da; color: #721c24; padding: 8px 16px; border-radius: 4px;")
+        msg.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
+        msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        msg.adjustSize()
+        parent_rect = self.rect()
+        msg.move((parent_rect.width() - msg.width()) // 2, (parent_rect.height() - msg.height()) // 2)
+        msg.show()
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(2000, msg.close)
+
+    def _aplicar_filtro(self):
         self._popular_tabela()
 
     def _popular_tabela(self):
         self.tabela.blockSignals(True)
         self.tabela.setRowCount(0)
+        filtro = self.campo_busca.text().strip().lower()
         for item in self.dados:
+            if filtro:
+                texto = " ".join(str(v) for v in item.values()).lower()
+                if filtro not in texto:
+                    continue
             row = self.tabela.rowCount()
             self.tabela.insertRow(row)
             for col, chave in enumerate(self.CHAVES):

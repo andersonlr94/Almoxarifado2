@@ -12,5 +12,12 @@
     "email": "",
     "telefone": "",
     "duns": "sss"
+  },
+  {
+    "indice": 3,
+    "fornecedor": "abacado",
+    "email": "",
+    "telefone": "",
+    "duns": ""
   }
 ]

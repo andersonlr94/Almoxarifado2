@@ -117,6 +117,7 @@ class DigitarAEPage(QWidget):
         linha_descricao.addStretch()
 
         self.label_duns = QLabel("DUNS: ---")
+        self.label_duns.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.label_duns.setStyleSheet("font-size: 11px; color: #888;")
         linha_descricao.addWidget(self.label_duns)
         card_layout.addLayout(linha_descricao)
@@ -247,8 +248,9 @@ class DigitarAEPage(QWidget):
         linha_titulo_anotacoes.addStretch()
 
         self.combo_abrir_anotacao = QComboBox()
-        self.combo_abrir_anotacao.setMinimumWidth(84)
-        self.combo_abrir_anotacao.setFixedHeight(32)
+        self.combo_abrir_anotacao.setMinimumWidth(92)
+        self.combo_abrir_anotacao.setFixedHeight(35)
+        self.combo_abrir_anotacao.setStyleSheet("padding: 0px 4px; text-align: center;")
         self.combo_abrir_anotacao.setPlaceholderText("Abrir...")
         self.combo_abrir_anotacao.currentIndexChanged.connect(self._carregar_anotacao_arquivo)
         linha_titulo_anotacoes.addWidget(self.combo_abrir_anotacao)
@@ -445,7 +447,7 @@ class DigitarAEPage(QWidget):
 
     def _salvar_anotacoes(self):
         texto = self.campo_anotacoes.toPlainText()
-        data = datetime.now().strftime("%d-%m-%Y")
+        data = self.combo_abrir_anotacao.currentText() or datetime.now().strftime("%d-%m-%Y")
         pasta = _caminho_pasta_anotacoes()
         os.makedirs(pasta, exist_ok=True)
         caminho = os.path.join(pasta, f"{data}.json")

@@ -267,6 +267,13 @@ class ControlePedidosPage(QWidget):
 
         linha_top.addStretch()
 
+        self.campo_busca = QLineEdit()
+        self.campo_busca.setPlaceholderText("Pesquisar...")
+        self.campo_busca.setFixedHeight(30)
+        self.campo_busca.setFixedWidth(200)
+        self.campo_busca.textChanged.connect(self._aplicar_filtro)
+        linha_top.addWidget(self.campo_busca)
+
         self.label_contador = QLabel("0 itens")
         self.label_contador.setObjectName("statusLabel")
         linha_top.addWidget(self.label_contador)
@@ -409,10 +416,18 @@ class ControlePedidosPage(QWidget):
             # Se NÃO existe nos pedidos pendentes, marcar como "Entregue"
             item["status"] = "Entregue"
 
+    def _aplicar_filtro(self):
+        self._popular_tabela()
+
     def _popular_tabela(self):
         self.tabela.blockSignals(True)
         self.tabela.setRowCount(0)
+        filtro = self.campo_busca.text().strip().lower()
         for item in self.dados:
+            if filtro:
+                texto = " ".join(str(v) for v in item.values()).lower()
+                if filtro not in texto:
+                    continue
             row = self.tabela.rowCount()
             self.tabela.insertRow(row)
             cor_nome = item.get("cor", "")
