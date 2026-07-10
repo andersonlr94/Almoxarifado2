@@ -261,10 +261,30 @@ class EstoquePage(QWidget):
         self._popular_tabela()
 
     def _fazer_atualizacao_parcial(self, linhas, header):
+        # Fallbacks padrão caso não tenha cabeçalho ou alguma coluna não seja encontrada
         kardex_idx = 0
         qtde_novo_idx = 6
         qtde_retorno_idx = 4
         consumo_medio_idx = 18
+        loc_novo_idx = 5
+        loc_retorno_idx = 3
+
+        if header:
+            mapa = self._obter_indices_parciais(header)
+            if "Kardex" in mapa:
+                kardex_idx = mapa["Kardex"]
+            if "Qtde novo" in mapa:
+                qtde_novo_idx = mapa["Qtde novo"]
+            if "Qtde retorno" in mapa:
+                qtde_retorno_idx = mapa["Qtde retorno"]
+            if "Consumo médio" in mapa:
+                consumo_medio_idx = mapa["Consumo médio"]
+            if "Loc novo" in mapa:
+                loc_novo_idx = mapa["Loc novo"]
+            if "Loc retorno" in mapa:
+                loc_retorno_idx = mapa["Loc retorno"]
+
+        max_idx = max(kardex_idx, qtde_novo_idx, qtde_retorno_idx, consumo_medio_idx, loc_novo_idx, loc_retorno_idx)
 
         dados_por_kardex = {
             str(item.get("Kardex", "")).strip(): item
@@ -275,7 +295,7 @@ class EstoquePage(QWidget):
         atualizou = False
         for linha in linhas:
             partes = linha.split("\t")
-            if len(partes) <= max(kardex_idx, qtde_novo_idx, qtde_retorno_idx, consumo_medio_idx):
+            if len(partes) <= max_idx:
                 continue
 
             chave_kardex = partes[kardex_idx].strip()
@@ -286,6 +306,8 @@ class EstoquePage(QWidget):
             item["Qtde novo"] = partes[qtde_novo_idx].strip()
             item["Qtde retorno"] = partes[qtde_retorno_idx].strip()
             item["Consumo médio"] = partes[consumo_medio_idx].strip()
+            item["Loc novo"] = partes[loc_novo_idx].strip()
+            item["Loc retorno"] = partes[loc_retorno_idx].strip()
             atualizou = True
 
         if atualizou:
@@ -328,16 +350,32 @@ class EstoquePage(QWidget):
 
     def _obter_indices_parciais(self, header):
         mapa = {}
-        nomes_esperados = ["Kardex", "Qtde novo", "Qtde retorno", "Consumo médio"]
-        normalizados_esperados = {self._normalizar_coluna(nome): nome for nome in nomes_esperados}
+        mapeamento_nomes = {
+            "kardex": "Kardex",
+            "codkardex": "Kardex",
+            
+            "qtdenovo": "Qtde novo",
+            "quantidadenovo": "Qtde novo",
+            
+            "qtderetorno": "Qtde retorno",
+            "quantidaderetorno": "Qtde retorno",
+            
+            "consumomedio": "Consumo médio",
+            "consumo": "Consumo médio",
+            
+            "locnovo": "Loc novo",
+            "localnovo": "Loc novo",
+            "localizacaonovo": "Loc novo",
+            
+            "locretorno": "Loc retorno",
+            "localretorno": "Loc retorno",
+            "localizacaoretorno": "Loc retorno",
+        }
 
         for indice, coluna in enumerate(header):
             chave = self._normalizar_coluna(coluna)
-            if chave in normalizados_esperados:
-                mapa[normalizados_esperados[chave]] = indice
-
-        if len(mapa) != len(nomes_esperados):
-            return None
+            if chave in mapeamento_nomes:
+                mapa[mapeamento_nomes[chave]] = indice
 
         return mapa
 
