@@ -239,6 +239,13 @@ class EstoquePage(QWidget):
             self.btn_toggle.setText("Visão completa")
         self._popular_tabela()
 
+        # Sincronizar itens com estoque zero
+        main_win = self.window()
+        if main_win and hasattr(main_win, "pages"):
+            itens_zero_page = main_win.pages.get("itens_zero")
+            if itens_zero_page:
+                itens_zero_page._sincronizar()
+
         QMessageBox.information(
             self,
             "Sucesso",

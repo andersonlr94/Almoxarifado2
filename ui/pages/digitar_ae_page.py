@@ -201,6 +201,7 @@ class DigitarAEPage(QWidget):
         card_layout.addLayout(linha_botoes)
 
         self.tabela = QTableWidget(0, len(HEADERS_TABELA))
+        self.tabela.setObjectName("tabelaDigitarAE")
         self.tabela.setHorizontalHeaderLabels(HEADERS_TABELA)
         header = self.tabela.horizontalHeader()
         percentuais = [0.17, 0.30, 0.10, 0.05, 0.10, 0.11, 0.09, 0.08]
@@ -218,8 +219,8 @@ class DigitarAEPage(QWidget):
         self._ajustar_colunas()
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabela.setAlternatingRowColors(True)
-        self.tabela.verticalHeader().setDefaultSectionSize(36)
-        self.tabela.verticalHeader().setMinimumSectionSize(28)
+        self.tabela.verticalHeader().setDefaultSectionSize(28)
+        self.tabela.verticalHeader().setMinimumSectionSize(24)
         self.tabela.verticalHeader().setVisible(False)
         card_layout.addWidget(self.tabela)
 

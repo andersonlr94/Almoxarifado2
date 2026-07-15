@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QStyledItemDelegate, QMenu, QInputDialog,
     QDialog, QDialogButtonBox, QComboBox, QPlainTextEdit,
 )
-from PySide6.QtCore import Qt, QSize, QTimer
+from PySide6.QtCore import Qt, QSize, QTimer, QPoint
 from PySide6.QtGui import QColor, QBrush, QPainter, QPalette, QCursor, QShortcut, QKeySequence
 
 
@@ -49,7 +49,7 @@ class EditorDelegate(QStyledItemDelegate):
 
     def sizeHint(self, option, index):
         base = super().sizeHint(option, index)
-        return QSize(base.width(), max(base.height(), 34))
+        return QSize(base.width(), max(base.height(), 24))
 
     def createEditor(self, parent, option, index):
         if index.column() == 5:
@@ -59,17 +59,19 @@ class EditorDelegate(QStyledItemDelegate):
             editor.setEditable(True)
             editor.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
             editor.addItems(self.fornecedores)
-            editor.setMinimumHeight(34)
-            editor.lineEdit().setStyleSheet("padding: 0px; border: none; border-radius: 0px;")
+            editor.setMinimumHeight(24)
+            editor.setContentsMargins(0, 0, 0, 0)
+            editor.lineEdit().setStyleSheet("padding: 0px; margin: 0px; border: none; border-radius: 0px;")
             editor.setStyleSheet(
-                "QComboBox { padding: 0px; border: none; border-radius: 0px; }"
+                "QComboBox { padding: 0px; margin: 0px; border: none; border-radius: 0px; }"
                 "QComboBox::drop-down { width: 0px; border: none; background: transparent; }"
             )
             return editor
         editor = super().createEditor(parent, option, index)
         if isinstance(editor, QLineEdit):
-            editor.setMinimumHeight(34)
-            editor.setStyleSheet("border: none; border-bottom: 1px solid #999; border-radius: 0px;")
+            editor.setMinimumHeight(24)
+            editor.setContentsMargins(0, 0, 0, 0)
+            editor.setStyleSheet("padding: 0px; margin: 0px; border: none; border-bottom: 1px solid #999; border-radius: 0px;")
         return editor
 
     def setModelData(self, editor, model, index):
@@ -265,6 +267,12 @@ class ControlePedidosPage(QWidget):
         btn_remover.clicked.connect(self._remover_linha)
         linha_top.addWidget(btn_remover)
 
+        btn_pendente = QPushButton("Marcar como pendente")
+        btn_pendente.setObjectName("btnSecondary")
+        btn_pendente.setFixedHeight(34)
+        btn_pendente.clicked.connect(self._marcar_pendente)
+        linha_top.addWidget(btn_pendente)
+
         linha_top.addStretch()
 
         self.campo_busca = QLineEdit()
@@ -304,6 +312,7 @@ class ControlePedidosPage(QWidget):
 
         self.tabela = QTableWidget(0, len(self.COLUNAS))
         self.tabela.setStyleSheet(
+            "QTableWidget::item { padding: 0px; }\n"
             "QTableWidget::item:focus { outline: none; border: none; border-bottom: 1px solid #999; }"
         )
         self.tabela.setHorizontalHeaderLabels(self.COLUNAS)
@@ -339,8 +348,8 @@ class ControlePedidosPage(QWidget):
         self.tabela.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.CurrentChanged)
         self.tabela.setAlternatingRowColors(False)
-        self.tabela.verticalHeader().setDefaultSectionSize(36)
-        self.tabela.verticalHeader().setMinimumSectionSize(28)
+        self.tabela.verticalHeader().setDefaultSectionSize(24)
+        self.tabela.verticalHeader().setMinimumSectionSize(18)
         self.tabela.verticalHeader().setVisible(False)
         self.tabela.setItemDelegate(EditorDelegate(self.tabela, self.lista_fornecedores))
         self.tabela.itemChanged.connect(self._item_modificado)
@@ -437,26 +446,8 @@ class ControlePedidosPage(QWidget):
                 if col == 5:
                     dpp_val = item.get("dpp", "").strip()
                     if dpp_val:
-                        btn = QPushButton("Enviar")
-                        btn.setStyleSheet("""
-                            QPushButton {
-                                background-color: #2563eb;
-                                color: white;
-                                border: none;
-                                border-radius: 4px;
-                                font-weight: 600;
-                                font-size: 11px;
-                                margin: 4px;
-                            }
-                            QPushButton:hover {
-                                background-color: #1d4ed8;
-                            }
-                            QPushButton:pressed {
-                                background-color: #1e40af;
-                            }
-                        """)
-                        btn.clicked.connect(self._on_enviar_clicado)
-                        self.tabela.setCellWidget(row, col, btn)
+                        btn_container = self._criar_botao_enviar(self._on_enviar_clicado)
+                        self.tabela.setCellWidget(row, col, btn_container)
                     
                     cell = QTableWidgetItem("")
                     cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -536,26 +527,8 @@ class ControlePedidosPage(QWidget):
         tabela.setHorizontalHeaderLabels(self.COLUNAS)
         for col, chave in enumerate(self.CHAVES):
             if col == 5:
-                btn = QPushButton("Enviar")
-                btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #2563eb;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        font-weight: 600;
-                        font-size: 11px;
-                        margin: 4px;
-                    }
-                    QPushButton:hover {
-                        background-color: #1d4ed8;
-                    }
-                    QPushButton:pressed {
-                        background-color: #1e40af;
-                    }
-                """)
-                btn.clicked.connect(lambda checked=False, tbl=tabela: self._enviar_email_dialog(tbl))
-                tabela.setCellWidget(0, col, btn)
+                btn_container = self._criar_botao_enviar(lambda checked=False, tbl=tabela: self._enviar_email_dialog(tbl))
+                tabela.setCellWidget(0, col, btn_container)
                 
                 celula = QTableWidgetItem("")
                 celula.setFlags(celula.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -657,6 +630,17 @@ class ControlePedidosPage(QWidget):
             self._salvar_json()
         self._popular_tabela()
 
+    def _marcar_pendente(self):
+        selected_rows = self.tabela.selectionModel().selectedRows()
+        if not selected_rows:
+            return
+        indices = sorted(set(index.row() for index in selected_rows), reverse=True)
+        for row in indices:
+            if 0 <= row < len(self.dados):
+                self.dados[row]["status"] = "Em andamento"
+        self._salvar_json()
+        self._popular_tabela()
+
     def _context_menu(self, pos):
         item = self.tabela.itemAt(pos)
         if not item:
@@ -729,26 +713,8 @@ class ControlePedidosPage(QWidget):
                 
                 # Add the "Enviar" button to the newly added row if DPP is filled
                 if novo_item.get("dpp", "").strip():
-                    btn = QPushButton("Enviar")
-                    btn.setStyleSheet("""
-                        QPushButton {
-                            background-color: #2563eb;
-                            color: white;
-                            border: none;
-                            border-radius: 4px;
-                            font-weight: 600;
-                            font-size: 11px;
-                            margin: 4px;
-                        }
-                        QPushButton:hover {
-                            background-color: #1d4ed8;
-                        }
-                        QPushButton:pressed {
-                            background-color: #1e40af;
-                        }
-                    """)
-                    btn.clicked.connect(self._on_enviar_clicado)
-                    self.tabela.setCellWidget(row, 5, btn)
+                    btn_container = self._criar_botao_enviar(self._on_enviar_clicado)
+                    self.tabela.setCellWidget(row, 5, btn_container)
                 
                 self.tabela.insertRow(row + 1)
                 for c in range(len(self.COLUNAS)):
@@ -769,26 +735,8 @@ class ControlePedidosPage(QWidget):
             if chave == "dpp":
                 if item.text().strip():
                     if not self.tabela.cellWidget(row, 5):
-                        btn = QPushButton("Enviar")
-                        btn.setStyleSheet("""
-                            QPushButton {
-                                background-color: #2563eb;
-                                color: white;
-                                border: none;
-                                border-radius: 4px;
-                                font-weight: 600;
-                                font-size: 11px;
-                                margin: 4px;
-                            }
-                            QPushButton:hover {
-                                background-color: #1d4ed8;
-                            }
-                            QPushButton:pressed {
-                                background-color: #1e40af;
-                            }
-                        """)
-                        btn.clicked.connect(self._on_enviar_clicado)
-                        self.tabela.setCellWidget(row, 5, btn)
+                        btn_container = self._criar_botao_enviar(self._on_enviar_clicado)
+                        self.tabela.setCellWidget(row, 5, btn_container)
                 else:
                     self.tabela.removeCellWidget(row, 5)
             self._salvar_json()
@@ -801,11 +749,41 @@ class ControlePedidosPage(QWidget):
         except OSError:
             pass
 
+    def _criar_botao_enviar(self, clicked_slot):
+        container = QWidget()
+        layout_btn = QHBoxLayout(container)
+        layout_btn.setContentsMargins(0, 0, 0, 0)
+        layout_btn.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        btn = QPushButton("Enviar")
+        btn.setFixedSize(50, 20)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2563eb;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-weight: 600;
+                font-size: 10px;
+            }
+            QPushButton:hover {
+                background-color: #1d4ed8;
+            }
+            QPushButton:pressed {
+                background-color: #1e40af;
+            }
+        """)
+        btn.clicked.connect(clicked_slot)
+        layout_btn.addWidget(btn)
+        return container
+
     def _on_enviar_clicado(self):
         button = self.sender()
         if not button:
             return
-        index = self.tabela.indexAt(button.pos())
+        # Mapear a posição do botão para o viewport da tabela
+        pos = button.mapTo(self.tabela.viewport(), button.rect().center())
+        index = self.tabela.indexAt(pos)
         row = index.row()
         if row < 0:
             return

@@ -1,4 +1,4 @@
-﻿from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget, QLabel, QSizePolicy, QSpacerItem
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget, QLabel, QSizePolicy, QSpacerItem
 from PySide6.QtCore import Qt, QSize
 from ui.styles import FUSION_QSS
 from ui.pages.inicio_page import InicioPage
@@ -12,6 +12,7 @@ from ui.pages.reajuste_precos_page import ReajustePrecosPage
 from ui.pages.settings_page import SettingsPage
 from ui.pages.fornecedores_page import FornecedoresPage
 from ui.pages.pedidos_pendentes_page import PedidosPendentesPage
+from ui.pages.testar_contas_page import TestarContasPage
 
 
 SIDEBAR_WIDTH = 220
@@ -92,6 +93,7 @@ class MainWindow(QMainWindow):
             ("fornecedores", "Fornecedores", "⚑"),
             ("controle_pedidos", "Controle de Pedidos", "☐"),
             ("pedidos_pendentes", "Pedidos Pendentes", "◈"),
+            ("testar_contas", "Testar Contas", "⬡"),
             ("reajuste_precos", "Reajuste de Preços", "♯"),
             ("configuracoes", "Configurações", "⚙"),
         ]
@@ -133,6 +135,7 @@ class MainWindow(QMainWindow):
             ("fornecedores", FornecedoresPage),
             ("controle_pedidos", ControlePedidosPage),
             ("pedidos_pendentes", PedidosPendentesPage),
+            ("testar_contas", TestarContasPage),
             ("reajuste_precos", ReajustePrecosPage),
             ("configuracoes", SettingsPage),
         ]

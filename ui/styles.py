@@ -455,4 +455,24 @@ QPushButton#segmented:checked {
     border-color: #2563eb;
     font-weight: 600;
 }
+
+/* ── Specific Table for Digitar AE page ── */
+QTableWidget#tabelaDigitarAE {
+    font-size: 11px;
+}
+
+QTableWidget#tabelaDigitarAE QHeaderView::section {
+    font-size: 10px;
+    padding: 4px 6px;
+}
+
+/* ── Specific Table for Itens com Estoque Zero page ── */
+QTableWidget#tabelaItensZero {
+    font-size: 11px;
+}
+
+QTableWidget#tabelaItensZero QHeaderView::section {
+    font-size: 10px;
+    padding: 4px 6px;
+}
 '''

@@ -90,13 +90,13 @@ class EditorDelegate(QStyledItemDelegate):
 
     def sizeHint(self, option, index):
         base = super().sizeHint(option, index)
-        return QSize(base.width(), max(base.height(), 34))
+        return QSize(base.width(), max(base.height(), 26))
 
     def createEditor(self, parent, option, index):
         editor = super().createEditor(parent, option, index)
         if isinstance(editor, QLineEdit):
-            editor.setMinimumHeight(34)
-            editor.setStyleSheet("padding: 4px 8px;")
+            editor.setMinimumHeight(26)
+            editor.setStyleSheet("padding: 2px 6px; font-size: 11px;")
             col = index.column()
             if col < len(self._chaves) and self._chaves[col] not in ("dpp", "observacao"):
                 editor.setReadOnly(True)
@@ -201,6 +201,7 @@ class ItensZeroPage(QWidget):
         card_layout.addLayout(info_linha)
 
         self.tabela = TabelaReordenavel(0, len(self.COLUNAS))
+        self.tabela.setObjectName("tabelaItensZero")
         self.tabela.setHorizontalHeaderLabels(self.COLUNAS)
         header = self.tabela.horizontalHeader()
         header.setStretchLastSection(True)
@@ -221,8 +222,8 @@ class ItensZeroPage(QWidget):
         self.tabela.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
         self.tabela.setAlternatingRowColors(False)
-        self.tabela.verticalHeader().setDefaultSectionSize(36)
-        self.tabela.verticalHeader().setMinimumSectionSize(28)
+        self.tabela.verticalHeader().setDefaultSectionSize(28)
+        self.tabela.verticalHeader().setMinimumSectionSize(24)
         self.tabela.verticalHeader().setVisible(False)
         self.tabela.setItemDelegate(EditorDelegate(self.tabela, self.CHAVES))
         self.tabela.itemChanged.connect(self._item_modificado)
