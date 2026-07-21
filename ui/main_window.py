@@ -4,6 +4,7 @@ from ui.styles import FUSION_QSS
 from ui.pages.inicio_page import InicioPage
 from ui.pages.programacao_agulhas_page import ProgramacaoAgulhasPage
 from ui.pages.digitar_ae_page import DigitarAEPage
+from ui.pages.dpp_ativos_page import DppAtivosPage
 from ui.pages.transferencia_page import TransferenciaPage
 from ui.pages.estoque_page import EstoquePage
 from ui.pages.itens_zero_page import ItensZeroPage
@@ -87,6 +88,7 @@ class MainWindow(QMainWindow):
             ("inicio", "Início", "⌂"),
             ("programacao_agulhas", "Programação de Agulhas", "⊞"),
             ("digitar_ae", "Digitar AE", "✎"),
+            ("dpp_ativos", "DPP Ativos", "📥"),
             ("transferencia", "Transferência", "⇄"),
             ("estoque", "Estoque", "▣"),
             ("itens_zero", "Itens 0", "○"),
@@ -129,6 +131,7 @@ class MainWindow(QMainWindow):
             ("inicio", InicioPage),
             ("programacao_agulhas", ProgramacaoAgulhasPage),
             ("digitar_ae", DigitarAEPage),
+            ("dpp_ativos", DppAtivosPage),
             ("transferencia", TransferenciaPage),
             ("estoque", EstoquePage),
             ("itens_zero", ItensZeroPage),
