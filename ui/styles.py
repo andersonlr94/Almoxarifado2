@@ -51,6 +51,30 @@ QPushButton#tabButton:checked {
     font-weight: 600;
 }
 
+QPushButton#tabSubButton {
+    background-color: #0a1628;
+    color: #94a3b8;
+    border: none;
+    border-left: 3px solid transparent;
+    padding: 8px 16px 8px 28px;
+    font-size: 12px;
+    font-weight: 400;
+    text-align: left;
+    border-radius: 0;
+}
+
+QPushButton#tabSubButton:hover {
+    background-color: #1e293b;
+    color: #e2e8f0;
+}
+
+QPushButton#tabSubButton:checked {
+    background-color: #162032;
+    color: #60a5fa;
+    border-left: 3px solid #3b82f6;
+    font-weight: 600;
+}
+
 /* ── Content Area ── */
 QWidget#contentArea {
     background-color: #f1f5f9;

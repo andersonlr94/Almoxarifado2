@@ -49,7 +49,7 @@ class EditorDelegate(QStyledItemDelegate):
 
     def sizeHint(self, option, index):
         base = super().sizeHint(option, index)
-        return QSize(base.width(), max(base.height(), 24))
+        return QSize(base.width(), 24)
 
     def createEditor(self, parent, option, index):
         if index.column() == 5:
@@ -59,7 +59,8 @@ class EditorDelegate(QStyledItemDelegate):
             editor.setEditable(True)
             editor.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
             editor.addItems(self.fornecedores)
-            editor.setMinimumHeight(24)
+            editor.setFixedHeight(option.rect.height())
+            editor.setMaximumWidth(option.rect.width())
             editor.setContentsMargins(0, 0, 0, 0)
             editor.lineEdit().setStyleSheet("padding: 0px; margin: 0px; border: none; border-radius: 0px;")
             editor.setStyleSheet(
@@ -69,7 +70,8 @@ class EditorDelegate(QStyledItemDelegate):
             return editor
         editor = super().createEditor(parent, option, index)
         if isinstance(editor, QLineEdit):
-            editor.setMinimumHeight(24)
+            editor.setFixedHeight(option.rect.height())
+            editor.setMaximumWidth(option.rect.width())
             editor.setContentsMargins(0, 0, 0, 0)
             editor.setStyleSheet("padding: 0px; margin: 0px; border: none; border-bottom: 1px solid #999; border-radius: 0px;")
         return editor
@@ -220,8 +222,8 @@ class ConfigEmailDialog(QDialog):
 
 
 class ControlePedidosPage(QWidget):
-    COLUNAS = ["Data", "Fornecedores", "Nome", "Requisição", "DPP", "Email", "Observação"]
-    CHAVES = ["data", "fornecedores", "nome", "requisicao", "dpp", "email", "observacao"]
+    COLUNAS = ["Data", "Fornecedores", "Nome", "Requisição", "DPP", "Status", "Email", "Observação"]
+    CHAVES = ["data", "fornecedores", "nome", "requisicao", "dpp", "status_cor", "email", "observacao"]
     CORES = {"Amarelo": "#FFFF00", "Verde": "#00FF00", "Vermelho": "#FF0000"}
 
     def __init__(self):
@@ -342,14 +344,17 @@ class ControlePedidosPage(QWidget):
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(4, 100) #dpp      
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(5, 100) #email
-        header.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
+        header.resizeSection(5, 70) #status cor
+        header.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(6, 70) #email
+        header.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch) #observação
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabela.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.CurrentChanged)
         self.tabela.setAlternatingRowColors(False)
         self.tabela.verticalHeader().setDefaultSectionSize(24)
         self.tabela.verticalHeader().setMinimumSectionSize(18)
+        self.tabela.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         self.tabela.verticalHeader().setVisible(False)
         self.tabela.setItemDelegate(EditorDelegate(self.tabela, self.lista_fornecedores))
         self.tabela.itemChanged.connect(self._item_modificado)
@@ -429,6 +434,12 @@ class ControlePedidosPage(QWidget):
         self._popular_tabela()
 
     def _popular_tabela(self):
+        # Salvar posições dos scrollbars e célula atual
+        v_scroll = self.tabela.verticalScrollBar().value()
+        h_scroll = self.tabela.horizontalScrollBar().value()
+        curr_row = self.tabela.currentRow()
+        curr_col = self.tabela.currentColumn()
+
         self.tabela.blockSignals(True)
         self.tabela.setRowCount(0)
         filtro = self.campo_busca.text().strip().lower()
@@ -443,11 +454,20 @@ class ControlePedidosPage(QWidget):
             cor_hex = self.CORES.get(cor_nome, "")
             status_val = item.get("status", "")
             for col, chave in enumerate(self.CHAVES):
-                if col == 5:
+                if col == 6:
                     dpp_val = item.get("dpp", "").strip()
                     if dpp_val:
                         btn_container = self._criar_botao_enviar(self._on_enviar_clicado)
                         self.tabela.setCellWidget(row, col, btn_container)
+                    
+                    cell = QTableWidgetItem("")
+                    cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    if status_val == "Entregue":
+                        cell.setData(Qt.BackgroundRole, QBrush(QColor("#C8E6C9")))
+                    self.tabela.setItem(row, col, cell)
+                elif col == 5:
+                    btn_container = self._criar_botao_cor(self._on_cor_clicado)
+                    self.tabela.setCellWidget(row, col, btn_container)
                     
                     cell = QTableWidgetItem("")
                     cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -467,12 +487,20 @@ class ControlePedidosPage(QWidget):
         self.tabela.blockSignals(False)
         self._atualizar_contador()
 
+        # Restaurar célula selecionada e foco
+        if curr_row >= 0 and curr_row < self.tabela.rowCount() and curr_col >= 0 and curr_col < self.tabela.columnCount():
+            self.tabela.setCurrentCell(curr_row, curr_col)
+
+        # Restaurar posições dos scrollbars
+        self.tabela.verticalScrollBar().setValue(v_scroll)
+        self.tabela.horizontalScrollBar().setValue(h_scroll)
+
     def _inserir_linha_vazia(self):
         row = self.tabela.rowCount()
         self.tabela.insertRow(row)
         for col in range(len(self.COLUNAS)):
             cell = QTableWidgetItem("")
-            if col == 5:
+            if col in (5, 6):
                 cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
             else:
                 cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
@@ -526,8 +554,15 @@ class ControlePedidosPage(QWidget):
         tabela = QTableWidget(1, len(self.COLUNAS))
         tabela.setHorizontalHeaderLabels(self.COLUNAS)
         for col, chave in enumerate(self.CHAVES):
-            if col == 5:
+            if col == 6:
                 btn_container = self._criar_botao_enviar(lambda checked=False, tbl=tabela: self._enviar_email_dialog(tbl))
+                tabela.setCellWidget(0, col, btn_container)
+                
+                celula = QTableWidgetItem("")
+                celula.setFlags(celula.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                tabela.setItem(0, col, celula)
+            elif col == 5:
+                btn_container = self._criar_botao_cor(lambda checked=False, tbl=tabela: self._on_cor_dialog_clicado(tbl))
                 tabela.setCellWidget(0, col, btn_container)
                 
                 celula = QTableWidgetItem("")
@@ -536,6 +571,11 @@ class ControlePedidosPage(QWidget):
             else:
                 celula = QTableWidgetItem(str(item.get(chave, "")))
                 celula.setFlags(celula.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                if col == 4:
+                    cor_nome = item.get("cor", "")
+                    cor_hex = self.CORES.get(cor_nome, "")
+                    if cor_hex:
+                        celula.setData(Qt.BackgroundRole, QBrush(QColor(cor_hex)))
                 tabela.setItem(0, col, celula)
         header = tabela.horizontalHeader()
         header.setStretchLastSection(True)
@@ -711,15 +751,19 @@ class ControlePedidosPage(QWidget):
                 self._salvar_json()
                 self.tabela.blockSignals(True)
                 
+                # Add "Cor" button
+                btn_container_cor = self._criar_botao_cor(self._on_cor_clicado)
+                self.tabela.setCellWidget(row, 5, btn_container_cor)
+
                 # Add the "Enviar" button to the newly added row if DPP is filled
                 if novo_item.get("dpp", "").strip():
                     btn_container = self._criar_botao_enviar(self._on_enviar_clicado)
-                    self.tabela.setCellWidget(row, 5, btn_container)
+                    self.tabela.setCellWidget(row, 6, btn_container)
                 
                 self.tabela.insertRow(row + 1)
                 for c in range(len(self.COLUNAS)):
                     celula = QTableWidgetItem("")
-                    if c == 5:
+                    if c in (5, 6):
                         celula.setFlags(celula.flags() & ~Qt.ItemFlag.ItemIsEditable)
                     else:
                         celula.setFlags(celula.flags() | Qt.ItemFlag.ItemIsEditable)
@@ -734,11 +778,11 @@ class ControlePedidosPage(QWidget):
                 QTimer.singleShot(0, lambda r=row: self.tabela.setCurrentCell(r, 1))
             if chave == "dpp":
                 if item.text().strip():
-                    if not self.tabela.cellWidget(row, 5):
+                    if not self.tabela.cellWidget(row, 6):
                         btn_container = self._criar_botao_enviar(self._on_enviar_clicado)
-                        self.tabela.setCellWidget(row, 5, btn_container)
+                        self.tabela.setCellWidget(row, 6, btn_container)
                 else:
-                    self.tabela.removeCellWidget(row, 5)
+                    self.tabela.removeCellWidget(row, 6)
             self._salvar_json()
 
     def _salvar_json(self):
@@ -788,6 +832,87 @@ class ControlePedidosPage(QWidget):
         if row < 0:
             return
         self._enviar_email(row)
+
+    def _criar_botao_cor(self, clicked_slot):
+        container = QWidget()
+        layout_btn = QHBoxLayout(container)
+        layout_btn.setContentsMargins(0, 0, 0, 0)
+        layout_btn.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        btn = QPushButton("")
+        btn.setFixedSize(16, 16)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #94a3b8;
+                border: none;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #64748b;
+            }
+            QPushButton:pressed {
+                background-color: #475569;
+            }
+        """)
+        btn.clicked.connect(clicked_slot)
+        layout_btn.addWidget(btn)
+        return container
+
+    def _on_cor_clicado(self):
+        button = self.sender()
+        if not button:
+            return
+        pos = button.mapTo(self.tabela.viewport(), button.rect().center())
+        index = self.tabela.indexAt(pos)
+        row = index.row()
+        if row < 0 or row >= len(self.dados):
+            return
+        
+        cor_atual = self.dados[row].get("cor", "")
+        if cor_atual == "Amarelo":
+            nova_cor = "Verde"
+        elif cor_atual == "Verde":
+            nova_cor = "Vermelho"
+        elif cor_atual == "Vermelho":
+            nova_cor = ""
+        else:
+            nova_cor = "Amarelo"
+            
+        self.dados[row]["cor"] = nova_cor
+        self._salvar_json()
+        self._popular_tabela()
+
+    def _on_cor_dialog_clicado(self, tabela):
+        button = self.sender()
+        if not button:
+            return
+        dpp_item = tabela.item(0, 4)
+        if not dpp_item:
+            return
+        
+        bg_brush = dpp_item.data(Qt.BackgroundRole)
+        bg_color = bg_brush.color().name().upper() if bg_brush else ""
+        
+        cor_atual = ""
+        for nome, hex_val in self.CORES.items():
+            if bg_color == hex_val:
+                cor_atual = nome
+                break
+                
+        if cor_atual == "Amarelo":
+            nova_cor_nome = "Verde"
+        elif cor_atual == "Verde":
+            nova_cor_nome = "Vermelho"
+        elif cor_atual == "Vermelho":
+            nova_cor_nome = ""
+        else:
+            nova_cor_nome = "Amarelo"
+            
+        if nova_cor_nome:
+            hex_cor = self.CORES[nova_cor_nome]
+            dpp_item.setData(Qt.BackgroundRole, QBrush(QColor(hex_cor)))
+        else:
+            dpp_item.setData(Qt.BackgroundRole, None)
 
     def _obter_email_fornecedor(self, fornecedor_nome):
         if not fornecedor_nome:
