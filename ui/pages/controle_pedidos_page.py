@@ -741,6 +741,12 @@ class ControlePedidosPage(QWidget):
                 for c, ch in enumerate(self.CHAVES):
                     celula = self.tabela.item(row, c)
                     valor = celula.text().strip() if celula else ""
+                    if ch in ("fornecedores", "dpp"):
+                        valor = valor.upper()
+                        self.tabela.blockSignals(True)
+                        if celula:
+                            celula.setText(valor)
+                        self.tabela.blockSignals(False)
                     novo_item[ch] = valor
                 novo_item["cor"] = ""
                 novo_item["status"] = "Em andamento"
@@ -772,12 +778,20 @@ class ControlePedidosPage(QWidget):
                 self._atualizar_contador()
         elif 0 <= row < len(self.dados):
             old_val = self.dados[row].get(chave, "")
-            self.dados[row][chave] = item.text()
-            if chave == "requisicao" and not old_val and item.text().strip() and row > 0:
+            valor = item.text()
+            if chave in ("fornecedores", "dpp"):
+                valor_upper = valor.upper()
+                if valor_upper != valor:
+                    self.tabela.blockSignals(True)
+                    item.setText(valor_upper)
+                    self.tabela.blockSignals(False)
+                    valor = valor_upper
+            self.dados[row][chave] = valor
+            if chave == "requisicao" and not old_val and valor.strip() and row > 0:
                 self._auto_preencher_nome(row, " | Capex")
                 QTimer.singleShot(0, lambda r=row: self.tabela.setCurrentCell(r, 1))
             if chave == "dpp":
-                if item.text().strip():
+                if valor.strip():
                     if not self.tabela.cellWidget(row, 6):
                         btn_container = self._criar_botao_enviar(self._on_enviar_clicado)
                         self.tabela.setCellWidget(row, 6, btn_container)
