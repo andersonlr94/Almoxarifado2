@@ -54,6 +54,20 @@ class EditorDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
         if index.column() == 5:
             return None
+        # Se já tem fornecedor preenchido, colunas 0-3 são somente leitura
+        if index.column() in (0, 1, 2, 3):
+            model = index.model()
+            forn_index = model.index(index.row(), 1)
+            forn_val = forn_index.data(Qt.DisplayRole)
+            if forn_val and str(forn_val).strip():
+                return None
+        # Se já tem DPP preenchido, coluna 4 é somente leitura
+        if index.column() == 4:
+            model = index.model()
+            dpp_index = model.index(index.row(), 4)
+            dpp_val = dpp_index.data(Qt.DisplayRole)
+            if dpp_val and str(dpp_val).strip():
+                return None
         if index.column() == 1 and self.fornecedores:
             editor = QComboBox(parent)
             editor.setEditable(True)
@@ -230,6 +244,7 @@ class ControlePedidosPage(QWidget):
         super().__init__()
         self.dados = []
         self.lista_fornecedores = _carregar_fornecedores()
+        self._linhas_editaveis = set()  # índices de linhas em modo edição
         self._setup_ui()
         self._carregar_dados()
 
@@ -274,6 +289,35 @@ class ControlePedidosPage(QWidget):
         btn_pendente.setFixedHeight(34)
         btn_pendente.clicked.connect(self._marcar_pendente)
         linha_top.addWidget(btn_pendente)
+
+        self.btn_editar = QPushButton("✏ Editar")
+        self.btn_editar.setFixedHeight(34)
+        self.btn_editar.setCheckable(True)
+        self.btn_editar.setStyleSheet("""
+            QPushButton {
+                background-color: #f1f5f9;
+                color: #475569;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 0 12px;
+                font-weight: 500;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: #e2e8f0;
+                color: #1e293b;
+            }
+            QPushButton:checked {
+                background-color: #1e40af;
+                color: white;
+                border: 1px solid #1e3a8a;
+            }
+            QPushButton:checked:hover {
+                background-color: #1d4ed8;
+            }
+        """)
+        self.btn_editar.clicked.connect(self._toggle_edicao)
+        linha_top.addWidget(self.btn_editar)
 
         linha_top.addStretch()
 
@@ -358,6 +402,7 @@ class ControlePedidosPage(QWidget):
         self.tabela.verticalHeader().setVisible(False)
         self.tabela.setItemDelegate(EditorDelegate(self.tabela, self.lista_fornecedores))
         self.tabela.itemChanged.connect(self._item_modificado)
+        self.tabela.cellClicked.connect(self._on_celula_clicada)
         self.tabela.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tabela.customContextMenuRequested.connect(self._context_menu)
         card_layout.addWidget(self.tabela)
@@ -477,7 +522,20 @@ class ControlePedidosPage(QWidget):
                 else:
                     valor = str(item.get(chave, ""))
                     cell = QTableWidgetItem(valor)
-                    cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
+                    # Colunas 0-3 são somente leitura se o fornecedor já está preenchido
+                    fornecedor_preenchido = bool(item.get("fornecedores", "").strip())
+                    # Coluna 4 (DPP) é somente leitura se já tiver valor
+                    dpp_preenchido = bool(item.get("dpp", "").strip())
+                    # Verifica se a linha está em modo edição (liberada pelo botão Editar)
+                    em_edicao = row in self._linhas_editaveis
+                    if em_edicao:
+                        cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
+                    elif col in (0, 1, 2, 3) and fornecedor_preenchido:
+                        cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    elif col == 4 and dpp_preenchido:
+                        cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    else:
+                        cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
                     if status_val == "Entregue":
                         cell.setData(Qt.BackgroundRole, QBrush(QColor("#C8E6C9")))
                     if cor_hex and col == 4:
@@ -681,6 +739,27 @@ class ControlePedidosPage(QWidget):
         self._salvar_json()
         self._popular_tabela()
 
+    def _toggle_edicao(self):
+        """Alterna o modo de edição para as linhas selecionadas."""
+        selected_rows = self.tabela.selectionModel().selectedRows()
+        if not selected_rows:
+            # Sem seleção: limpa todas as linhas em modo edição
+            self._linhas_editaveis.clear()
+            self.btn_editar.setChecked(False)
+            self._popular_tabela()
+            return
+
+        indices = set(index.row() for index in selected_rows if index.row() < len(self.dados))
+
+        # Se todas já estão em modo edição, desativa (toggle off)
+        if indices and indices.issubset(self._linhas_editaveis):
+            self._linhas_editaveis -= indices
+        else:
+            self._linhas_editaveis |= indices
+
+        self.btn_editar.setChecked(bool(self._linhas_editaveis))
+        self._popular_tabela()
+
     def _context_menu(self, pos):
         item = self.tabela.itemAt(pos)
         if not item:
@@ -806,6 +885,26 @@ class ControlePedidosPage(QWidget):
                 json.dump(self.dados, f, ensure_ascii=False, indent=2)
         except OSError:
             pass
+
+    def _on_celula_clicada(self, row, col):
+        """Abre o link do InteleCat ao clicar na coluna Nome quando já bloqueada."""
+        if col != 2:
+            return
+        if row < 0 or row >= len(self.dados):
+            return
+        # Só abre o link se a célula está bloqueada (fornecedor preenchido)
+        fornecedor_preenchido = bool(self.dados[row].get("fornecedores", "").strip())
+        if not fornecedor_preenchido:
+            return
+        req_val = self.dados[row].get("requisicao", "").strip()
+        if not req_val:
+            return
+        url = (
+            f"https://aptiv.intellecat.com/IntelleCat/CartServlet"
+            f"?ic_action=viewReq&reqID={urllib.parse.quote(req_val)}"
+            f"&view=viewRequestor&role=REQUESTOR"
+        )
+        webbrowser.open(url)
 
     def _criar_botao_enviar(self, clicked_slot):
         container = QWidget()
