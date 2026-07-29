@@ -18,6 +18,7 @@ from ui.pages.settings_page import SettingsPage
 from ui.pages.fornecedores_page import FornecedoresPage
 from ui.pages.pedidos_pendentes_page import PedidosPendentesPage
 from ui.pages.testar_contas_page import TestarContasPage
+from ui.pages.baixa_3_7_page import Baixa37Page
 
 
 SIDEBAR_WIDTH = 230
@@ -109,6 +110,7 @@ class MainWindow(QMainWindow):
             ("transferencia",     "Transferência",         "⇄", True),
             ("remove_loc_duplicadas", "Remove Loc Dup.",   "⇄", True),
             ("testar_contas",     "Testar Contas",         "⬡", True),
+            ("baixa_3_7_page",     "Baixa 3.7",         "⬡", True),
             # Back to top level
             ("fornecedores",      "Fornecedores",          "⚑", False),
             ("reajuste_precos",   "Reajuste de Preços",    "♯", False),
@@ -118,7 +120,7 @@ class MainWindow(QMainWindow):
 
         # Sub-item keys
         self._subitem_keys = {
-            "digitar_ae", "transferencia", "remove_loc_duplicadas", "testar_contas"
+            "digitar_ae", "transferencia", "remove_loc_duplicadas", "testar_contas", "baixa_3_7_page"
         }
 
         # Create the group header button for "Automações"
@@ -197,6 +199,7 @@ class MainWindow(QMainWindow):
             ("transferencia",         TransferenciaPage),
             ("remove_loc_duplicadas", RemoveLocDuplicadasPage),
             ("testar_contas",         TestarContasPage),
+            ("baixa_3_7_page",         Baixa37Page),
             ("fornecedores",          FornecedoresPage),
             ("reajuste_precos",       ReajustePrecosPage),
             ("dpp_ativos",            DppAtivosPage),
