@@ -64,7 +64,7 @@ class EstoquePage(QWidget):
     def __init__(self):
         super().__init__()
         self.dados = []
-        self.modo_resumido = False
+        self.modo_resumido = True
         self._setup_ui()
         self._carregar_dados()
 
@@ -105,7 +105,7 @@ class EstoquePage(QWidget):
 
         linha_top.addStretch()
 
-        self.btn_toggle = QPushButton("Visão resumida")
+        self.btn_toggle = QPushButton("Visão completa")
         self.btn_toggle.setObjectName("btnSecondary")
         self.btn_toggle.setFixedHeight(34)
         self.btn_toggle.setCheckable(True)

@@ -19,6 +19,7 @@ from ui.pages.fornecedores_page import FornecedoresPage
 from ui.pages.pedidos_pendentes_page import PedidosPendentesPage
 from ui.pages.testar_contas_page import TestarContasPage
 from ui.pages.baixa_3_7_page import Baixa37Page
+from ui.pages.acuracidade_page import AcuracidadePage
 
 
 SIDEBAR_WIDTH = 230
@@ -101,6 +102,7 @@ class MainWindow(QMainWindow):
         self._nav_items = [
             ("estoque",           "Estoque",               "▣", False),
             ("itens_zero",        "Itens 0",               "○", False),
+            ("acuracidade",       "Acuracidade",           "◎", False),
             ("controle_pedidos",  "Controle de Pedidos",   "☐", False),
             ("pedidos_pendentes", "Pedidos Pendentes",     "◈", False),
             ("programacao_agulhas", "Prog. de Agulhas",    "⊞", False),
@@ -192,6 +194,7 @@ class MainWindow(QMainWindow):
             ("inicio",                InicioPage),
             ("estoque",               EstoquePage),
             ("itens_zero",            ItensZeroPage),
+            ("acuracidade",           AcuracidadePage),
             ("controle_pedidos",      ControlePedidosPage),
             ("pedidos_pendentes",     PedidosPendentesPage),
             ("programacao_agulhas",   ProgramacaoAgulhasPage),
