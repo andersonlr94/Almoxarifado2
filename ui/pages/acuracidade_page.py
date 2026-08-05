@@ -8,8 +8,8 @@ from PySide6.QtWidgets import (
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QStyledItemDelegate, QMessageBox, QComboBox,
 )
-from PySide6.QtCore import Qt, QSize, QLocale
-from PySide6.QtGui import QGuiApplication, QColor, QDoubleValidator, QTextDocument, QPageLayout
+from PySide6.QtCore import Qt, QSize, QLocale, QMarginsF
+from PySide6.QtGui import QGuiApplication, QColor, QDoubleValidator, QTextDocument, QPageLayout, QIntValidator, QPainter, QFont
 from PySide6.QtPrintSupport import QPrinter, QPrinterInfo, QPrintPreviewDialog
 
 
@@ -95,6 +95,11 @@ class AcuracidadePage(QWidget):
         filtro_layout.addWidget(self.campo_filtro)
 
         filtro_layout.addStretch()
+
+        self.label_contador_estoque = QLabel("Itens: 0")
+        self.label_contador_estoque.setObjectName("statusLabel")
+        filtro_layout.addWidget(self.label_contador_estoque)
+
         self.filtro_widget.setVisible(False)
         self.card_layout.addWidget(self.filtro_widget)
 
@@ -141,8 +146,10 @@ class AcuracidadePage(QWidget):
         self.campo_qtde = QLineEdit()
         self.campo_qtde.setFixedHeight(34)
         self.campo_qtde.setFixedWidth(100)
-        self.campo_qtde.setPlaceholderText("0")
+        self.campo_qtde.setPlaceholderText("5")
+        self.campo_qtde.setText("5")
         self.campo_qtde.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.campo_qtde.setValidator(QIntValidator(1, 10))
         bottom_layout.addWidget(self.campo_qtde)
 
         label_impressora = QLabel("Impressora:")
@@ -219,7 +226,7 @@ class AcuracidadePage(QWidget):
             self.tabela.setColumnHidden(i, False)
 
         if colunas == self.COLUNAS:
-            widths = {0: 100, 1: 120, 2: 180, 3: 110, 4: 110, 5: 110, 6: 100, 7: 250}
+            widths = {0: 130, 1: 120, 2: 180, 3: 110, 4: 110, 5: 110, 6: 100, 7: 250}
             for i, w in widths.items():
                 if i < len(colunas):
                     if i == 7:
@@ -280,6 +287,9 @@ class AcuracidadePage(QWidget):
             qtde = int(texto)
         except ValueError:
             QMessageBox.warning(self, "Aviso", "Quantidade inválida.")
+            return
+        if qtde < 1 or qtde > 10:
+            QMessageBox.warning(self, "Aviso", "A quantidade deve ser entre 1 e 10.")
             return
 
         caminho_base = self._caminho_jsons()
@@ -530,7 +540,7 @@ class AcuracidadePage(QWidget):
 
         itens_estoque = []
         for item in dados:
-            if str(item.get("Item de estoque", "")).strip().lower() == "true":
+            if str(item.get("Item de estoque", "")).strip().lower() == "true" and str(item.get("Loc novo", "")).strip() != "":
                 itens_estoque.append({
                     "Kardex": item.get("Kardex", ""),
                     "Código": item.get("Código", ""),
@@ -560,6 +570,7 @@ class AcuracidadePage(QWidget):
     def _popular_tabela_estoque(self, itens):
         self._rebuild_tabela(self.COLUNAS_ESTOQUE)
         self.tabela.setRowCount(len(itens))
+        self.label_contador_estoque.setText(f"Itens: {len(itens)}")
         for row, item in enumerate(itens):
             self.tabela.setItem(row, 0, QTableWidgetItem(str(item.get("Kardex", ""))))
             self.tabela.setItem(row, 1, QTableWidgetItem(str(item.get("Código", ""))))
@@ -592,6 +603,7 @@ class AcuracidadePage(QWidget):
             printer = QPrinter()
 
         printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+        printer.setPageMargins(QMarginsF(10, 10, 10, 10))
 
         preview = QPrintPreviewDialog(printer, self)
         preview.setWindowTitle("Visualização de Impressão - Acuracidade")
@@ -602,7 +614,14 @@ class AcuracidadePage(QWidget):
     def _renderizar_impressao(self, printer):
         printer.setPageOrientation(QPageLayout.Orientation.Landscape)
         titulo_doc = self.titulo.text()
-        data_hoje = date.today().strftime("%d/%m/%Y")
+        meses = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                 "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+        hoje = date.today()
+        data_formatada = f"{hoje.day:02d} de {meses[hoje.month]} de {hoje.year}"
+
+        caminho_base = self._caminho_jsons()
+        pasta_assets = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "ui", "assets")
+        caminho_imagem = os.path.join(pasta_assets, "versigent.png").replace("\\", "/")
 
         html = f"""
         <html>
@@ -610,7 +629,7 @@ class AcuracidadePage(QWidget):
             <style>
                 @page {{ size: landscape; margin: 10mm; }}
                 body {{ font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; margin: 0; padding: 10px; color: #1e293b; width: 100%; }}
-                .header {{ text-align: center; margin-bottom: 15px; }}
+                .header {{ text-align: center; margin-bottom: 15px; position: relative; }}
                 .header h2 {{ margin: 0 0 4px 0; color: #0f172a; font-size: 18px; }}
                 .header p {{ margin: 0; color: #64748b; font-size: 11px; }}
                 table {{ width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }}
@@ -621,22 +640,28 @@ class AcuracidadePage(QWidget):
         </head>
         <body>
             <div class="header">
+                <img src="file:///{caminho_imagem}" style="position: absolute; right: 0; top: 0;" width="80">
                 <h2>Relatório de {titulo_doc}</h2>
-                <p>Data: {data_hoje} | Total de Itens: {self.tabela.rowCount()}</p>
             </div>
-            <table>
+            <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
                 <thead>
                     <tr>
         """
 
         colunas_visiveis = []
+        larguras = {0: 120, 1: 140, 3: 90, 4: 80, 5: 80, 6: 90, 7: 180}
+        estilo_borda = 'border: 1px solid #cbd5e1;'
         for col in range(self.tabela.columnCount()):
             if not self.tabela.isColumnHidden(col):
                 colunas_visiveis.append(col)
                 header_item = self.tabela.horizontalHeaderItem(col)
                 header_text = header_item.text() if header_item else f"Col {col}"
                 header_text_html = header_text.replace("\n", "<br>")
-                html += f"<th>{header_text_html}</th>"
+                w = larguras.get(col)
+                if w:
+                    html += f'<th width="{w}" style="{estilo_borda} background-color: #f1f5f9; font-size: 10px; font-weight: bold; text-transform: uppercase; text-align: center; padding: 6px 8px;">{header_text_html}</th>'
+                else:
+                    html += f'<th style="{estilo_borda} background-color: #f1f5f9; font-size: 10px; font-weight: bold; text-transform: uppercase; text-align: center; padding: 6px 8px;">{header_text_html}</th>'
 
         html += """
                     </tr>
@@ -649,12 +674,27 @@ class AcuracidadePage(QWidget):
             for col in colunas_visiveis:
                 item = self.tabela.item(row, col)
                 texto = item.text() if item else ""
-                html += f"<td>{texto}</td>"
+                w = larguras.get(col)
+                if w:
+                    html += f'<td width="{w}" style="{estilo_borda} text-align: center; padding: 5px 8px; font-size: 10px;">{texto}</td>'
+                else:
+                    html += f'<td style="{estilo_borda} text-align: center; padding: 5px 8px; font-size: 10px;">{texto}</td>'
             html += "</tr>"
 
-        html += """
+        num_linhas = self.tabela.rowCount()
+        altura_linha = 18
+        altura_header = 60
+        altura_tabela = altura_header + (num_linhas * altura_linha) + 20
+        page_height = printer.pageRect(QPrinter.Unit.Point).size().height()
+        altura_spacer = max(int(page_height) - altura_tabela - 50, 20)
+
+        html += f"""
                 </tbody>
             </table>
+            <div style="height: {altura_spacer}px;">&nbsp;</div>
+            <div style="text-align: left; font-size: 10px; color: #64748b;">
+                {data_formatada}
+            </div>
         </body>
         </html>
         """
