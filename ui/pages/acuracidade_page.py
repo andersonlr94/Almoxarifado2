@@ -6,10 +6,11 @@ from datetime import date
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QStyledItemDelegate, QMessageBox,
+    QAbstractItemView, QStyledItemDelegate, QMessageBox, QComboBox,
 )
 from PySide6.QtCore import Qt, QSize, QLocale
-from PySide6.QtGui import QGuiApplication, QColor, QDoubleValidator
+from PySide6.QtGui import QGuiApplication, QColor, QDoubleValidator, QTextDocument, QPageLayout
+from PySide6.QtPrintSupport import QPrinter, QPrinterInfo, QPrintPreviewDialog
 
 
 class EditorDelegate(QStyledItemDelegate):
@@ -32,7 +33,7 @@ class EditorDelegate(QStyledItemDelegate):
 class AcuracidadePage(QWidget):
     COLUNAS = [
         "Kardex", "Item", "Descrição", "LocNovo",
-        "Primeira contagem", "Segunda contagem", "Divergência", "Observação",
+        "Primeira\ncontagem", "Segunda\ncontagem", "Divergência", "Observação",
     ]
     COLUNAS_ESTOQUE = ["Kardex", "Código", "Descrição", "Loc novo", "Qtde novo", "Acuracidade ok"]
 
@@ -121,29 +122,21 @@ class AcuracidadePage(QWidget):
             "  border-bottom: 2px solid #e2e8f0;"
             "}"
         )
-        header.setStretchLastSection(True)
-        for i in range(len(self.COLUNAS)):
-            header.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
-
-        self.tabela.setStyleSheet(
-            "QTableWidget { font-size: 11px; gridline-color: #e2e8f0; }"
-            "QTableWidget::item { padding: 6px 12px; }"
-            "QTableWidget::item:selected { background-color: #dbeafe; color: #1e293b; }"
-        )
-
-        self.tabela.setColumnHidden(0, True)
+        self._rebuild_tabela(self.COLUNAS)
+        self.tabela.setColumnHidden(0, False)
+        self.tabela.setColumnHidden(2, True)
 
         self.card_layout.addWidget(self.tabela, stretch=2)
 
-        # ── Área inferior (só aparece no modo acuracidade) ──
+        # ── Área inferior ──
         self.bottom_widget = QWidget()
         bottom_layout = QHBoxLayout(self.bottom_widget)
         bottom_layout.setContentsMargins(0, 8, 0, 0)
         bottom_layout.setSpacing(12)
 
-        label_qtde = QLabel("Qtde de itens:")
-        label_qtde.setObjectName("statusLabel")
-        bottom_layout.addWidget(label_qtde)
+        self.label_qtde = QLabel("Qtde de itens:")
+        self.label_qtde.setObjectName("statusLabel")
+        bottom_layout.addWidget(self.label_qtde)
 
         self.campo_qtde = QLineEdit()
         self.campo_qtde.setFixedHeight(34)
@@ -152,7 +145,23 @@ class AcuracidadePage(QWidget):
         self.campo_qtde.setAlignment(Qt.AlignmentFlag.AlignCenter)
         bottom_layout.addWidget(self.campo_qtde)
 
+        label_impressora = QLabel("Impressora:")
+        label_impressora.setObjectName("statusLabel")
+        bottom_layout.addWidget(label_impressora)
+
+        self.combo_impressoras = QComboBox()
+        self.combo_impressoras.setFixedHeight(34)
+        self.combo_impressoras.setMinimumWidth(200)
+        self._carregar_impressoras()
+        bottom_layout.addWidget(self.combo_impressoras)
+
         bottom_layout.addStretch()
+
+        self.btn_imprimir = QPushButton("Imprimir")
+        self.btn_imprimir.setObjectName("btnSecondary")
+        self.btn_imprimir.setFixedHeight(34)
+        self.btn_imprimir.clicked.connect(self._abrir_visualizacao_impressao)
+        bottom_layout.addWidget(self.btn_imprimir)
 
         self.btn_gerar = QPushButton("Gerar lista")
         self.btn_gerar.setObjectName("btnPrimary")
@@ -175,18 +184,26 @@ class AcuracidadePage(QWidget):
 
     def _alternar_modo(self):
         self._modo_acuracidade = not self._modo_acuracidade
+        self.bottom_widget.setVisible(True)
         if self._modo_acuracidade:
             self.titulo.setText("Acuracidade")
             self.btn_toggle.setText("Itens de estoque")
-            self.bottom_widget.setVisible(True)
+            self.label_qtde.setVisible(True)
+            self.campo_qtde.setVisible(True)
+            self.btn_gerar.setVisible(True)
+            self.btn_prosseguir.setVisible(True)
             self.btn_atualizar_itens.setVisible(False)
             self.filtro_widget.setVisible(False)
             self._rebuild_tabela(self.COLUNAS)
-            self.tabela.setColumnHidden(0, True)
+            self.tabela.setColumnHidden(0, False)
+            self.tabela.setColumnHidden(2, True)
         else:
             self.titulo.setText("Itens de estoque")
             self.btn_toggle.setText("Acuracidade")
-            self.bottom_widget.setVisible(False)
+            self.label_qtde.setVisible(False)
+            self.campo_qtde.setVisible(False)
+            self.btn_gerar.setVisible(False)
+            self.btn_prosseguir.setVisible(False)
             self.btn_atualizar_itens.setVisible(True)
             self.filtro_widget.setVisible(True)
             self.campo_filtro.clear()
@@ -197,8 +214,28 @@ class AcuracidadePage(QWidget):
         self.tabela.setColumnCount(len(colunas))
         self.tabela.setHorizontalHeaderLabels(colunas)
         header = self.tabela.horizontalHeader()
+        header.setStretchLastSection(False)
         for i in range(len(colunas)):
-            header.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
+            self.tabela.setColumnHidden(i, False)
+
+        if colunas == self.COLUNAS:
+            widths = {0: 100, 1: 120, 2: 180, 3: 110, 4: 110, 5: 110, 6: 100, 7: 250}
+            for i, w in widths.items():
+                if i < len(colunas):
+                    if i == 7:
+                        header.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
+                    else:
+                        header.setSectionResizeMode(i, QHeaderView.ResizeMode.Fixed)
+                        self.tabela.setColumnWidth(i, w)
+        else:
+            widths = {0: 100, 1: 120, 2: 300, 3: 110, 4: 100, 5: 120}
+            for i, w in widths.items():
+                if i < len(colunas):
+                    if i == 2:
+                        header.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
+                    else:
+                        header.setSectionResizeMode(i, QHeaderView.ResizeMode.Fixed)
+                        self.tabela.setColumnWidth(i, w)
 
     def _carregar_itens_estoque(self):
         caminho_base = self._caminho_jsons()
@@ -292,7 +329,7 @@ class AcuracidadePage(QWidget):
             self.tabela.setItem(row, 7, QTableWidgetItem(""))
 
         self._prosseguir_count = 0
-        self._bloquear_colunas([1, 2, 3, 5, 6])
+        self._bloquear_colunas([0, 1, 2, 3, 5, 6, 7])
         self._desbloquear_coluna(4)
         self.btn_gerar.setEnabled(False)
 
@@ -379,7 +416,7 @@ class AcuracidadePage(QWidget):
         for row in range(self.tabela.rowCount()):
             item = {}
             for col in range(self.tabela.columnCount()):
-                header = self.tabela.horizontalHeaderItem(col).text()
+                header = self.tabela.horizontalHeaderItem(col).text().replace("\n", " ")
                 cell = self.tabela.item(row, col)
                 item[header] = cell.text() if cell else ""
             lista.append(item)
@@ -530,3 +567,102 @@ class AcuracidadePage(QWidget):
             self.tabela.setItem(row, 3, QTableWidgetItem(str(item.get("Loc novo", ""))))
             self.tabela.setItem(row, 4, QTableWidgetItem(str(item.get("Qtde novo", ""))))
             self.tabela.setItem(row, 5, QTableWidgetItem(str(item.get("Acuracidade ok", ""))))
+
+    def _carregar_impressoras(self):
+        self.combo_impressoras.clear()
+        impressoras = QPrinterInfo.availablePrinterNames()
+        if impressoras:
+            self.combo_impressoras.addItems(impressoras)
+            padrao = QPrinterInfo.defaultPrinterName()
+            if padrao in impressoras:
+                self.combo_impressoras.setCurrentText(padrao)
+        else:
+            self.combo_impressoras.addItem("Nenhuma impressora disponível")
+
+    def _abrir_visualizacao_impressao(self):
+        if self.tabela.rowCount() == 0:
+            QMessageBox.warning(self, "Aviso", "Não há dados na tabela para imprimir.")
+            return
+
+        nome_impressora = self.combo_impressoras.currentText()
+        if nome_impressora and nome_impressora != "Nenhuma impressora disponível":
+            printer_info = QPrinterInfo.printerInfo(nome_impressora)
+            printer = QPrinter(printer_info) if not printer_info.isNull() else QPrinter()
+        else:
+            printer = QPrinter()
+
+        printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+
+        preview = QPrintPreviewDialog(printer, self)
+        preview.setWindowTitle("Visualização de Impressão - Acuracidade")
+        preview.resize(1050, 750)
+        preview.paintRequested.connect(self._renderizar_impressao)
+        preview.exec()
+
+    def _renderizar_impressao(self, printer):
+        printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+        titulo_doc = self.titulo.text()
+        data_hoje = date.today().strftime("%d/%m/%Y")
+
+        html = f"""
+        <html>
+        <head>
+            <style>
+                @page {{ size: landscape; margin: 10mm; }}
+                body {{ font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; margin: 0; padding: 10px; color: #1e293b; width: 100%; }}
+                .header {{ text-align: center; margin-bottom: 15px; }}
+                .header h2 {{ margin: 0 0 4px 0; color: #0f172a; font-size: 18px; }}
+                .header p {{ margin: 0; color: #64748b; font-size: 11px; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }}
+                th {{ background-color: #f1f5f9; color: #334155; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; padding: 6px 8px; text-transform: uppercase; text-align: center; word-wrap: break-word; }}
+                td {{ border: 1px solid #cbd5e1; padding: 5px 8px; font-size: 10px; text-align: center; word-wrap: break-word; }}
+                tr:nth-child(even) {{ background-color: #f8fafc; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>Relatório de {titulo_doc}</h2>
+                <p>Data: {data_hoje} | Total de Itens: {self.tabela.rowCount()}</p>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+        """
+
+        colunas_visiveis = []
+        for col in range(self.tabela.columnCount()):
+            if not self.tabela.isColumnHidden(col):
+                colunas_visiveis.append(col)
+                header_item = self.tabela.horizontalHeaderItem(col)
+                header_text = header_item.text() if header_item else f"Col {col}"
+                header_text_html = header_text.replace("\n", "<br>")
+                html += f"<th>{header_text_html}</th>"
+
+        html += """
+                    </tr>
+                </thead>
+                <tbody>
+        """
+
+        for row in range(self.tabela.rowCount()):
+            html += "<tr>"
+            for col in colunas_visiveis:
+                item = self.tabela.item(row, col)
+                texto = item.text() if item else ""
+                html += f"<td>{texto}</td>"
+            html += "</tr>"
+
+        html += """
+                </tbody>
+            </table>
+        </body>
+        </html>
+        """
+
+        doc = QTextDocument()
+        page_size = printer.pageRect(QPrinter.Unit.Point).size()
+        if page_size.width() > 0:
+            doc.setPageSize(page_size)
+        doc.setHtml(html)
+        doc.print_(printer)
+

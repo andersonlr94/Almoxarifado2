@@ -2,7 +2,7 @@ import time
 
 import pyautogui
 
-_VELOCIDADE = 0.1
+_VELOCIDADE = 0.02
 
 
 def configurar_velocidade(segundos):

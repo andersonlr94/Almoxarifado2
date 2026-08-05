@@ -5,7 +5,7 @@ import urllib.parse
 import webbrowser
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QStyledItemDelegate, QMenu, QInputDialog,
     QDialog, QDialogButtonBox, QComboBox, QPlainTextEdit,
@@ -32,9 +32,10 @@ def _carregar_fornecedores():
 
 
 class EditorDelegate(QStyledItemDelegate):
-    def __init__(self, parent=None, fornecedores=None):
+    def __init__(self, parent=None, fornecedores=None, edit_mode_getter=None):
         super().__init__(parent)
         self.fornecedores = fornecedores or []
+        self._edit_mode_getter = edit_mode_getter or (lambda: False)
 
     def paint(self, painter, option, index):
         self.initStyleOption(option, index)
@@ -54,20 +55,22 @@ class EditorDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
         if index.column() == 5:
             return None
-        # Se já tem fornecedor preenchido, colunas 0-3 são somente leitura
-        if index.column() in (0, 1, 2, 3):
-            model = index.model()
-            forn_index = model.index(index.row(), 1)
-            forn_val = forn_index.data(Qt.DisplayRole)
-            if forn_val and str(forn_val).strip():
-                return None
-        # Se já tem DPP preenchido, coluna 4 é somente leitura
-        if index.column() == 4:
-            model = index.model()
-            dpp_index = model.index(index.row(), 4)
-            dpp_val = dpp_index.data(Qt.DisplayRole)
-            if dpp_val and str(dpp_val).strip():
-                return None
+        # Se o modo de edição global está ativo, pular as restrições de bloqueio
+        if not self._edit_mode_getter():
+            # Se já tem fornecedor preenchido, colunas 0-3 são somente leitura
+            if index.column() in (0, 1, 2, 3):
+                model = index.model()
+                forn_index = model.index(index.row(), 1)
+                forn_val = forn_index.data(Qt.DisplayRole)
+                if forn_val and str(forn_val).strip():
+                    return None
+            # Se já tem DPP preenchido, coluna 4 é somente leitura
+            if index.column() == 4:
+                model = index.model()
+                dpp_index = model.index(index.row(), 4)
+                dpp_val = dpp_index.data(Qt.DisplayRole)
+                if dpp_val and str(dpp_val).strip():
+                    return None
         if index.column() == 1 and self.fornecedores:
             editor = QComboBox(parent)
             editor.setEditable(True)
@@ -245,6 +248,7 @@ class ControlePedidosPage(QWidget):
         self.dados = []
         self.lista_fornecedores = _carregar_fornecedores()
         self._linhas_editaveis = set()  # índices de linhas em modo edição
+        self._edit_mode = False  # Flag for global edit mode
         self._setup_ui()
         self._carregar_dados()
 
@@ -308,12 +312,12 @@ class ControlePedidosPage(QWidget):
                 color: #1e293b;
             }
             QPushButton:checked {
-                background-color: #1e40af;
+                background-color: #10b981;  /* green when active */
                 color: white;
-                border: 1px solid #1e3a8a;
+                border: 1px solid #047857;
             }
             QPushButton:checked:hover {
-                background-color: #1d4ed8;
+                background-color: #059669;
             }
         """)
         self.btn_editar.clicked.connect(self._toggle_edicao)
@@ -380,13 +384,13 @@ class ControlePedidosPage(QWidget):
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(0, 75) #data
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(1, 120) #fornecedores
+        header.resizeSection(1, 144) #fornecedores (+20%)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(2, 120) #nome
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(3, 100) #requisição
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(4, 100) #dpp      
+        header.resizeSection(4, 80) #dpp (-20%)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(5, 70) #status cor
         header.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
@@ -400,17 +404,30 @@ class ControlePedidosPage(QWidget):
         self.tabela.verticalHeader().setMinimumSectionSize(18)
         self.tabela.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         self.tabela.verticalHeader().setVisible(False)
-        self.tabela.setItemDelegate(EditorDelegate(self.tabela, self.lista_fornecedores))
+        self.tabela.setItemDelegate(EditorDelegate(self.tabela, self.lista_fornecedores, edit_mode_getter=lambda: self._edit_mode))
         self.tabela.itemChanged.connect(self._item_modificado)
-        self.tabela.cellClicked.connect(self._on_celula_clicada)
         self.tabela.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tabela.customContextMenuRequested.connect(self._context_menu)
         card_layout.addWidget(self.tabela)
 
         QShortcut(QKeySequence("Ctrl+F"), self, self._buscar_item)
         QShortcut(QKeySequence("Ctrl+L"), self, self._buscar_item)
+        QShortcut(QKeySequence("Ctrl+C"), self.tabela, self._copiar_selecao)
 
         layout.addWidget(card)
+
+    def _copiar_selecao(self):
+        """Copia apenas o conteúdo da célula atual/focada para a área de transferência."""
+        item = self.tabela.currentItem()
+        if item:
+            QApplication.clipboard().setText(item.text())
+        else:
+            row = self.tabela.currentRow()
+            col = self.tabela.currentColumn()
+            if row >= 0 and col >= 0:
+                item_cell = self.tabela.item(row, col)
+                if item_cell:
+                    QApplication.clipboard().setText(item_cell.text())
 
     def _carregar_dados(self):
         try:
@@ -527,15 +544,21 @@ class ControlePedidosPage(QWidget):
                     # Coluna 4 (DPP) é somente leitura se já tiver valor
                     dpp_preenchido = bool(item.get("dpp", "").strip())
                     # Verifica se a linha está em modo edição (liberada pelo botão Editar)
-                    em_edicao = row in self._linhas_editaveis
-                    if em_edicao:
+                    # Determine editability based on global edit mode
+                    if self._edit_mode:
+                        # Global edit mode: allow editing for all editable columns (except action columns 5 and 6)
                         cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
-                    elif col in (0, 1, 2, 3) and fornecedor_preenchido:
-                        cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                    elif col == 4 and dpp_preenchido:
-                        cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
                     else:
-                        cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
+                        # Preserve existing per‑row edit restrictions
+                        em_edicao = row in self._linhas_editaveis
+                        if em_edicao:
+                            cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
+                        elif col in (0, 1, 2, 3) and fornecedor_preenchido:
+                            cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                        elif col == 4 and dpp_preenchido:
+                            cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                        else:
+                            cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
                     if status_val == "Entregue":
                         cell.setData(Qt.BackgroundRole, QBrush(QColor("#C8E6C9")))
                     if cor_hex and col == 4:
@@ -740,24 +763,15 @@ class ControlePedidosPage(QWidget):
         self._popular_tabela()
 
     def _toggle_edicao(self):
-        """Alterna o modo de edição para as linhas selecionadas."""
-        selected_rows = self.tabela.selectionModel().selectedRows()
-        if not selected_rows:
-            # Sem seleção: limpa todas as linhas em modo edição
-            self._linhas_editaveis.clear()
-            self.btn_editar.setChecked(False)
-            self._popular_tabela()
-            return
-
-        indices = set(index.row() for index in selected_rows if index.row() < len(self.dados))
-
-        # Se todas já estão em modo edição, desativa (toggle off)
-        if indices and indices.issubset(self._linhas_editaveis):
-            self._linhas_editaveis -= indices
-        else:
-            self._linhas_editaveis |= indices
-
-        self.btn_editar.setChecked(bool(self._linhas_editaveis))
+        """Alterna o modo de edição global para a tabela.
+        Quando ativado, todas as células (exceto colunas de ação) ficam editáveis.
+        Quando desativado, volta ao comportamento padrão de bloqueio.
+        """
+        # Toggle global edit mode based on button state
+        self._edit_mode = self.btn_editar.isChecked()
+        # Ensure button visual reflects state
+        self.btn_editar.setChecked(self._edit_mode)
+        # Refresh table to apply editability changes
         self._popular_tabela()
 
     def _context_menu(self, pos):
@@ -765,17 +779,41 @@ class ControlePedidosPage(QWidget):
         if not item:
             return
         col = item.column()
-        if col != 4:
-            return
         row = item.row()
-        if row >= len(self.dados):
+        if row < 0 or row >= len(self.dados):
             return
-        menu = QMenu(self)
-        for nome, hex_cor in self.CORES.items():
-            pix = self._color_pixmap(hex_cor)
-            acao = menu.addAction(pix, nome)
-            acao.triggered.connect(lambda checked, n=nome, r=row: self._aplicar_cor(r, n))
-        menu.exec(QCursor.pos())
+        # Coluna DPP (4) → menu de cor
+        if col == 4:
+            menu = QMenu(self)
+            for nome, hex_cor in self.CORES.items():
+                pix = self._color_pixmap(hex_cor)
+                acao = menu.addAction(pix, nome)
+                acao.triggered.connect(lambda checked, n=nome, r=row: self._aplicar_cor(r, n))
+            menu.exec(QCursor.pos())
+            return
+        # Coluna Nome (2) → menu "Verificar requisição"
+        if col == 2:
+            req_val = self.dados[row].get("requisicao", "").strip()
+            if not req_val:
+                return
+            menu = QMenu(self)
+            verificar = menu.addAction("Verificar requisição")
+            verificar.triggered.connect(lambda checked=False, r=row: self._abrir_requisicao(r))
+            menu.exec(QCursor.pos())
+            return
+
+    def _abrir_requisicao(self, row):
+        """Abre o link do IntelleCat para a requisição da linha informada."""
+        req_val = self.dados[row].get("requisicao", "").strip()
+        if not req_val:
+            return
+        url = (
+            f"https://aptiv.intellecat.com/IntelleCat/CartServlet"
+            f"?ic_action=viewReq&reqID={urllib.parse.quote(req_val)}"
+            f"&view=viewRequestor&role=REQUESTOR"
+        )
+        webbrowser.open(url)
+
 
     def _color_pixmap(self, hex_cor):
         from PySide6.QtGui import QPixmap, QPainter
@@ -953,12 +991,12 @@ class ControlePedidosPage(QWidget):
         layout_btn.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         btn = QPushButton("")
-        btn.setFixedSize(16, 16)
+        btn.setFixedSize(32, 16)
         btn.setStyleSheet("""
             QPushButton {
                 background-color: #94a3b8;
                 border: none;
-                border-radius: 8px;
+                border-radius: 4px;
             }
             QPushButton:hover {
                 background-color: #64748b;
