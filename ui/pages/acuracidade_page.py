@@ -3,6 +3,11 @@ import os
 import random
 from datetime import date
 
+import matplotlib
+matplotlib.use("QtAgg")
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
@@ -81,6 +86,15 @@ class AcuracidadePage(QWidget):
 
         self.card_layout.addLayout(titulo_row)
 
+        # ── Linha de conteúdo: tabela à esquerda, gráfico à direita ──
+        conteudo_row = QHBoxLayout()
+        conteudo_row.setSpacing(16)
+
+        painel_tabela = QWidget()
+        painel_tabela_layout = QVBoxLayout(painel_tabela)
+        painel_tabela_layout.setContentsMargins(0, 0, 0, 0)
+        painel_tabela_layout.setSpacing(12)
+
         # ── Filtro (só aparece no modo itens de estoque) ──
         self.filtro_widget = QWidget()
         filtro_layout = QHBoxLayout(self.filtro_widget)
@@ -101,7 +115,7 @@ class AcuracidadePage(QWidget):
         filtro_layout.addWidget(self.label_contador_estoque)
 
         self.filtro_widget.setVisible(False)
-        self.card_layout.addWidget(self.filtro_widget)
+        painel_tabela_layout.addWidget(self.filtro_widget)
 
         # ── Tabela ──
         self.tabela = QTableWidget(0, len(self.COLUNAS))
@@ -131,7 +145,7 @@ class AcuracidadePage(QWidget):
         self.tabela.setColumnHidden(0, False)
         self.tabela.setColumnHidden(2, True)
 
-        self.card_layout.addWidget(self.tabela, stretch=2)
+        painel_tabela_layout.addWidget(self.tabela, stretch=2)
 
         # ── Área inferior ──
         self.bottom_widget = QWidget()
@@ -185,9 +199,96 @@ class AcuracidadePage(QWidget):
         self.btn_prosseguir.clicked.connect(self._prosseguir)
         bottom_layout.addWidget(self.btn_prosseguir)
 
-        self.card_layout.addWidget(self.bottom_widget, stretch=1)
+        painel_tabela_layout.addWidget(self.bottom_widget, stretch=1)
+
+        conteudo_row.addWidget(painel_tabela, stretch=1)
+
+        # ── Card do gráfico de acuracidades (à direita) ──
+        grafico_card = QWidget()
+        grafico_card.setObjectName("statCard")
+        grafico_card.setFixedWidth(320)
+        grafico_card_layout = QVBoxLayout(grafico_card)
+        grafico_card_layout.setContentsMargins(16, 14, 16, 14)
+        grafico_card_layout.setSpacing(8)
+
+        grafico_header = QHBoxLayout()
+        self.grafico_titulo = QLabel("Progresso de Acuracidade")
+        self.grafico_titulo.setObjectName("sectionTitle")
+        grafico_header.addWidget(self.grafico_titulo)
+        grafico_header.addStretch()
+        self.btn_atualizar_grafico = QPushButton("Atualizar")
+        self.btn_atualizar_grafico.setObjectName("btnSecondary")
+        self.btn_atualizar_grafico.setFixedHeight(26)
+        self.btn_atualizar_grafico.clicked.connect(self._atualizar_grafico)
+        grafico_header.addWidget(self.btn_atualizar_grafico)
+        grafico_card_layout.addLayout(grafico_header)
+
+        self.canvas_grafico = FigureCanvas(Figure(figsize=(2.6, 2.6)))
+        self.canvas_grafico.setMinimumHeight(260)
+        self.canvas_grafico.setMinimumWidth(260)
+        self.canvas_grafico.setParent(self)
+        grafico_card_layout.addWidget(self.canvas_grafico)
+
+        self.grafico_subtitulo = QLabel("")
+        self.grafico_subtitulo.setObjectName("pageSubtitle")
+        self.grafico_subtitulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        grafico_card_layout.addWidget(self.grafico_subtitulo)
+
+        grafico_card_layout.addStretch()
+        conteudo_row.addWidget(grafico_card)
+
+        self.card_layout.addLayout(conteudo_row)
 
         layout.addWidget(self.card)
+        self._atualizar_grafico()
+
+    def _dados_progresso_acuracidade(self):
+        """Retorna (acurados, total) de itens já conferidos."""
+        caminho_base = self._caminho_jsons()
+        arquivo = os.path.join(caminho_base, "Almox", "Acuracidade", "ItensDeEstoque", "ItensDeEstoque.json")
+        if not os.path.isfile(arquivo):
+            return 0, 0
+        try:
+            with open(arquivo, "r", encoding="utf-8") as f:
+                dados = json.load(f)
+        except Exception:
+            return 0, 0
+        total = len(dados)
+        acurados = sum(1 for item in dados if str(item.get("Acuracidade ok", "")).strip())
+        return acurados, total
+
+    def _atualizar_grafico(self):
+        acurados, total = self._dados_progresso_acuracidade()
+        pct = (acurados / total * 100) if total else 0
+
+        self.grafico_subtitulo.setText(
+            f"{acurados} de {total} itens acurados" if total else "Nenhum item de estoque cadastrado"
+        )
+
+        fig = self.canvas_grafico.figure
+        fig.clear()
+        ax = fig.add_subplot(111)
+
+        if total == 0:
+            ax.text(0.5, 0.5, "Sem itens de estoque", ha="center", va="center",
+                    fontsize=12, color="#94a3b8")
+            ax.axis("off")
+        else:
+            ax.pie(
+                [acurados, total - acurados],
+                colors=["#10b981", "#e5e7eb"],
+                startangle=90,
+                counterclock=False,
+                wedgeprops={"width": 0.28, "edgecolor": "white", "linewidth": 2},
+            )
+            ax.text(0.5, 0.52, f"{pct:.0f}%", ha="center", va="center",
+                    fontsize=26, fontweight="bold", color="#1e1b4b")
+            ax.text(0.5, 0.36, "acurado", ha="center", va="center",
+                    fontsize=11, color="#94a3b8")
+            ax.axis("equal")
+
+        fig.tight_layout()
+        self.canvas_grafico.draw()
 
     def _alternar_modo(self):
         self._modo_acuracidade = not self._modo_acuracidade
@@ -411,9 +512,7 @@ class AcuracidadePage(QWidget):
                 if not item or not item.text().strip():
                     QMessageBox.warning(self, "Aviso", "Preencha todas as células de Segunda contagem.")
                     return
-                try:
-                    float(item.text().strip())
-                except ValueError:
+                if self._para_float(item.text()) is None:
                     QMessageBox.warning(self, "Aviso", f"Valor inválido na Segunda contagem (linha {row + 1}).")
                     return
             self._calcular_divergencia()
@@ -448,6 +547,24 @@ class AcuracidadePage(QWidget):
             QMessageBox.critical(self, "Erro", f"Erro ao salvar arquivo:\n{e}")
             return
 
+        if self._prosseguir_count == 2:
+            self._atualizar_grafico()
+
+    @staticmethod
+    def _para_float(texto):
+        """Converte número no formato brasileiro ('1.800,50') para float."""
+        texto = str(texto).strip().replace(" ", "")
+        if not texto:
+            return None
+        try:
+            if "," in texto:
+                texto = texto.replace(".", "").replace(",", ".")
+            elif texto.count(".") > 1:
+                texto = texto.replace(".", "")
+            return float(texto)
+        except ValueError:
+            return None
+
     def _comparar_primeira_contagem(self):
         for row in range(self.tabela.rowCount()):
             kardex_item = self.tabela.item(row, 0)
@@ -462,7 +579,13 @@ class AcuracidadePage(QWidget):
                 continue
 
             qtde_novo = self._mapa_kardex_qtde.get(kardex, "")
-            if contagem_texto != qtde_novo:
+            valor_contagem = self._para_float(contagem_texto)
+            valor_sistema = self._para_float(qtde_novo)
+            if valor_contagem is not None and valor_sistema is not None:
+                diverge = valor_contagem != valor_sistema
+            else:
+                diverge = contagem_texto != qtde_novo
+            if diverge:
                 contagem_item.setForeground(QColor("red"))
             else:
                 contagem_item.setForeground(QColor())
@@ -481,15 +604,13 @@ class AcuracidadePage(QWidget):
             if not segunda_texto:
                 continue
 
-            try:
-                segunda_qtde = float(segunda_texto)
-            except ValueError:
+            segunda_qtde = self._para_float(segunda_texto)
+            if segunda_qtde is None:
                 continue
 
             qtde_novo_texto = self._mapa_kardex_qtde.get(kardex, "")
-            try:
-                qtde_novo = float(qtde_novo_texto)
-            except ValueError:
+            qtde_novo = self._para_float(qtde_novo_texto)
+            if qtde_novo is None:
                 continue
 
             divergencia = segunda_qtde - qtde_novo
@@ -562,6 +683,7 @@ class AcuracidadePage(QWidget):
             return
 
         self._popular_tabela_estoque(itens_estoque)
+        self._atualizar_grafico()
         QMessageBox.information(
             self, "Acuracidade",
             f"{len(itens_estoque)} itens de estoque salvos com sucesso!"

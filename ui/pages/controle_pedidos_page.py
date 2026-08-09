@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 import urllib.parse
 import webbrowser
+import qtawesome
 
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
@@ -50,7 +51,7 @@ class EditorDelegate(QStyledItemDelegate):
 
     def sizeHint(self, option, index):
         base = super().sizeHint(option, index)
-        return QSize(base.width(), 24)
+        return QSize(base.width(), max(base.height(), 32))
 
     def createEditor(self, parent, option, index):
         if index.column() == 5:
@@ -90,7 +91,10 @@ class EditorDelegate(QStyledItemDelegate):
             editor.setFixedHeight(option.rect.height())
             editor.setMaximumWidth(option.rect.width())
             editor.setContentsMargins(0, 0, 0, 0)
-            editor.setStyleSheet("padding: 0px; margin: 0px; border: none; border-bottom: 1px solid #999; border-radius: 0px;")
+            editor.setStyleSheet(
+                "padding: 0px 10px; margin: 0px; border: none; "
+                "border-bottom: 2px solid #6366f1; border-radius: 0px;"
+            )
         return editor
 
     def setModelData(self, editor, model, index):
@@ -252,74 +256,67 @@ class ControlePedidosPage(QWidget):
         self._setup_ui()
         self._carregar_dados()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, lambda: self.tabela.verticalScrollBar().setValue(self.tabela.verticalScrollBar().maximum()))
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 32, 32, 32)
+        layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
+
+        # ── Page Header ──
+        header_layout = QHBoxLayout()
+        header_texts = QVBoxLayout()
+        header_texts.setSpacing(4)
+        titulo = QLabel("Controle de Pedidos")
+        titulo.setObjectName("pageTitle")
+        header_texts.addWidget(titulo)
+        subtitulo = QLabel("Acompanhamento de pedidos e confirmações de entrega")
+        subtitulo.setObjectName("pageSubtitle")
+        header_texts.addWidget(subtitulo)
+        header_layout.addLayout(header_texts)
+        header_layout.addStretch()
+        layout.addLayout(header_layout)
 
         card = QWidget()
         card.setObjectName("pageCard")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(28, 28, 28, 28)
-        card_layout.setSpacing(16)
+        card_layout.setContentsMargins(18, 16, 18, 16)
+        card_layout.setSpacing(12)
 
-        titulo = QLabel("Controle de Pedidos")
-        titulo.setObjectName("pageTitle")
-        card_layout.addWidget(titulo)
-
+        # ── Action Buttons Row ──
         linha_top = QHBoxLayout()
         linha_top.setSpacing(8)
 
-        btn_adicionar = QPushButton("Atualizar")
+        btn_adicionar = QPushButton(qtawesome.icon('mdi6.refresh', color='#ffffff'), "  Atualizar")
         btn_adicionar.setObjectName("btnPrimary")
         btn_adicionar.setFixedHeight(34)
         btn_adicionar.clicked.connect(self._adicionar_linha)
         linha_top.addWidget(btn_adicionar)
 
-        btn_entregar = QPushButton("Entregar")
-        btn_entregar.setObjectName("btnPrimary")
+        btn_entregar = QPushButton(qtawesome.icon('fa6s.check', color='#ffffff'), "  Entregar")
+        btn_entregar.setObjectName("btnGradientGreen")
         btn_entregar.setFixedHeight(34)
         btn_entregar.clicked.connect(self._entregar_item)
         linha_top.addWidget(btn_entregar)
 
-        btn_remover = QPushButton("Remover")
-        btn_remover.setObjectName("btnDanger")
+        btn_remover = QPushButton(qtawesome.icon('fa6s.trash', color='#ffffff'), "  Remover")
+        btn_remover.setObjectName("btnGradientRose")
         btn_remover.setFixedHeight(34)
         btn_remover.clicked.connect(self._remover_linha)
         linha_top.addWidget(btn_remover)
 
-        btn_pendente = QPushButton("Marcar como pendente")
+        btn_pendente = QPushButton(qtawesome.icon('mdi6.backup-restore', color='#6b7280'), "  Marcar como pendente")
         btn_pendente.setObjectName("btnSecondary")
         btn_pendente.setFixedHeight(34)
         btn_pendente.clicked.connect(self._marcar_pendente)
         linha_top.addWidget(btn_pendente)
 
-        self.btn_editar = QPushButton("✏ Editar")
+        self.btn_editar = QPushButton(qtawesome.icon('mdi6.pencil-outline', color='#6b7280'), "  Editar")
+        self.btn_editar.setObjectName("btnEditMode")
         self.btn_editar.setFixedHeight(34)
         self.btn_editar.setCheckable(True)
-        self.btn_editar.setStyleSheet("""
-            QPushButton {
-                background-color: #f1f5f9;
-                color: #475569;
-                border: 1px solid #e2e8f0;
-                border-radius: 6px;
-                padding: 0 12px;
-                font-weight: 500;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: #e2e8f0;
-                color: #1e293b;
-            }
-            QPushButton:checked {
-                background-color: #10b981;  /* green when active */
-                color: white;
-                border: 1px solid #047857;
-            }
-            QPushButton:checked:hover {
-                background-color: #059669;
-            }
-        """)
         self.btn_editar.clicked.connect(self._toggle_edicao)
         linha_top.addWidget(self.btn_editar)
 
@@ -327,7 +324,7 @@ class ControlePedidosPage(QWidget):
 
         self.campo_busca = QLineEdit()
         self.campo_busca.setPlaceholderText("Pesquisar...")
-        self.campo_busca.setFixedHeight(30)
+        self.campo_busca.setFixedHeight(32)
         self.campo_busca.setFixedWidth(200)
         self.campo_busca.textChanged.connect(self._aplicar_filtro)
         linha_top.addWidget(self.campo_busca)
@@ -336,72 +333,70 @@ class ControlePedidosPage(QWidget):
         self.label_contador.setObjectName("statusLabel")
         linha_top.addWidget(self.label_contador)
 
-        self.btn_config = QPushButton("⚙")
+        self.btn_config = QPushButton(qtawesome.icon('fa6s.gear', color='#64748b'), "")
+        self.btn_config.setObjectName("btnGhost")
         self.btn_config.setFixedSize(34, 34)
         self.btn_config.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_config.setStyleSheet("""
-            QPushButton {
-                font-size: 18px;
-                background-color: #f1f5f9;
-                color: #475569;
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
-            }
-            QPushButton:hover {
-                background-color: #e2e8f0;
-                color: #1e293b;
-            }
-            QPushButton:pressed {
-                background-color: #cbd5e1;
-            }
-        """)
+        self.btn_config.setToolTip("Configurar modelo de e-mail")
         self.btn_config.clicked.connect(self._abrir_config_email)
         linha_top.addWidget(self.btn_config)
 
         card_layout.addLayout(linha_top)
 
         self.tabela = QTableWidget(0, len(self.COLUNAS))
-        self.tabela.setStyleSheet(
-            "QTableWidget::item { padding: 0px; }\n"
-            "QTableWidget::item:focus { outline: none; border: none; border-bottom: 1px solid #999; }"
-        )
+        self.tabela.setObjectName("tabelaControle")
+        self.tabela.setStyleSheet("""
+            QTableWidget#tabelaControle {
+                background-color: #ffffff;
+                border: 1px solid #eef1f6;
+                border-radius: 12px;
+                gridline-color: transparent;
+                selection-background-color: #eef2ff;
+                selection-color: #1e1b4b;
+                font-size: 13px;
+                outline: none;
+            }
+            QTableWidget#tabelaControle::item {
+                padding: 4px 10px;
+                border-bottom: 1px solid #f3f4f6;
+            }
+            QTableWidget#tabelaControle::item:selected {
+                background-color: #eef2ff;
+                color: #1e1b4b;
+            }
+            QTableWidget#tabelaControle::item:hover {
+                background-color: #f5f3ff;
+            }
+            QTableWidget#tabelaControle::item:focus {
+                outline: none;
+                border: 1.5px solid #6366f1;
+                border-radius: 4px;
+            }
+        """)
         self.tabela.setHorizontalHeaderLabels(self.COLUNAS)
         header = self.tabela.horizontalHeader()
-        header.setStyleSheet(
-            "QHeaderView::section {"
-            "  font-size: 9px;"
-            "  font-weight: 600;"
-            "  background-color: #f8fafc;"
-            "  color: #64748b;"
-            "  text-transform: uppercase;"
-            "  letter-spacing: 0.5px;"
-            "  padding: 8px 12px;"
-            "  border: none;"
-            "  border-bottom: 2px solid #e2e8f0;"
-            "}"
-        )
         header.setStretchLastSection(True)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(0, 75) #data
+        header.resizeSection(0, 94) #data
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(1, 144) #fornecedores (+20%)
+        header.resizeSection(1, 180) #fornecedores
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(2, 120) #nome
+        header.resizeSection(2, 140) #nome
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(3, 100) #requisição
+        header.resizeSection(3, 110) #requisição
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(4, 80) #dpp (-20%)
+        header.resizeSection(4, 90) #dpp
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(5, 70) #status cor
+        header.resizeSection(5, 80) #status cor
         header.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(6, 70) #email
+        header.resizeSection(6, 80) #email
         header.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch) #observação
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabela.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.CurrentChanged)
-        self.tabela.setAlternatingRowColors(False)
-        self.tabela.verticalHeader().setDefaultSectionSize(24)
-        self.tabela.verticalHeader().setMinimumSectionSize(18)
+        self.tabela.setAlternatingRowColors(True)
+        self.tabela.verticalHeader().setDefaultSectionSize(32)
+        self.tabela.verticalHeader().setMinimumSectionSize(26)
         self.tabela.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         self.tabela.verticalHeader().setVisible(False)
         self.tabela.setItemDelegate(EditorDelegate(self.tabela, self.lista_fornecedores, edit_mode_getter=lambda: self._edit_mode))
@@ -458,6 +453,31 @@ class ControlePedidosPage(QWidget):
             pass
         return []
 
+    def _carregar_pedidos_entregues_filtrados(self, filtro):
+        """Carrega dos arquivos anuais os pedidos entregues que casam com o filtro."""
+        if not filtro:
+            return []
+        ano_atual = int(datetime.now().strftime("%Y"))
+        import config
+        base = config.obter_caminho_jsons()
+        if not base:
+            base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+        resultado = []
+        for ano in range(ano_atual, 2023, -1):
+            caminho = os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", f"ControlePedidosEntregues{ano}.json"))
+            try:
+                with open(caminho, "r", encoding="utf-8") as f:
+                    dados = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                continue
+            for item in dados:
+                if not isinstance(item, dict):
+                    continue
+                texto = " ".join(str(v) for v in item.values()).lower()
+                if filtro in texto:
+                    resultado.append(item)
+        return resultado
+
     def _verificar_status_pedidos(self):
         """Verifica o status dos pedidos com base em pedidos pendentes"""
         pedidos_pendentes = self._carregar_pedidos_pendentes()
@@ -505,16 +525,25 @@ class ControlePedidosPage(QWidget):
         self.tabela.blockSignals(True)
         self.tabela.setRowCount(0)
         filtro = self.campo_busca.text().strip().lower()
-        for item in self.dados:
+        itens_exibidos = []
+        origens = []
+        if filtro:
+            entregues = self._carregar_pedidos_entregues_filtrados(filtro)
+            itens_exibidos.extend(entregues)
+            origens.extend([-1] * len(entregues))
+        for idx, item in enumerate(self.dados):
             if filtro:
                 texto = " ".join(str(v) for v in item.values()).lower()
                 if filtro not in texto:
                     continue
+            itens_exibidos.append(item)
+            origens.append(idx)
+        for item, origem in zip(itens_exibidos, origens):
             row = self.tabela.rowCount()
             self.tabela.insertRow(row)
             cor_nome = item.get("cor", "")
             cor_hex = self.CORES.get(cor_nome, "")
-            status_val = item.get("status", "")
+            status_val = "Entregue" if origem == -1 else item.get("status", "")
             for col, chave in enumerate(self.CHAVES):
                 if col == 6:
                     dpp_val = item.get("dpp", "").strip()
@@ -564,6 +593,9 @@ class ControlePedidosPage(QWidget):
                     if cor_hex and col == 4:
                         cell.setData(Qt.BackgroundRole, QBrush(QColor(cor_hex)))
                     self.tabela.setItem(row, col, cell)
+            celula_origem = self.tabela.item(row, 0)
+            if celula_origem:
+                celula_origem.setData(Qt.ItemDataRole.UserRole, origem)
         self._inserir_linha_vazia()
         self.tabela.blockSignals(False)
         self._atualizar_contador()
@@ -588,7 +620,7 @@ class ControlePedidosPage(QWidget):
             self.tabela.setItem(row, col, cell)
 
     def _atualizar_contador(self):
-        total = len(self.dados)
+        total = max(0, self.tabela.rowCount() - 1)
         self.label_contador.setText(f"{total} itens")
 
     def _buscar_item(self):
@@ -725,15 +757,27 @@ class ControlePedidosPage(QWidget):
         self._popular_tabela()
         self.tabela.selectRow(self.tabela.rowCount() - 2)
 
+    def _indice_por_linha(self, row):
+        """Retorna o índice real no self.dados da linha exibida, ou None se não mapeia."""
+        celula = self.tabela.item(row, 0)
+        if celula is None:
+            return None
+        origem = celula.data(Qt.ItemDataRole.UserRole)
+        if isinstance(origem, int) and 0 <= origem < len(self.dados):
+            return origem
+        return None
+
     def _entregar_item(self):
         selected_rows = self.tabela.selectionModel().selectedRows()
         if not selected_rows:
             return
         indices = sorted(set(index.row() for index in selected_rows), reverse=True)
         for row in indices:
-            if 0 <= row < len(self.dados):
-                status_atual = self.dados[row].get("status", "")
-                self.dados[row]["status"] = "Em andamento" if status_atual == "Entregue" else "Entregue"
+            idx = self._indice_por_linha(row)
+            if idx is None:
+                continue
+            status_atual = self.dados[idx].get("status", "")
+            self.dados[idx]["status"] = "Em andamento" if status_atual == "Entregue" else "Entregue"
         self._salvar_json()
         self._popular_tabela()
 
@@ -741,12 +785,14 @@ class ControlePedidosPage(QWidget):
         selected_rows = self.tabela.selectionModel().selectedRows()
         if not selected_rows:
             return
-        indices = sorted(set(index.row() for index in selected_rows), reverse=True)
+        indices = sorted(
+            {i for i in (self._indice_por_linha(index.row()) for index in selected_rows) if i is not None},
+            reverse=True,
+        )
         removidos = False
-        for row in indices:
-            if 0 <= row < len(self.dados):
-                self.dados.pop(row)
-                removidos = True
+        for idx in indices:
+            self.dados.pop(idx)
+            removidos = True
         if removidos:
             self._salvar_json()
         self._popular_tabela()
@@ -757,8 +803,10 @@ class ControlePedidosPage(QWidget):
             return
         indices = sorted(set(index.row() for index in selected_rows), reverse=True)
         for row in indices:
-            if 0 <= row < len(self.dados):
-                self.dados[row]["status"] = "Em andamento"
+            idx = self._indice_por_linha(row)
+            if idx is None:
+                continue
+            self.dados[idx]["status"] = "Em andamento"
         self._salvar_json()
         self._popular_tabela()
 
@@ -780,7 +828,8 @@ class ControlePedidosPage(QWidget):
             return
         col = item.column()
         row = item.row()
-        if row < 0 or row >= len(self.dados):
+        idx = self._indice_por_linha(row)
+        if idx is None:
             return
         # Coluna DPP (4) → menu de cor
         if col == 4:
@@ -788,23 +837,23 @@ class ControlePedidosPage(QWidget):
             for nome, hex_cor in self.CORES.items():
                 pix = self._color_pixmap(hex_cor)
                 acao = menu.addAction(pix, nome)
-                acao.triggered.connect(lambda checked, n=nome, r=row: self._aplicar_cor(r, n))
+                acao.triggered.connect(lambda checked, n=nome, i=idx: self._aplicar_cor(i, n))
             menu.exec(QCursor.pos())
             return
         # Coluna Nome (2) → menu "Verificar requisição"
         if col == 2:
-            req_val = self.dados[row].get("requisicao", "").strip()
+            req_val = self.dados[idx].get("requisicao", "").strip()
             if not req_val:
                 return
             menu = QMenu(self)
             verificar = menu.addAction("Verificar requisição")
-            verificar.triggered.connect(lambda checked=False, r=row: self._abrir_requisicao(r))
+            verificar.triggered.connect(lambda checked=False, i=idx: self._abrir_requisicao(i))
             menu.exec(QCursor.pos())
             return
 
-    def _abrir_requisicao(self, row):
+    def _abrir_requisicao(self, idx):
         """Abre o link do IntelleCat para a requisição da linha informada."""
-        req_val = self.dados[row].get("requisicao", "").strip()
+        req_val = self.dados[idx].get("requisicao", "").strip()
         if not req_val:
             return
         url = (
@@ -821,10 +870,10 @@ class ControlePedidosPage(QWidget):
         pix.fill(QColor(hex_cor))
         return pix
 
-    def _aplicar_cor(self, row, nome_cor):
-        if self.dados[row].get("cor") == nome_cor:
+    def _aplicar_cor(self, idx, nome_cor):
+        if self.dados[idx].get("cor") == nome_cor:
             nome_cor = ""
-        self.dados[row]["cor"] = nome_cor
+        self.dados[idx]["cor"] = nome_cor
         self._salvar_json()
         self._popular_tabela()
 
@@ -850,8 +899,12 @@ class ControlePedidosPage(QWidget):
         row = item.row()
         col = item.column()
         chave = self.CHAVES[col]
+        sem_filtro = not self.campo_busca.text().strip()
 
-        if row == len(self.dados):
+        idx = self._indice_por_linha(row)
+        if idx is None:
+            if row != self.tabela.rowCount() - 1:
+                return
             texto = item.text().strip()
             if texto:
                 novo_item = {}
@@ -868,12 +921,18 @@ class ControlePedidosPage(QWidget):
                 novo_item["cor"] = ""
                 novo_item["status"] = "Em andamento"
                 self.dados.append(novo_item)
-                if chave == "requisicao" and row > 0:
+                novo_idx = len(self.dados) - 1
+                if chave == "requisicao" and sem_filtro and row > 0:
                     self._auto_preencher_nome(row, " | Capex")
                     QTimer.singleShot(0, lambda r=row: self.tabela.setCurrentCell(r, 1))
                 self._salvar_json()
                 self.tabela.blockSignals(True)
-                
+
+                # Guarda o índice real na célula da coluna Data
+                celula_origem = self.tabela.item(row, 0)
+                if celula_origem:
+                    celula_origem.setData(Qt.ItemDataRole.UserRole, novo_idx)
+
                 # Add "Cor" button
                 btn_container_cor = self._criar_botao_cor(self._on_cor_clicado)
                 self.tabela.setCellWidget(row, 5, btn_container_cor)
@@ -882,7 +941,7 @@ class ControlePedidosPage(QWidget):
                 if novo_item.get("dpp", "").strip():
                     btn_container = self._criar_botao_enviar(self._on_enviar_clicado)
                     self.tabela.setCellWidget(row, 6, btn_container)
-                
+
                 self.tabela.insertRow(row + 1)
                 for c in range(len(self.COLUNAS)):
                     celula = QTableWidgetItem("")
@@ -893,28 +952,29 @@ class ControlePedidosPage(QWidget):
                     self.tabela.setItem(row + 1, c, celula)
                 self.tabela.blockSignals(False)
                 self._atualizar_contador()
-        elif 0 <= row < len(self.dados):
-            old_val = self.dados[row].get(chave, "")
-            valor = item.text()
-            if chave in ("fornecedores", "dpp"):
-                valor_upper = valor.upper()
-                if valor_upper != valor:
-                    self.tabela.blockSignals(True)
-                    item.setText(valor_upper)
-                    self.tabela.blockSignals(False)
-                    valor = valor_upper
-            self.dados[row][chave] = valor
-            if chave == "requisicao" and not old_val and valor.strip() and row > 0:
-                self._auto_preencher_nome(row, " | Capex")
-                QTimer.singleShot(0, lambda r=row: self.tabela.setCurrentCell(r, 1))
-            if chave == "dpp":
-                if valor.strip():
-                    if not self.tabela.cellWidget(row, 6):
-                        btn_container = self._criar_botao_enviar(self._on_enviar_clicado)
-                        self.tabela.setCellWidget(row, 6, btn_container)
-                else:
-                    self.tabela.removeCellWidget(row, 6)
-            self._salvar_json()
+            return
+
+        old_val = self.dados[idx].get(chave, "")
+        valor = item.text()
+        if chave in ("fornecedores", "dpp"):
+            valor_upper = valor.upper()
+            if valor_upper != valor:
+                self.tabela.blockSignals(True)
+                item.setText(valor_upper)
+                self.tabela.blockSignals(False)
+                valor = valor_upper
+        self.dados[idx][chave] = valor
+        if chave == "requisicao" and not old_val and valor.strip() and sem_filtro and idx > 0:
+            self._auto_preencher_nome(row, " | Capex")
+            QTimer.singleShot(0, lambda r=row: self.tabela.setCurrentCell(r, 1))
+        if chave == "dpp":
+            if valor.strip():
+                if not self.tabela.cellWidget(row, 6):
+                    btn_container = self._criar_botao_enviar(self._on_enviar_clicado)
+                    self.tabela.setCellWidget(row, 6, btn_container)
+            else:
+                self.tabela.removeCellWidget(row, 6)
+        self._salvar_json()
 
     def _salvar_json(self):
         try:
@@ -951,21 +1011,21 @@ class ControlePedidosPage(QWidget):
         layout_btn.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         btn = QPushButton("Enviar")
-        btn.setFixedSize(50, 20)
+        btn.setFixedSize(54, 22)
         btn.setStyleSheet("""
             QPushButton {
-                background-color: #2563eb;
+                background-color: #6366f1;
                 color: white;
                 border: none;
-                border-radius: 4px;
+                border-radius: 6px;
                 font-weight: 600;
                 font-size: 10px;
             }
             QPushButton:hover {
-                background-color: #1d4ed8;
+                background-color: #4f46e5;
             }
             QPushButton:pressed {
-                background-color: #1e40af;
+                background-color: #4338ca;
             }
         """)
         btn.clicked.connect(clicked_slot)
@@ -991,18 +1051,18 @@ class ControlePedidosPage(QWidget):
         layout_btn.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         btn = QPushButton("")
-        btn.setFixedSize(32, 16)
+        btn.setFixedSize(36, 18)
         btn.setStyleSheet("""
             QPushButton {
-                background-color: #94a3b8;
-                border: none;
-                border-radius: 4px;
+                background-color: #cbd5e1;
+                border: 1px solid #94a3b8;
+                border-radius: 5px;
             }
             QPushButton:hover {
-                background-color: #64748b;
+                background-color: #94a3b8;
             }
             QPushButton:pressed {
-                background-color: #475569;
+                background-color: #64748b;
             }
         """)
         btn.clicked.connect(clicked_slot)
@@ -1016,10 +1076,11 @@ class ControlePedidosPage(QWidget):
         pos = button.mapTo(self.tabela.viewport(), button.rect().center())
         index = self.tabela.indexAt(pos)
         row = index.row()
-        if row < 0 or row >= len(self.dados):
+        idx = self._indice_por_linha(row)
+        if idx is None:
             return
-        
-        cor_atual = self.dados[row].get("cor", "")
+
+        cor_atual = self.dados[idx].get("cor", "")
         if cor_atual == "Amarelo":
             nova_cor = "Verde"
         elif cor_atual == "Verde":
@@ -1028,8 +1089,8 @@ class ControlePedidosPage(QWidget):
             nova_cor = ""
         else:
             nova_cor = "Amarelo"
-            
-        self.dados[row]["cor"] = nova_cor
+
+        self.dados[idx]["cor"] = nova_cor
         self._salvar_json()
         self._popular_tabela()
 
@@ -1116,8 +1177,9 @@ class ControlePedidosPage(QWidget):
             dpp_item.setData(Qt.BackgroundRole, QBrush(QColor("#FFFF00")))
 
         # Update and save the color in the JSON data model
-        if 0 <= row < len(self.dados):
-            self.dados[row]["cor"] = "Amarelo"
+        idx = self._indice_por_linha(row)
+        if idx is not None:
+            self.dados[idx]["cor"] = "Amarelo"
             self._salvar_json()
 
     def _enviar_email_dialog(self, tabela):

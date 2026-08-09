@@ -7,6 +7,7 @@ import matplotlib
 matplotlib.use("QtAgg")
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+import qtawesome
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
@@ -193,78 +194,106 @@ class ProgramacaoAgulhasPage(QWidget):
         except Exception:
             return []
 
-    def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
+    def _stat_card(self, titulo, valor, cor_icone, icon_name):
+        card = QWidget()
+        card.setObjectName("statCard")
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(14, 10, 14, 10)
         layout.setSpacing(12)
 
-        card = QWidget()
-        card.setObjectName("pageCard")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(16, 16, 16, 16)
-        card_layout.setSpacing(12)
+        icon = qtawesome.icon(icon_name, color=cor_icone, scale_factor=1.1)
+        icon_label = QLabel()
+        icon_label.setPixmap(icon.pixmap(20, 20))
+        icon_bg = QWidget()
+        icon_bg.setFixedSize(38, 38)
+        icon_bg.setStyleSheet(f"background-color: {cor_icone}1a; border-radius: 10px;")
+        icon_bg_layout = QHBoxLayout(icon_bg)
+        icon_bg_layout.setContentsMargins(0, 0, 0, 0)
+        icon_bg_layout.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(icon_bg)
 
-        titulo = QLabel("Programação de agulhas para manutenção")
+        texts = QVBoxLayout()
+        texts.setSpacing(2)
+        lbl_titulo = QLabel(titulo)
+        lbl_titulo.setObjectName("statLabel")
+        texts.addWidget(lbl_titulo)
+        lbl_valor = QLabel(str(valor))
+        lbl_valor.setObjectName("statValue")
+        texts.addWidget(lbl_valor)
+        layout.addLayout(texts)
+        layout.addStretch()
+
+        return card, lbl_valor
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
+
+        # ── Page Header ──
+        header_layout = QHBoxLayout()
+        header_texts = QVBoxLayout()
+        header_texts.setSpacing(4)
+        titulo = QLabel("Programação de Agulhas")
         titulo.setObjectName("pageTitle")
-        card_layout.addWidget(titulo)
+        header_texts.addWidget(titulo)
+        subtitulo = QLabel("Gerenciamento de pedidos de agulhas para manutenção")
+        subtitulo.setObjectName("pageSubtitle")
+        header_texts.addWidget(subtitulo)
+        header_layout.addLayout(header_texts)
+        header_layout.addStretch()
+        layout.addLayout(header_layout)
 
-        secao_form = QLabel("Novo Pedido")
-        secao_form.setObjectName("sectionTitle")
-        card_layout.addWidget(secao_form)
+        # ── Stats Cards ──
+        stats_layout = QHBoxLayout()
+        stats_layout.setSpacing(12)
+        self.card_pendentes, self.stat_pendentes = self._stat_card("Pendentes", "0", "#f59e0b", "mdi6.clock-outline")
+        self.card_programados, self.stat_programados = self._stat_card("Programados", "0", "#6366f1", "mdi6.calendar-check-outline")
+        self.card_separando, self.stat_separando = self._stat_card("Separando", "0", "#0ea5e9", "mdi6.package-variant-closed")
+        self.card_entregues, self.stat_entregues = self._stat_card("Entregues", "0", "#10b981", "mdi6.check-circle-outline")
+        stats_layout.addWidget(self.card_pendentes)
+        stats_layout.addWidget(self.card_programados)
+        stats_layout.addWidget(self.card_separando)
+        stats_layout.addWidget(self.card_entregues)
+        layout.addLayout(stats_layout)
 
-        form_layout = QHBoxLayout()
-        form_layout.setSpacing(8)
+        # ── Filters / Form Card ──
+        filters_card = QWidget()
+        filters_card.setObjectName("pageCard")
+        filters_card_layout = QHBoxLayout(filters_card)
+        filters_card_layout.setContentsMargins(18, 14, 18, 14)
+        filters_card_layout.setSpacing(20)
 
-        self.campo_pedido = QLineEdit()
-        self.campo_pedido.setPlaceholderText("Pedido")
-        self.campo_codigo = QLineEdit()
-        self.campo_codigo.setPlaceholderText("Código")
-        self.campo_qtde = QLineEdit()
-        self.campo_qtde.setPlaceholderText("Qtde")
-        self.campo_requisitante = QLineEdit()
-        self.campo_requisitante.setPlaceholderText("Requisitante (1, 2 ou 3)")
-        self.campo_requisitante.textChanged.connect(self._mapear_requisitante)
+        # ── Left Panel: Status + Filtros + Ações ──
+        painel_esquerdo = QWidget()
+        painel_esquerdo_layout = QVBoxLayout(painel_esquerdo)
+        painel_esquerdo_layout.setContentsMargins(0, 0, 0, 0)
+        painel_esquerdo_layout.setSpacing(10)
 
-        for campo in [self.campo_pedido, self.campo_codigo, self.campo_qtde, self.campo_requisitante]:
-            campo.setFixedHeight(34)
-            campo.returnPressed.connect(self._inserir)
-            form_layout.addWidget(campo)
-
-        btn_inserir = QPushButton("Inserir")
-        btn_inserir.setObjectName("btnPrimary")
-        btn_inserir.setFixedHeight(34)
-        btn_inserir.setDefault(True)
-        btn_inserir.clicked.connect(self._inserir)
-        form_layout.addWidget(btn_inserir)
-        card_layout.addLayout(form_layout)
-
-        secao_filtros = QLabel("Filtrar por Status")
-        secao_filtros.setObjectName("sectionTitle")
-        card_layout.addWidget(secao_filtros)
-
-        linha_top = QHBoxLayout()
-        linha_top.setSpacing(8)
-
+        # Status Tabs Row
         botoes_status_layout = QHBoxLayout()
-        botoes_status_layout.setSpacing(6)
+        botoes_status_layout.setSpacing(4)
         self.botoes_status = {}
-        for status in ["Pendentes", "Programados", "Separando", "Entregues"]:
-            btn = QPushButton(status)
-            btn.setObjectName("segmented")
+
+        status_configs = [
+            ("Pendentes", "#f59e0b", "mdi6.clock-outline"),
+            ("Programados", "#6366f1", "mdi6.calendar-check-outline"),
+            ("Separando", "#0ea5e9", "mdi6.package-variant-closed"),
+            ("Entregues", "#10b981", "mdi6.check-circle-outline"),
+        ]
+        for status, color, icon in status_configs:
+            btn = QPushButton(qtawesome.icon(icon, color=color), f"  {status}")
+            btn.setObjectName("statusTab")
+            btn.setProperty("status_color", color)
             btn.setCheckable(True)
-            btn.setFixedHeight(30)
+            btn.setFixedHeight(34)
             btn.clicked.connect(lambda checked, s=status: self._filtrar_por_status(s))
             botoes_status_layout.addWidget(btn)
             self.botoes_status[status] = btn
         self.botoes_status["Pendentes"].setChecked(True)
-        linha_top.addLayout(botoes_status_layout)
 
-        self.campo_filtro = QLineEdit()
-        self.campo_filtro.setPlaceholderText("Pesquisar...")
-        self.campo_filtro.setFixedHeight(30)
-        self.campo_filtro.setFixedWidth(140)
-        self.campo_filtro.textChanged.connect(self._aplicar_filtro)
-        linha_top.addWidget(self.campo_filtro)
+        botoes_status_layout.addStretch()
+        painel_esquerdo_layout.addLayout(botoes_status_layout)
 
         self.widget_filtro_data = QWidget()
         layout_filtro_data = QHBoxLayout()
@@ -304,85 +333,182 @@ class ProgramacaoAgulhasPage(QWidget):
         self.btn_limpar_filtro_data.clicked.connect(self._limpar_filtro_data)
         layout_filtro_data.addWidget(self.btn_limpar_filtro_data)
 
-        self.btn_grafico = QPushButton("Gráfico")
+        self.btn_grafico = QPushButton(qtawesome.icon('mdi6.chart-bar', color='#ffffff'), "  Gráfico")
         self.btn_grafico.setFixedHeight(30)
-        self.btn_grafico.setObjectName("btnPrimary")
+        self.btn_grafico.setObjectName("btnGradientChartreuse")
         self.btn_grafico.clicked.connect(self._abrir_grafico)
         layout_filtro_data.addWidget(self.btn_grafico)
 
         self.widget_filtro_data.setLayout(layout_filtro_data)
         self.widget_filtro_data.setVisible(False)
-        linha_top.addWidget(self.widget_filtro_data)
 
-        linha_top.addStretch()
+        # Action Buttons Row
+        linha_acoes = QHBoxLayout()
+        linha_acoes.setSpacing(8)
 
-        self.btn_mover_programado = QPushButton("Programar")
-        self.btn_mover_programado.setObjectName("btnPrimary")
-        self.btn_mover_programado.setFixedHeight(30)
+        linha_acoes.addWidget(self.widget_filtro_data)
+
+        self.btn_mover_programado = QPushButton(qtawesome.icon('mdi6.calendar-check', color='#ffffff'), "  Programar")
+        self.btn_mover_programado.setObjectName("btnGradientIndigo")
+        self.btn_mover_programado.setFixedHeight(32)
         self.btn_mover_programado.clicked.connect(self._mover_programado)
-        self.btn_mover_separando = QPushButton("Separar")
-        self.btn_mover_separando.setObjectName("btnPrimary")
-        self.btn_mover_separando.setFixedHeight(30)
+
+        self.btn_mover_separando = QPushButton(qtawesome.icon('mdi6.package-variant', color='#ffffff'), "  Separar")
+        self.btn_mover_separando.setObjectName("btnGradientTeal")
+        self.btn_mover_separando.setFixedHeight(32)
         self.btn_mover_separando.clicked.connect(self._mover_separando)
-        self.btn_entregar = QPushButton("Entregar")
-        self.btn_entregar.setObjectName("btnPrimary")
-        self.btn_entregar.setFixedHeight(30)
+
+        self.btn_entregar = QPushButton(qtawesome.icon('fa6s.check', color='#ffffff'), "  Entregar")
+        self.btn_entregar.setObjectName("btnGradientGreen")
+        self.btn_entregar.setFixedHeight(32)
         self.btn_entregar.clicked.connect(self._entregar)
-        self.btn_excluir = QPushButton("Excluir")
-        self.btn_excluir.setObjectName("btnDanger")
-        self.btn_excluir.setFixedHeight(30)
-        self.btn_excluir.clicked.connect(self._excluir)
-        self.btn_dividir = QPushButton("Dividir")
-        self.btn_dividir.setObjectName("btnPrimary")
-        self.btn_dividir.setFixedHeight(30)
+
+        self.btn_dividir = QPushButton(qtawesome.icon('mdi6.call-split', color='#ffffff'), "  Dividir")
+        self.btn_dividir.setObjectName("btnGradientPurple")
+        self.btn_dividir.setFixedHeight(32)
         self.btn_dividir.clicked.connect(self._dividir)
 
+        self.btn_excluir = QPushButton(qtawesome.icon('fa6s.trash', color='#ffffff'), "  Excluir")
+        self.btn_excluir.setObjectName("btnGradientRose")
+        self.btn_excluir.setFixedHeight(32)
+        self.btn_excluir.clicked.connect(self._excluir)
+
         self.combo_impressoras = QComboBox()
-        self.combo_impressoras.setFixedHeight(30)
+        self.combo_impressoras.setFixedHeight(32)
         self.combo_impressoras.setFixedWidth(160)
         self.combo_impressoras.setToolTip("Selecione a impressora Zebra para impressão")
         self.combo_impressoras.setVisible(False)
 
-        self.btn_imprimir = QPushButton("Imprimir")
-        self.btn_imprimir.setObjectName("btnPrimary")
-        self.btn_imprimir.setFixedHeight(30)
+        self.btn_imprimir = QPushButton(qtawesome.icon('fa6s.print', color='#1e1b4b'), "  Imprimir")
+        self.btn_imprimir.setObjectName("btnGradientAmber")
+        self.btn_imprimir.setFixedHeight(32)
         self.btn_imprimir.clicked.connect(self._imprimir_zebra)
         self.btn_imprimir.setVisible(False)
 
-        linha_top.addWidget(self.btn_mover_programado)
-        linha_top.addWidget(self.btn_mover_separando)
-        linha_top.addWidget(self.btn_excluir)
-        linha_top.addWidget(self.btn_dividir)
-        linha_top.addWidget(self.btn_entregar)
-        linha_top.addWidget(self.combo_impressoras)
-        linha_top.addWidget(self.btn_imprimir)
+        linha_acoes.addWidget(self.btn_mover_programado)
+        linha_acoes.addWidget(self.btn_mover_separando)
+        linha_acoes.addWidget(self.btn_entregar)
+        linha_acoes.addWidget(self.btn_dividir)
+        linha_acoes.addWidget(self.btn_excluir)
+        linha_acoes.addStretch()
+        linha_acoes.addWidget(self.combo_impressoras)
+        linha_acoes.addWidget(self.btn_imprimir)
 
-        card_layout.addLayout(linha_top)
+        painel_esquerdo_layout.addLayout(linha_acoes)
+        painel_esquerdo.setFixedWidth(533)
+        filters_card_layout.addWidget(painel_esquerdo)
 
+        # ── Right Panel: Novo Pedido ──
+        self.painel_form = QWidget()
+        painel_form = self.painel_form
+        painel_form.setFixedWidth(690)
+        painel_form_layout = QVBoxLayout(painel_form)
+        painel_form_layout.setContentsMargins(0, 0, 0, 0)
+        painel_form_layout.setSpacing(10)
+
+        form_grid = QGridLayout()
+        form_grid.setSpacing(6)
+        form_grid.setHorizontalSpacing(10)
+
+        lbl_pedido = QLabel("Pedido")
+        lbl_pedido.setObjectName("fieldLabel")
+        self.campo_pedido = QLineEdit()
+        self.campo_pedido.setPlaceholderText("Nº do pedido")
+        self.campo_pedido.setFixedHeight(36)
+        self.campo_pedido.setFixedWidth(99)
+        self.campo_pedido.returnPressed.connect(self._inserir)
+        form_grid.addWidget(lbl_pedido, 0, 0)
+        form_grid.addWidget(self.campo_pedido, 1, 0)
+
+        lbl_codigo = QLabel("Código")
+        lbl_codigo.setObjectName("fieldLabel")
+        self.campo_codigo = QLineEdit()
+        self.campo_codigo.setPlaceholderText("Código do item")
+        self.campo_codigo.setFixedHeight(36)
+        self.campo_codigo.setFixedWidth(120)
+        self.campo_codigo.returnPressed.connect(self._inserir)
+        form_grid.addWidget(lbl_codigo, 0, 1)
+        form_grid.addWidget(self.campo_codigo, 1, 1)
+
+        lbl_qtde = QLabel("Qtde")
+        lbl_qtde.setObjectName("fieldLabel")
+        self.campo_qtde = QLineEdit()
+        self.campo_qtde.setPlaceholderText("Qtde")
+        self.campo_qtde.setFixedHeight(36)
+        self.campo_qtde.setFixedWidth(99)
+        self.campo_qtde.returnPressed.connect(self._inserir)
+        form_grid.addWidget(lbl_qtde, 0, 2)
+        form_grid.addWidget(self.campo_qtde, 1, 2)
+
+        lbl_req = QLabel("Requisitante")
+        lbl_req.setObjectName("fieldLabel")
+        self.campo_requisitante = QLineEdit()
+        self.campo_requisitante.setPlaceholderText("1, 2 ou 3")
+        self.campo_requisitante.setFixedHeight(36)
+        self.campo_requisitante.setFixedWidth(158)
+        self.campo_requisitante.textChanged.connect(self._mapear_requisitante)
+        self.campo_requisitante.returnPressed.connect(self._inserir)
+        form_grid.addWidget(lbl_req, 0, 3)
+        form_grid.addWidget(self.campo_requisitante, 1, 3)
+
+        btn_inserir = QPushButton(qtawesome.icon('fa6s.plus', color='#ffffff'), "  Inserir")
+        btn_inserir.setObjectName("btnGradientIndigo")
+        btn_inserir.setFixedHeight(36)
+        btn_inserir.setFixedWidth(120)
+        btn_inserir.setDefault(True)
+        btn_inserir.clicked.connect(self._inserir)
+        form_grid.addWidget(btn_inserir, 1, 4, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        painel_form_layout.addLayout(form_grid)
+
+        filters_card_layout.addWidget(painel_form)
+        filters_card_layout.addStretch()
+        layout.addWidget(filters_card)
+
+        # ── Table Card ──
+        table_card = QWidget()
+        table_card.setObjectName("pageCard")
+        table_card_layout = QVBoxLayout(table_card)
+        table_card_layout.setContentsMargins(18, 14, 18, 14)
+        table_card_layout.setSpacing(10)
+
+        # Info bar
         info_linha = QHBoxLayout()
-        info_linha.setSpacing(16)
+        info_linha.setSpacing(20)
 
-        def lbl_info(texto):
-            label = QLabel(texto)
-            label.setObjectName("statusLabel")
-            return label
+        def info_badge(texto, valor):
+            container = QHBoxLayout()
+            container.setSpacing(4)
+            lbl = QLabel(texto)
+            lbl.setObjectName("statusLabel")
+            container.addWidget(lbl)
+            val = QLabel(valor)
+            val.setObjectName("infoValue")
+            container.addWidget(val)
+            return container, val
 
-        info_linha.addWidget(lbl_info("QTDE NOVO:"))
-        self.label_qtde_novo = lbl_info("0")
-        info_linha.addWidget(self.label_qtde_novo)
-        info_linha.addWidget(lbl_info("QTDE RETORNO:"))
-        self.label_qtde_retorno = lbl_info("0")
-        info_linha.addWidget(self.label_qtde_retorno)
-        info_linha.addWidget(lbl_info("CONSUMO MÉDIO:"))
-        self.label_consumo_medio = lbl_info("0")
-        info_linha.addWidget(self.label_consumo_medio)
+        qtde_novo_layout, self.label_qtde_novo = info_badge("Qtde Novo:", "0")
+        info_linha.addLayout(qtde_novo_layout)
+        qtde_ret_layout, self.label_qtde_retorno = info_badge("Qtde Retorno:", "0")
+        info_linha.addLayout(qtde_ret_layout)
+        consumo_layout, self.label_consumo_medio = info_badge("Consumo Médio:", "0")
+        info_linha.addLayout(consumo_layout)
+
+        self.campo_filtro = QLineEdit()
+        self.campo_filtro.setPlaceholderText("Pesquisar...")
+        self.campo_filtro.setFixedHeight(30)
+        self.campo_filtro.setFixedWidth(180)
+        self.campo_filtro.textChanged.connect(self._aplicar_filtro)
+        info_linha.addSpacing(8)
+        info_linha.addWidget(self.campo_filtro)
 
         info_linha.addStretch()
         self.label_contador = QLabel("0 itens")
         self.label_contador.setObjectName("statusLabel")
         info_linha.addWidget(self.label_contador)
-        card_layout.addLayout(info_linha)
+        table_card_layout.addLayout(info_linha)
 
+        # Table
         self.tabela = QTableWidget(0, 8)
         self.tabela.setHorizontalHeaderLabels(
             ["", "Pedido", "Kardex", "Código", "Qtde", "Fornecedor", "Requisitante", "Data"]
@@ -406,10 +532,10 @@ class ProgramacaoAgulhasPage(QWidget):
         self.tabela.setItemDelegate(EditorDelegate(self.tabela))
         self.tabela.itemChanged.connect(self._item_modificado)
         self.tabela.cellClicked.connect(self._linha_clicada)
-        card_layout.addWidget(self.tabela)
+        table_card_layout.addWidget(self.tabela)
+        layout.addWidget(table_card)
 
         self._preencher_impressoras()
-        layout.addWidget(card)
 
     def _proximo_id(self):
         max_id = 0
@@ -486,6 +612,7 @@ class ProgramacaoAgulhasPage(QWidget):
             chk = QTableWidgetItem()
             chk.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
             chk.setCheckState(Qt.CheckState.Unchecked if not item.get("selecionado") else Qt.CheckState.Checked)
+            chk.setData(Qt.ItemDataRole.UserRole, item.get("id"))
             self.tabela.setItem(row, 0, chk)
 
             editavel = self.filtro_status != "Entregues"
@@ -522,6 +649,8 @@ class ProgramacaoAgulhasPage(QWidget):
         self.btn_dividir.setVisible(False)
         self.combo_impressoras.setVisible(False)
         self.btn_imprimir.setVisible(False)
+        self.widget_filtro_data.setVisible(self.filtro_status == "Entregues")
+        self.painel_form.setVisible(self.filtro_status == "Pendentes")
         if self.filtro_status == "Pendentes":
             self.btn_mover_programado.setVisible(True)
             self.btn_mover_separando.setVisible(True)
@@ -543,6 +672,22 @@ class ProgramacaoAgulhasPage(QWidget):
             if chk and chk.checkState() == Qt.CheckState.Checked:
                 selecionados += 1
         self.label_contador.setText(f"{selecionados} itens selecionados de {total}")
+        self._atualizar_stats()
+
+    def _atualizar_stats(self):
+        pendentes = sum(1 for d in self.dados if d.get("status") == "Pendente")
+        programados = sum(1 for d in self.dados if "Programado" in d.get("status", ""))
+        separando = sum(1 for d in self.dados if "Separando" in d.get("status", ""))
+        ano = datetime.now().strftime("%Y")
+        try:
+            with open(_caminho_entregues(ano), "r", encoding="utf-8") as f:
+                entregues = len(json.load(f))
+        except (FileNotFoundError, json.JSONDecodeError):
+            entregues = 0
+        self.stat_pendentes.setText(str(pendentes))
+        self.stat_programados.setText(str(programados))
+        self.stat_separando.setText(str(separando))
+        self.stat_entregues.setText(str(entregues))
 
     def _mover_status(self, novo_status):
         hoje = datetime.now().strftime("%d/%m/%Y")
@@ -771,7 +916,6 @@ class ProgramacaoAgulhasPage(QWidget):
         for s, btn in self.botoes_status.items():
             btn.setChecked(s == status)
         self.filtro_status = status
-        self.widget_filtro_data.setVisible(status == "Entregues")
         for d in self.dados:
             d["selecionado"] = False
         self._popular_tabela()
@@ -924,32 +1068,36 @@ class ProgramacaoAgulhasPage(QWidget):
             dado["selecionado"] = False
         if checked:
             for row in range(self.tabela.rowCount()):
-                pedido = self.tabela.item(row, 1)
-                codigo = self.tabela.item(row, 3)
-                if pedido and codigo:
-                    indices = [i for i, d in enumerate(self.dados)
-                               if d.get("pedido") == pedido.text()
-                               and d.get("codigo") == codigo.text()]
-                    if indices:
-                        self.dados[indices[0]]["selecionado"] = True
+                chk = self.tabela.item(row, 0)
+                if chk:
+                    item_id = chk.data(Qt.ItemDataRole.UserRole)
+                    for d in self.dados:
+                        if d.get("id") == item_id:
+                            d["selecionado"] = True
+                            break
         self._atualizar_contador()
         self._atualizar_header_checkbox()
         self._salvar_json()
+
+    def _dado_por_linha(self, row):
+        chk = self.tabela.item(row, 0)
+        if chk is None:
+            return None
+        item_id = chk.data(Qt.ItemDataRole.UserRole)
+        for d in self.dados:
+            if d.get("id") == item_id:
+                return d
+        return None
 
     def _item_modificado(self, item):
         row = item.row()
         col = item.column()
         if col == 0:
             checked = item.checkState() == Qt.CheckState.Checked
-            pedido = self.tabela.item(row, 1)
-            codigo = self.tabela.item(row, 3)
-            if pedido and codigo:
-                indices = [i for i, d in enumerate(self.dados)
-                           if d.get("pedido") == pedido.text()
-                           and d.get("codigo") == codigo.text()]
-                if indices:
-                    self.dados[indices[0]]["selecionado"] = checked
-                    self._salvar_json()
+            dado = self._dado_por_linha(row)
+            if dado is not None:
+                dado["selecionado"] = checked
+                self._salvar_json()
             self._atualizar_header_checkbox()
             self._atualizar_contador()
             return
@@ -964,15 +1112,10 @@ class ProgramacaoAgulhasPage(QWidget):
                 return
         else:
             return
-        pedido = self.tabela.item(row, 1)
-        codigo = self.tabela.item(row, 3)
-        if pedido and codigo:
-            indices = [i for i, d in enumerate(self.dados)
-                       if d.get("pedido") == pedido.text()
-                       and d.get("codigo") == codigo.text()]
-            if indices:
-                self.dados[indices[0]][chave] = item.text()
-                self._salvar_json()
+        dado = self._dado_por_linha(row)
+        if dado is not None:
+            dado[chave] = item.text()
+            self._salvar_json()
 
     def _atualizar_header_checkbox(self):
         total = self.tabela.rowCount()
@@ -1051,7 +1194,6 @@ class ProgramacaoAgulhasPage(QWidget):
         def _send_zpl_to_printer(printer_name, zpl_data):
             try:
                 import win32print
-                import win32api
             except Exception:
                 QMessageBox.warning(self, "Impressão Zebra", "Envio direto de ZPL requer a biblioteca pywin32 (win32print). Instale-a e tente novamente.")
                 return False
@@ -1059,12 +1201,14 @@ class ProgramacaoAgulhasPage(QWidget):
             try:
                 hPrinter = win32print.OpenPrinter(printer_name)
                 try:
-                    # Start a raw print job
-                    hJob = win32print.StartDocPrinter(hPrinter, 1, ("ZPL Print", None, "RAW"))
+                    win32print.StartDocPrinter(hPrinter, 1, ("ZPL Print", None, "RAW"))
                     try:
-                        win32print.StartPagePrinter(hPrinter)
-                        win32print.WritePrinter(hPrinter, zpl_data.encode('utf-8'))
-                        win32print.EndPagePrinter(hPrinter)
+                        pos = 0
+                        while pos < len(zpl_data):
+                            written = win32print.WritePrinter(hPrinter, zpl_data[pos:])
+                            if written <= 0:
+                                raise IOError("Falha ao gravar dados na impressora")
+                            pos += written
                     finally:
                         win32print.EndDocPrinter(hPrinter)
                 finally:
@@ -1074,11 +1218,9 @@ class ProgramacaoAgulhasPage(QWidget):
                 QMessageBox.critical(self, "Erro de Impressão", f"Falha ao enviar ZPL para a impressora: {e}")
                 return False
 
-        # Send each ZPL job
-        for zpl in zpl_jobs:
-            ok = _send_zpl_to_printer(impressora, zpl)
-            if not ok:
-                break
+        # Envia todas as etiquetas em um único job para evitar perda da última
+        payload = "".join(zpl_jobs).encode('utf-8')
+        _send_zpl_to_printer(impressora, payload)
 
     def _linha_clicada(self, row, col):
         item_codigo = self.tabela.item(row, 3)
