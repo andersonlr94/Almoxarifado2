@@ -14,7 +14,7 @@ def _caminho_json():
     import config
     base = config.obter_caminho_jsons()
     if not base:
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+        return ""
     return os.path.normpath(os.path.join(base, "Almox", "RemoveLocDuplicadas", "remove_loc_duplicadas.json"))
 
 
@@ -328,9 +328,14 @@ class RemoveLocDuplicadasPage(QWidget):
         self._popular_tabela()
 
     def _salvar_json(self):
+        caminho = _caminho_json()
+        if not caminho:
+            import config
+            config.avisar_sem_pasta(self)
+            return
         try:
-            os.makedirs(os.path.dirname(_caminho_json()), exist_ok=True)
-            with open(_caminho_json(), "w", encoding="utf-8") as f:
+            os.makedirs(os.path.dirname(caminho), exist_ok=True)
+            with open(caminho, "w", encoding="utf-8") as f:
                 json.dump(self.dados, f, ensure_ascii=False, indent=2)
         except OSError:
             pass

@@ -201,7 +201,8 @@ class PedidosPendentesPage(QWidget):
         import config
         base = config.obter_caminho_jsons()
         if not base:
-            base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+            config.avisar_sem_pasta(self)
+            return
         pasta_json = os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "PedidosPendentes"))
         os.makedirs(pasta_json, exist_ok=True)
         caminho_arquivo = os.path.join(pasta_json, "PedidosPendentes.json")

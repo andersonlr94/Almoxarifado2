@@ -22,9 +22,11 @@ from ui.pages.pedidos_pendentes_page import PedidosPendentesPage
 from ui.pages.testar_contas_page import TestarContasPage
 from ui.pages.baixa_3_7_page import Baixa37Page
 from ui.pages.acuracidade_page import AcuracidadePage
+from ui.pages.fresh_start_page import FreshStartPage
 
 
 SIDEBAR_WIDTH = 240
+SIDEBAR_COLLAPSED_WIDTH = 58
 
 NAV_ICONS = {
     "estoque": ("fa6s.box", "box"),
@@ -33,6 +35,7 @@ NAV_ICONS = {
     "controle_pedidos": ("mdi6.clipboard-check-outline", "clipboard-check"),
     "pedidos_pendentes": ("mdi6.clock-outline", "clock"),
     "programacao_agulhas": ("mdi6.format-align-justify", "agulhas"),
+    "fresh_start": ("mdi6.sprout-outline", "sprout"),
     "digitar_ae": ("mdi6.pencil-outline", "pencil"),
     "transferencia": ("mdi6.swap-horizontal", "swap"),
     "remove_loc_duplicadas": ("mdi6.delete-sweep-outline", "delete"),
@@ -171,6 +174,7 @@ class MainWindow(QMainWindow):
             ("controle_pedidos",  "Controle de Pedidos",   False),
             ("pedidos_pendentes", "Pedidos Pendentes",     False),
             ("programacao_agulhas", "Prog. de Agulhas",    False),
+            ("fresh_start",         "Fresh Start",         False),
             (None, "Automações", False),
             ("digitar_ae",        "Digitar AE",            True),
             ("transferencia",     "Transferência",         True),
@@ -250,6 +254,7 @@ class MainWindow(QMainWindow):
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
+        self.content_layout = content_layout
 
         self.stacked = QStackedWidget()
         self.pages = {}
@@ -262,6 +267,7 @@ class MainWindow(QMainWindow):
             ("controle_pedidos",      ControlePedidosPage),
             ("pedidos_pendentes",     PedidosPendentesPage),
             ("programacao_agulhas",   ProgramacaoAgulhasPage),
+            ("fresh_start",           FreshStartPage),
             ("digitar_ae",            DigitarAEPage),
             ("transferencia",         TransferenciaPage),
             ("remove_loc_duplicadas", RemoveLocDuplicadasPage),
@@ -287,6 +293,10 @@ class MainWindow(QMainWindow):
         self.stacked.setCurrentWidget(self.pages[key])
         if key in self._subitem_keys and not self._automacoes_expanded:
             self._toggle_automacoes()
+
+    def _atualizar_margem_conteudo(self):
+        if hasattr(self, "content_layout"):
+            self.content_layout.setContentsMargins(SIDEBAR_COLLAPSED_WIDTH, 0, 0, 0)
 
     def _aplicar_estado_botoes(self, collapsed):
         if collapsed:
@@ -344,6 +354,7 @@ class MainWindow(QMainWindow):
         else:
             self.sidebar.setGeometry(0, 0, alvo, h)
             self._aplicar_estado_botoes(collapsed)
+        self._atualizar_margem_conteudo()
 
     def _expand_sidebar(self):
         self._set_sidebar_collapsed(False)

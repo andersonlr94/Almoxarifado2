@@ -464,6 +464,10 @@ class AcuracidadePage(QWidget):
 
     def _marcar_acuracidade_ok(self):
         caminho_base = self._caminho_jsons()
+        if not caminho_base:
+            import config
+            config.avisar_sem_pasta(self)
+            return
         arquivo = os.path.join(caminho_base, "Almox", "Acuracidade", "ItensDeEstoque", "ItensDeEstoque.json")
 
         if not os.path.isfile(arquivo):
@@ -532,6 +536,10 @@ class AcuracidadePage(QWidget):
 
         hoje = date.today()
         caminho_base = self._caminho_jsons()
+        if not caminho_base:
+            import config
+            config.avisar_sem_pasta(self)
+            return
         pasta = os.path.join(caminho_base, "Almox", "Acuracidade", str(hoje.year), f"{hoje.month:02d}")
         os.makedirs(pasta, exist_ok=True)
 
@@ -626,7 +634,7 @@ class AcuracidadePage(QWidget):
         import config
         base = config.obter_caminho_jsons()
         if not base:
-            base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+            return ""
         return os.path.normpath(base)
 
     def _buscar_qtde_novo(self, kardex):
@@ -646,6 +654,10 @@ class AcuracidadePage(QWidget):
 
     def _atualizar_itens(self):
         caminho_base = self._caminho_jsons()
+        if not caminho_base:
+            import config
+            config.avisar_sem_pasta(self)
+            return
         origem = os.path.join(caminho_base, "Almox", "ItensAlmoxarifado", "ItensAlmoxarifado.json")
 
         if not os.path.isfile(origem):

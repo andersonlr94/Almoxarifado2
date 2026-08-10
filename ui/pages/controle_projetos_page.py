@@ -35,7 +35,7 @@ def _caminho_pasta_dph():
     import config
     base = config.obter_caminho_jsons()
     if not base:
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+        return ""
     return os.path.normpath(os.path.join(base, "Almox", "DPH"))
 
 
@@ -228,6 +228,10 @@ class ControleProjetosPage(QWidget):
 
     def _salvar_dph_json(self, dados_novos):
         pasta = _caminho_pasta_dph()
+        if not pasta:
+            import config
+            config.avisar_sem_pasta(self)
+            return
         os.makedirs(pasta, exist_ok=True)
         data_str = datetime.now().strftime("%d-%m-%Y")
         caminho = os.path.join(pasta, f"{data_str}.json")
@@ -255,6 +259,8 @@ class ControleProjetosPage(QWidget):
 
     def _carregar_projetos(self):
         pasta = _caminho_pasta_dph()
+        if not pasta:
+            return
         os.makedirs(pasta, exist_ok=True)
         projetos = set()
         try:

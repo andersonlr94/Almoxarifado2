@@ -84,7 +84,7 @@ def _caminho_json():
     import config
     base = config.obter_caminho_jsons()
     if not base:
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+        return ""
     return os.path.normpath(os.path.join(base, "Almox", "ProgramacaoAgulhasManutencao", "pedidos.json"))
 
 
@@ -92,7 +92,7 @@ def _caminho_entregues(ano):
     import config
     base = config.obter_caminho_jsons()
     if not base:
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+        return ""
     return os.path.normpath(os.path.join(base, "Almox", "ProgramacaoAgulhasManutencao", f"{ano}-Entregues.json"))
 
 
@@ -100,7 +100,7 @@ def _caminho_itens():
     import config
     base = config.obter_caminho_jsons()
     if not base:
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+        return ""
     return os.path.normpath(os.path.join(base, "Almox", "ItensAlmoxarifado", "ItensAlmoxarifado.json"))
 
 
@@ -697,6 +697,12 @@ class ProgramacaoAgulhasPage(QWidget):
             "Entregue": "data_entregue",
         }.get(novo_status)
         if novo_status == "Entregue":
+            ano = datetime.now().strftime("%Y")
+            caminho_entregues = _caminho_entregues(ano)
+            if not caminho_entregues:
+                import config
+                config.avisar_sem_pasta(self)
+                return
             entregues = []
             restantes = []
             for d in self.dados:
@@ -710,16 +716,14 @@ class ProgramacaoAgulhasPage(QWidget):
                     restantes.append(d)
             self.dados = restantes
             if entregues:
-                ano = datetime.now().strftime("%Y")
-                caminho = _caminho_entregues(ano)
-                os.makedirs(os.path.dirname(caminho), exist_ok=True)
+                os.makedirs(os.path.dirname(caminho_entregues), exist_ok=True)
                 try:
-                    with open(caminho, "r", encoding="utf-8") as f:
+                    with open(caminho_entregues, "r", encoding="utf-8") as f:
                         existentes = json.load(f)
                 except (FileNotFoundError, json.JSONDecodeError):
                     existentes = []
                 existentes.extend(entregues)
-                with open(caminho, "w", encoding="utf-8") as f:
+                with open(caminho_entregues, "w", encoding="utf-8") as f:
                     json.dump(existentes, f, ensure_ascii=False, indent=2)
             self._salvar_json()
             self._filtrar_por_status(self.filtro_status)
@@ -1243,10 +1247,15 @@ class ProgramacaoAgulhasPage(QWidget):
             self.label_consumo_medio.setText("0")
 
     def _salvar_json(self):
+        caminho = _caminho_json()
+        if not caminho:
+            import config
+            config.avisar_sem_pasta(self)
+            return
         try:
-            os.makedirs(os.path.dirname(_caminho_json()), exist_ok=True)
+            os.makedirs(os.path.dirname(caminho), exist_ok=True)
             ativos = [d for d in self.dados if d.get("status") != "Entregue"]
-            with open(_caminho_json(), "w", encoding="utf-8") as f:
+            with open(caminho, "w", encoding="utf-8") as f:
                 json.dump(ativos, f, ensure_ascii=False, indent=2)
         except OSError:
             pass

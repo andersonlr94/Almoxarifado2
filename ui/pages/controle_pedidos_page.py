@@ -19,7 +19,7 @@ def _caminho_fornecedores_json():
     import config
     base = config.obter_caminho_jsons()
     if not base:
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+        return ""
     return os.path.normpath(os.path.join(base, "Almox", "Fornecedores", "fornecedores.json"))
 
 
@@ -77,7 +77,7 @@ class EditorDelegate(QStyledItemDelegate):
             editor.setEditable(True)
             editor.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
             editor.addItems(self.fornecedores)
-            editor.setFixedHeight(option.rect.height())
+            editor.setFixedHeight(option.rect.height() - 6)
             editor.setMaximumWidth(option.rect.width())
             editor.setContentsMargins(0, 0, 0, 0)
             editor.lineEdit().setStyleSheet("padding: 0px; margin: 0px; border: none; border-radius: 0px;")
@@ -88,11 +88,11 @@ class EditorDelegate(QStyledItemDelegate):
             return editor
         editor = super().createEditor(parent, option, index)
         if isinstance(editor, QLineEdit):
-            editor.setFixedHeight(option.rect.height())
+            editor.setFixedHeight(option.rect.height() - 6)
             editor.setMaximumWidth(option.rect.width())
             editor.setContentsMargins(0, 0, 0, 0)
             editor.setStyleSheet(
-                "padding: 0px 10px; margin: 0px; border: none; "
+                "padding: 0px; margin: 0px; border: none; "
                 "border-bottom: 2px solid #6366f1; border-radius: 0px;"
             )
         return editor
@@ -116,7 +116,7 @@ def _caminho_json():
     import config
     base = config.obter_caminho_jsons()
     if not base:
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+        return ""
     return os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "controlePedidos.json"))
 
 
@@ -124,7 +124,7 @@ def _caminho_pedidos_pendentes():
     import config
     base = config.obter_caminho_jsons()
     if not base:
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+        return ""
     return os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "PedidosPendentes", "PedidosPendentes.json"))
 
 def _caminho_pedidos_entregues():
@@ -134,7 +134,7 @@ def _caminho_pedidos_entregues():
     nome_arquivo = f"ControlePedidosEntregues{ano}"
     base = config.obter_caminho_jsons()
     if not base:
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+        return ""
     return os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", f"{nome_arquivo}.json"))
 
 
@@ -461,7 +461,7 @@ class ControlePedidosPage(QWidget):
         import config
         base = config.obter_caminho_jsons()
         if not base:
-            base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+            return []
         resultado = []
         for ano in range(ano_atual, 2023, -1):
             caminho = os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", f"ControlePedidosEntregues{ano}.json"))
@@ -643,7 +643,8 @@ class ControlePedidosPage(QWidget):
         import config
         base = config.obter_caminho_jsons()
         if not base:
-            base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+            self._mostrar_nao_encontrado()
+            return
         for ano in range(ano_atual, 2023, -1):
             caminho = os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", f"ControlePedidosEntregues{ano}.json"))
             try:
@@ -728,6 +729,10 @@ class ControlePedidosPage(QWidget):
         if not entregues:
             return
         caminho = _caminho_pedidos_entregues()
+        if not caminho:
+            import config
+            config.avisar_sem_pasta(self)
+            return
         try:
             os.makedirs(os.path.dirname(caminho), exist_ok=True)
             with open(caminho, "r", encoding="utf-8") as f:
@@ -977,9 +982,14 @@ class ControlePedidosPage(QWidget):
         self._salvar_json()
 
     def _salvar_json(self):
+        caminho = _caminho_json()
+        if not caminho:
+            import config
+            config.avisar_sem_pasta(self)
+            return
         try:
-            os.makedirs(os.path.dirname(_caminho_json()), exist_ok=True)
-            with open(_caminho_json(), "w", encoding="utf-8") as f:
+            os.makedirs(os.path.dirname(caminho), exist_ok=True)
+            with open(caminho, "w", encoding="utf-8") as f:
                 json.dump(self.dados, f, ensure_ascii=False, indent=2)
         except OSError:
             pass

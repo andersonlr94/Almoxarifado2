@@ -28,6 +28,23 @@ def obter_caminho_jsons():
     return ""
 
 
+def exigir_caminho_jsons():
+    caminho = obter_caminho_jsons()
+    if not caminho:
+        raise RuntimeError("Não existe uma pasta selecionada para salvar os dados.")
+    return caminho
+
+
+def avisar_sem_pasta(parent=None):
+    from PySide6.QtWidgets import QMessageBox
+    QMessageBox.warning(
+        parent,
+        "Pasta não selecionada",
+        "Não existe uma pasta selecionada para salvar os dados.\n"
+        "Selecione uma pasta em Configurações antes de continuar.",
+    )
+
+
 def definir_caminho_jsons(caminho):
     dados = _carregar()
     dados["caminho_jsons"] = os.path.normpath(caminho)

@@ -175,14 +175,7 @@ class DppAtivosPage(QWidget):
         base = config.obter_caminho_jsons()
 
         if not base:
-            base = os.path.join(
-                os.path.dirname(
-                    os.path.dirname(
-                        os.path.dirname(__file__)
-                    )
-                ),
-                "jsons"
-            )
+            return ""
 
         return os.path.normpath(
             os.path.join(base, "Almox")
@@ -231,6 +224,11 @@ class DppAtivosPage(QWidget):
             senha = dados["senha"]
 
             pasta_almox = self._obter_pasta_almox()
+
+            if not pasta_almox:
+                import config
+                config.avisar_sem_pasta(self)
+                return
 
             os.makedirs(
                 pasta_almox,

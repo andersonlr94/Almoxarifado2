@@ -29,7 +29,7 @@ def _caminho_pasta_anotacoes():
     import config
     base = config.obter_caminho_jsons()
     if not base:
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+        return ""
     return os.path.normpath(os.path.join(base, "Almox", "aeAnotacoes"))
 
 
@@ -37,7 +37,7 @@ def _caminho_fornecedores_json():
     import config
     base = config.obter_caminho_jsons()
     if not base:
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "jsons")
+        return ""
     return os.path.normpath(os.path.join(base, "Almox", "Fornecedores", "fornecedores.json"))
 
 
@@ -249,7 +249,7 @@ class DigitarAEPage(QWidget):
         linha_titulo_anotacoes.addStretch()
 
         self.combo_abrir_anotacao = QComboBox()
-        self.combo_abrir_anotacao.setMinimumWidth(92)
+        self.combo_abrir_anotacao.setMinimumWidth(110)
         self.combo_abrir_anotacao.setFixedHeight(35)
         self.combo_abrir_anotacao.setStyleSheet("padding: 0px 4px; text-align: center;")
         self.combo_abrir_anotacao.setPlaceholderText("Abrir...")
@@ -450,6 +450,10 @@ class DigitarAEPage(QWidget):
         texto = self.campo_anotacoes.toPlainText()
         data = self.combo_abrir_anotacao.currentText() or datetime.now().strftime("%d-%m-%Y")
         pasta = _caminho_pasta_anotacoes()
+        if not pasta:
+            import config
+            config.avisar_sem_pasta(self)
+            return
         os.makedirs(pasta, exist_ok=True)
         caminho = os.path.join(pasta, f"{data}.json")
         with open(caminho, "w", encoding="utf-8") as f:
@@ -458,6 +462,8 @@ class DigitarAEPage(QWidget):
 
     def _carregar_anotacoes(self):
         pasta = _caminho_pasta_anotacoes()
+        if not pasta:
+            return
         os.makedirs(pasta, exist_ok=True)
         data = datetime.now().strftime("%d-%m-%Y")
         caminho = os.path.join(pasta, f"{data}.json")
