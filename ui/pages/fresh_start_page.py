@@ -221,17 +221,20 @@ class FreshStartPage(QWidget):
             try:
                 with open(caminho_estoque, "r", encoding="utf-8") as f:
                     for item in json.load(f):
-                        k = str(item.get("Kardex", "")).strip()
+                        k = str(item.get("Kardex", "")).strip().upper()
                         if k:
                             estoque_por_kardex[k] = item
             except (FileNotFoundError, json.JSONDecodeError):
                 pass
 
-        por_chave = {(item.get("local", ""), item.get("kardex", "")): item for item in self.dados}
+        por_chave = {
+            (item.get("local", ""), item.get("kardex", "").upper(), item.get("loc", "").upper()): item
+            for item in self.dados
+        }
         for item in novos:
-            chave = (item["local"], item["kardex"])
+            chave = (item["local"], item["kardex"].upper(), item["loc"].upper())
             existente = por_chave.get(chave)
-            estoque = estoque_por_kardex.get(item["kardex"])
+            estoque = estoque_por_kardex.get(item["kardex"].upper())
             if estoque is not None:
                 item["descricao"] = str(estoque.get("Descrição", ""))
                 item["qtde_sci"] = str(estoque.get("Qtde novo", ""))
@@ -271,7 +274,7 @@ class FreshStartPage(QWidget):
                     continue
                 custo = linha[105:118].strip()
                 if custo and custo != "0,00" and any(ch.isdigit() for ch in custo):
-                    custos[codigo] = _parse_numero(custo)
+                    custos[codigo.upper()] = _parse_numero(custo)
         return custos
 
     def _calcular_total_zcentral(self):
@@ -281,7 +284,7 @@ class FreshStartPage(QWidget):
             kardex = str(item.get("kardex", "")).strip()
             if not kardex:
                 continue
-            custo = custos.get(kardex, 0.0)
+            custo = custos.get(kardex.upper(), 0.0)
             qtde = _parse_numero(str(item.get("qtde_qad", "")))
             total += custo * qtde
         self.label_total_zcentral.setText(f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))

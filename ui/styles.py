@@ -753,4 +753,45 @@ QTableWidget#tabelaItensZero QHeaderView::section {
     font-size: 10px;
     padding: 4px 6px;
 }
+
+/* ── Detail Box (Estoque) ── */
+QWidget#detalhesBox {
+    background-color: #f8fafc;
+    border: 1px solid #eef1f6;
+    border-radius: 12px;
+}
+
+QWidget#detalhesBox QLabel#fieldLabel {
+    color: #94a3b8;
+}
+
+QWidget#detalhesBox QLabel#infoValue {
+    color: #334155;
+    font-size: 13px;
+}
+
+/* ── Lateral Panel (Itens Zero) ── */
+QWidget#painelLateral {
+    background-color: #ffffff;
+    border: 1px solid #eef1f6;
+    border-radius: 16px;
+}
+
+QPushButton#btnLateral {
+    background-color: #eef2ff;
+    color: #4f46e5;
+    border: none;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QPushButton#btnLateral:hover {
+    background-color: #c7d2fe;
+    color: #4338ca;
+}
+
+QPushButton#btnLateral:pressed {
+    background-color: #a5b4fc;
+}
 '''

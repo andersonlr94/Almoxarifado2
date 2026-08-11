@@ -1,13 +1,19 @@
 import json
 import os
 
+import matplotlib
+
+matplotlib.use("QtAgg")
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QStyledItemDelegate, QStyleOptionViewItem,
     QStyle,
 )
-from PySide6.QtCore import Qt, QSize, QRect, Signal, QMimeData
+from PySide6.QtCore import Qt, QSize, QRect, Signal, QMimeData, QPropertyAnimation, QEasingCurve, Property
 from PySide6.QtGui import QPainter, QMouseEvent, QGuiApplication, QColor, QBrush, QPalette, QDrag, QKeySequence
 
 
@@ -103,6 +109,132 @@ class EditorDelegate(QStyledItemDelegate):
         return editor
 
 
+class PainelLateral(QWidget):
+    LARGURA_MINIMA = 58
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._largura = self.LARGURA_MINIMA
+        self._expandido = False
+        self.setFixedWidth(self.LARGURA_MINIMA)
+        self.setObjectName("painelLateral")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
+        self._anim = QPropertyAnimation(self, b"largura", self)
+        self._anim.setDuration(200)
+        self._anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 12, 0, 12)
+        layout.setSpacing(0)
+
+        self.btn_toggle = QPushButton("+")
+        self.btn_toggle.setObjectName("btnLateral")
+        self.btn_toggle.setFixedSize(34, 34)
+        self.btn_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_toggle.setToolTip("Expandir painel")
+        self.btn_toggle.clicked.connect(self._alternar)
+        layout.addWidget(self.btn_toggle, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        self.grafico_titulo = QLabel("Itens zerados por dia")
+        self.grafico_titulo.setObjectName("pageSubtitle")
+        self.grafico_titulo.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self.grafico_titulo.setContentsMargins(0, 12, 0, 8)
+        layout.addWidget(self.grafico_titulo)
+
+        self.figure = Figure(figsize=(3, 4), facecolor="none")
+        self.figure.subplots_adjust(left=0.08, right=0.97, top=0.96, bottom=0.14)
+        self.canvas = FigureCanvas(self.figure)
+        self.ax = self.figure.add_subplot(111)
+        altura_tela = QGuiApplication.primaryScreen().availableGeometry().height()
+        self.canvas.setFixedHeight(altura_tela // 2)
+        layout.addWidget(self.canvas, 0, Qt.AlignmentFlag.AlignTop)
+
+        layout.addStretch()
+
+    def atualizar_grafico(self):
+        self.ax.clear()
+        self.ax.set_facecolor("none")
+        for spine in self.ax.spines.values():
+            spine.set_visible(False)
+        self.ax.tick_params(left=False, labelleft=False, length=0)
+
+        registros = _carregar_historico()
+        if not registros:
+            self.ax.tick_params(bottom=False, labelbottom=False)
+            self.ax.text(
+                0.5, 0.5, "Sem dados ainda",
+                transform=self.ax.transAxes,
+                ha="center", va="center",
+                fontsize=12, color="#94a3b8",
+            )
+            self.canvas.draw()
+            return
+
+        datas = [r[0] for r in registros]
+        valores = [r[1] for r in registros]
+        xs = list(range(len(registros)))
+
+        self.ax.plot(
+            xs, valores,
+            color="#6366f1", linewidth=2.5, zorder=3,
+            marker="o", markersize=6,
+            markerfacecolor="#ffffff", markeredgecolor="#6366f1", markeredgewidth=2,
+        )
+        self.ax.fill_between(xs, valores, color="#6366f1", alpha=0.12, zorder=2)
+
+        for x, v in zip(xs, valores):
+            self.ax.annotate(
+                str(v), (x, v),
+                textcoords="offset points", xytext=(0, 9),
+                ha="center", va="bottom",
+                fontsize=8, fontweight="bold", color="#1e1b4b",
+            )
+
+        self.ax.set_xticks(xs)
+        self.ax.set_xticklabels(datas, rotation=45, ha="right", fontsize=8, color="#94a3b8")
+        self.ax.tick_params(axis="x", pad=6)
+        self.ax.grid(axis="y", color="#e5e7eb", linewidth=0.8, alpha=0.7)
+        self.ax.set_axisbelow(True)
+        self.ax.set_ylim(0, max(valores) * 1.25 + 1)
+
+        self.canvas.draw()
+
+    def _obter_largura(self):
+        return self._largura
+
+    def _definir_largura(self, valor):
+        self._largura = valor
+        self.setFixedWidth(int(valor))
+
+    largura = Property(int, _obter_largura, _definir_largura)
+
+    def _alternar(self):
+        if self._expandido:
+            self._colapsar()
+        else:
+            self._expandir()
+
+    def _expandir(self):
+        alvo = int(self.parentWidget().width() * 0.30) if self.parentWidget() else 400
+        self._anim.stop()
+        self._anim.setStartValue(self._largura)
+        self._anim.setEndValue(alvo)
+        self._anim.start()
+        self._expandido = True
+        self.btn_toggle.setText("-")
+        self.btn_toggle.setToolTip("Recolher painel")
+
+    def _colapsar(self):
+        self._anim.stop()
+        self._anim.setStartValue(self._largura)
+        self._anim.setEndValue(self.LARGURA_MINIMA)
+        self._anim.start()
+        self._expandido = False
+        self.btn_toggle.setText("+")
+        self.btn_toggle.setToolTip("Expandir painel")
+
+
 def _caminho_json():
     import config
     base = config.obter_caminho_jsons()
@@ -117,6 +249,35 @@ def _caminho_itens_almoxarifado_json():
     if not base:
         return ""
     return os.path.normpath(os.path.join(base, "Almox", "ItensAlmoxarifado", "ItensAlmoxarifado.json"))
+
+
+def _caminho_historico_json():
+    import config
+    base = config.obter_caminho_jsons()
+    if not base:
+        return ""
+    return os.path.normpath(os.path.join(base, "Almox", "ItensZero", "dadosItensZero.json"))
+
+
+def _carregar_historico():
+    caminho = _caminho_historico_json()
+    if not caminho or not os.path.isfile(caminho):
+        return []
+    registros = []
+    try:
+        with open(caminho, "r", encoding="utf-8") as f:
+            for linha in f:
+                linha = linha.strip()
+                if not linha or " - " not in linha:
+                    continue
+                data, valor = linha.split(" - ", 1)
+                try:
+                    registros.append((data, int(valor)))
+                except ValueError:
+                    continue
+    except OSError:
+        return []
+    return registros
 
 
 class ItensZeroPage(QWidget):
@@ -137,7 +298,7 @@ class ItensZeroPage(QWidget):
         self._carregar_dados()
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
+        layout = QHBoxLayout(self)
         layout.setContentsMargins(32, 32, 32, 32)
         layout.setSpacing(16)
 
@@ -230,7 +391,12 @@ class ItensZeroPage(QWidget):
         self.tabela.ordemAlterada.connect(self._sincronizar_ordem)
         card_layout.addWidget(self.tabela)
 
-        layout.addWidget(card)
+        layout.addWidget(card, 7)
+
+        self.painel_lateral = PainelLateral()
+        layout.addWidget(self.painel_lateral)
+
+        self.painel_lateral.atualizar_grafico()
 
     def _carregar_dados(self):
         try:
@@ -415,6 +581,48 @@ class ItensZeroPage(QWidget):
 
         self._salvar_json()
         self._popular_tabela()
+        self._salvar_historico()
+        self.painel_lateral.atualizar_grafico()
+
+    def _salvar_historico(self):
+        from datetime import date
+
+        caminho = _caminho_historico_json()
+        if not caminho:
+            return
+        qtde = self.tabela.rowCount()
+        hoje = date.today().strftime("%d/%m/%Y")
+        prefixo = f"{hoje} - "
+
+        linhas = []
+        try:
+            with open(caminho, "r", encoding="utf-8") as f:
+                linhas = [linha.rstrip("\n") for linha in f]
+        except (FileNotFoundError, OSError):
+            linhas = []
+
+        encontrou_hoje = False
+        for i, linha in enumerate(linhas):
+            if not linha.startswith(prefixo):
+                continue
+            encontrou_hoje = True
+            try:
+                valor_antigo = int(linha[len(prefixo):])
+            except ValueError:
+                valor_antigo = -1
+            if qtde > valor_antigo:
+                linhas[i] = f"{prefixo}{qtde}"
+            break
+
+        if not encontrou_hoje:
+            linhas.append(f"{prefixo}{qtde}")
+
+        try:
+            os.makedirs(os.path.dirname(caminho), exist_ok=True)
+            with open(caminho, "w", encoding="utf-8") as f:
+                f.write("\n".join(linhas) + "\n")
+        except OSError:
+            pass
 
     def _item_modificado(self, item):
         row = item.row()
