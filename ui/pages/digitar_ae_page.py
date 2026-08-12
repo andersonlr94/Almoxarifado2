@@ -2,12 +2,14 @@ import json
 import os
 import re
 from datetime import datetime, timedelta
+from functools import partial
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QPlainTextEdit, QSplitter,
-    QApplication,
+    QApplication, QInputDialog, QMessageBox, QScrollArea, QFrame,
+    QDialog, QFormLayout,
 )
 from PySide6.QtCore import Qt, QEvent
 from ui.regras_automacao import esperar_inicio, digitar_texto, enter
@@ -41,6 +43,16 @@ def _caminho_fornecedores_json():
     return os.path.normpath(os.path.join(base, "Almox", "Fornecedores", "fornecedores.json"))
 
 
+def _caminho_classificacao_fiscal_json():
+    import config
+    base = config.obter_caminho_jsons()
+    if not base:
+        return ""
+    pasta = os.path.normpath(os.path.join(base, "Almox", "aeAnotacoes"))
+    os.makedirs(pasta, exist_ok=True)
+    return os.path.join(pasta, "ClassificacaoFiscal.json")
+
+
 def _parse_br_number(texto):
     texto = texto.strip()
     if not texto:
@@ -67,6 +79,52 @@ def limpar_arquivos_antigos(pasta, dias=30):
         pass
 
 
+def _parse_comentario_nf(comentario):
+    """Parse a NF comment to extract ID, items, and costs.
+
+    Expected format fragments:
+      - ID at start: "ID 1732"
+      - Items between "PRIMEIRA SAÍDA -" and "- VALOR CONTÁBIL UNITÁRIO",
+        separated by "/"
+      - Costs between "VALOR CONTÁBIL UNITÁRIO" and "- ATIVO",
+        separated by "/"
+    """
+    resultado = {"id": "", "itens": [], "custos": [], "comentario_original": comentario}
+
+    # Extract ID
+    match_id = re.search(r'\bID\s*[:\s]*(\d+)', comentario, re.IGNORECASE)
+    if match_id:
+        resultado["id"] = match_id.group(1)
+
+    # Extract items: between "PRIMEIRA SAÍDA -" and "- VALOR CONTÁBIL UNITÁRIO"
+    match_itens = re.search(
+        r'PRIMEIRA\s+SA[IÍ]DA\s*[-–]\s*(.*?)\s*[-–]\s*VALOR\s+CONT[AÁ]BIL\s+UNIT[AÁ]RIO',
+        comentario, re.IGNORECASE
+    )
+    if match_itens:
+        texto_itens = match_itens.group(1).strip()
+        itens = [item.strip() for item in texto_itens.split("/") if item.strip()]
+        resultado["itens"] = itens
+
+    # Extract costs: between "VALOR CONTÁBIL UNITÁRIO" and "- ATIVO"
+    match_custos = re.search(
+        r'VALOR\s+CONT[AÁ]BIL\s+UNIT[AÁ]RIO\s+R?\$?\s*(.*?)\s*[-–]\s*ATIVO',
+        comentario, re.IGNORECASE
+    )
+    if match_custos:
+        texto_custos = match_custos.group(1).strip()
+        partes_custo = [c.strip() for c in texto_custos.split("/") if c.strip()]
+        custos = []
+        for parte in partes_custo:
+            # Remove leading "R$" if present
+            parte_limpa = re.sub(r'^R?\$\s*', '', parte).strip()
+            if parte_limpa:
+                custos.append(parte_limpa)
+        resultado["custos"] = custos
+
+    return resultado
+
+
 HEADERS_TABELA = [
     "Item", "Descrição", "Qtde", "UM",
     "Custo", "Clas. fiscal", "Classe", "C-M",
@@ -79,6 +137,7 @@ INDICE_QTDE = 2
 class DigitarAEPage(QWidget):
     def __init__(self):
         super().__init__()
+        self._comentarios_salvos = {}  # {id: {"comentario": str, "dados_parseados": dict}}
         self._setup_ui()
         self._carregar_anotacoes()
         self._popular_combo_anotacoes()
@@ -197,8 +256,28 @@ class DigitarAEPage(QWidget):
         btn_limpar.clicked.connect(self._limpar)
         linha_botoes.addWidget(btn_limpar)
 
+        btn_criar = QPushButton("Criar")
+        btn_criar.setObjectName("btnSecondary")
+        btn_criar.setFixedHeight(34)
+        btn_criar.setStyleSheet("background-color: #8b5cf6; color: #fff; border: none; border-radius: 8px; padding: 7px 20px; font-size: 13px; font-weight: 600;")
+        btn_criar.clicked.connect(self._criar_de_comentario)
+        linha_botoes.addWidget(btn_criar)
+
+        btn_cf = QPushButton("CF")
+        btn_cf.setObjectName("btnSecondary")
+        btn_cf.setFixedHeight(34)
+        btn_cf.setStyleSheet("background-color: #0ea5e9; color: #fff; border: none; border-radius: 8px; padding: 7px 20px; font-size: 13px; font-weight: 600;")
+        btn_cf.clicked.connect(self._abrir_cf)
+        linha_botoes.addWidget(btn_cf)
+
         linha_botoes.addStretch()
         card_layout.addLayout(linha_botoes)
+
+        # Layout for dynamically created ID buttons
+        self.linha_ids = QHBoxLayout()
+        self.linha_ids.setSpacing(6)
+        self.linha_ids.addStretch()
+        card_layout.addLayout(self.linha_ids)
 
         self.tabela = QTableWidget(0, len(HEADERS_TABELA))
         self.tabela.setObjectName("tabelaDigitarAE")
@@ -341,6 +420,134 @@ class DigitarAEPage(QWidget):
         if obj == self.campo_anotacoes and event.type() == QEvent.Type.FocusOut:
             self._salvar_anotacoes()
         return super().eventFilter(obj, event)
+
+    def _criar_de_comentario(self):
+        """Open an input dialog for NF comment, parse it, create an ID button, and populate the table."""
+        comentario, ok = QInputDialog.getMultiLineText(
+            self,
+            "Criar a partir de Comentário NF",
+            "Cole o comentário NF abaixo:",
+            "",
+        )
+        if not ok or not comentario.strip():
+            return
+
+        dados = _parse_comentario_nf(comentario)
+
+        if not dados["itens"]:
+            QMessageBox.warning(
+                self,
+                "Comentário inválido",
+                "Não foi possível extrair itens do comentário.\n\n"
+                "Certifique-se de que o comentário contém o trecho entre "
+                "\"PRIMEIRA SAÍDA\" e \"VALOR CONTÁBIL UNITÁRIO\" com itens separados por \"/\".",
+            )
+            return
+
+        id_valor = dados["id"] or "SEM_ID"
+
+        # Save parsed data for this ID
+        self._comentarios_salvos[id_valor] = {
+            "comentario": comentario,
+            "dados_parseados": dados,
+        }
+
+        # Create the ID button (insert before the stretch at the end)
+        btn_id = IDButton(f"ID{id_valor}", id_valor, self)
+        btn_id.clicked.connect(partial(self._carregar_dados_id, id_valor))
+        # Insert before the stretch (last item)
+        self.linha_ids.insertWidget(self.linha_ids.count() - 1, btn_id)
+
+        # Populate the table with the parsed items
+        self._popular_tabela_de_comentario(dados)
+
+    def _remover_id_button(self, id_valor, button_widget):
+        """Remove saved ID data and delete the button widget."""
+        if id_valor in self._comentarios_salvos:
+            del self._comentarios_salvos[id_valor]
+        self.linha_ids.removeWidget(button_widget)
+        button_widget.deleteLater()
+
+    def _carregar_dados_id(self, id_valor):
+        """Load the saved comment data for a given ID into the table."""
+        salvo = self._comentarios_salvos.get(id_valor)
+        if not salvo:
+            return
+        self._limpar()
+        self._popular_tabela_de_comentario(salvo["dados_parseados"])
+
+    def _popular_tabela_de_comentario(self, dados):
+        """Populate the table from parsed comment data."""
+        itens = dados["itens"]
+        custos = dados["custos"]
+        comentario = dados.get("comentario_original", "")
+
+        # Load ClassificacaoFiscal.json to match items
+        cf_caminho = _caminho_classificacao_fiscal_json()
+        cf_dados = []
+        if cf_caminho and os.path.exists(cf_caminho):
+            try:
+                with open(cf_caminho, "r", encoding="utf-8") as f:
+                    cf_dados = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                pass
+        
+        # Create a helper function to find a match where the registered item name is a substring of the parsed item name (or vice versa)
+        def encontrar_correspondencia(nome_do_item):
+            nome_do_item_upper = nome_do_item.strip().upper()
+            for cf in cf_dados:
+                item_cf = cf.get("item", "").strip().upper()
+                if not item_cf:
+                    continue
+                # Match if item_cf is contained in the parsed item name (e.g. "RACK" in "CAVITYPLUG -RACK LINHA")
+                # or if the parsed item name is contained in item_cf
+                if item_cf in nome_do_item_upper or nome_do_item_upper in item_cf:
+                    return cf
+            return None
+
+        # Determine default Classe based on comment content
+        classe_padrao = ""
+        if re.search(r'TRANSFERENCIA\s+DE\s+AF\s+PRIMEIRA\s+SA[IÍ]DA', comentario, re.IGNORECASE):
+            classe_padrao = "ISU"
+
+        for i, item_nome in enumerate(itens):
+            row = self.tabela.rowCount()
+            self.tabela.insertRow(row)
+            
+            nome_chave = item_nome.strip().upper()
+            cf_match = encontrar_correspondencia(nome_chave)
+
+            # Item (col 0) - use the item name
+            self.tabela.setItem(row, 0, QTableWidgetItem(nome_chave))
+
+            # Descrição (col 1) - same as item name
+            self.tabela.setItem(row, 1, QTableWidgetItem(nome_chave))
+
+            # Qtde (col 2) - always 1
+            self.tabela.setItem(row, 2, QTableWidgetItem("1"))
+
+            # UM (col 3) - always PC
+            self.tabela.setItem(row, 3, QTableWidgetItem("PC"))
+
+            # Custo (col 4) - from parsed costs, matching by index
+            custo = custos[i] if i < len(custos) else ""
+            self.tabela.setItem(row, 4, QTableWidgetItem(custo))
+
+            # Clas. fiscal (col 5)
+            clas_fiscal = cf_match.get("classificacao_fiscal", "") if cf_match else ""
+            self.tabela.setItem(row, 5, QTableWidgetItem(clas_fiscal))
+
+            # Classe (col 6) - Matches CF lookup or falls back to "ISU" if comment matches transfer
+            classe_val = ""
+            if cf_match and cf_match.get("classe_imposto"):
+                classe_val = cf_match.get("classe_imposto")
+            else:
+                classe_val = classe_padrao
+            self.tabela.setItem(row, 6, QTableWidgetItem(classe_val))
+
+            # C-M (col 7)
+            cm_val = cf_match.get("cm", "") if cf_match else ""
+            self.tabela.setItem(row, 7, QTableWidgetItem(cm_val))
 
     def _colar(self):
         clipboard = QApplication.clipboard()
@@ -506,3 +713,212 @@ class DigitarAEPage(QWidget):
                 self.campo_anotacoes.setPlainText(dados.get("anotacoes", ""))
         except (FileNotFoundError, json.JSONDecodeError):
             self.campo_anotacoes.setPlainText("")
+
+    def _abrir_cf(self):
+        """Open the Classificação Fiscal dialog."""
+        dlg = ClassificacaoFiscalDialog(self)
+        dlg.exec()
+
+
+class ClassificacaoFiscalDialog(QDialog):
+    """Dialog to manage fiscal classification entries."""
+
+    HEADERS = ["Item", "Clas. Fiscal", "Classe Imposto", "C-M"]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Classificação Fiscal")
+        self.setMinimumSize(620, 480)
+        self._setup_ui()
+        self._carregar_dados()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        titulo = QLabel("Classificação Fiscal")
+        titulo.setStyleSheet("font-size: 16px; font-weight: 700;")
+        layout.addWidget(titulo)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+
+        self.campo_item = QLineEdit()
+        self.campo_item.setPlaceholderText("Ex: CAVITYPLUG")
+        self.campo_item.setFixedHeight(32)
+        form.addRow("Item:", self.campo_item)
+
+        self.campo_clas_fiscal = QLineEdit()
+        self.campo_clas_fiscal.setPlaceholderText("Ex: 8538.90.90")
+        self.campo_clas_fiscal.setFixedHeight(32)
+        form.addRow("Classificação Fiscal:", self.campo_clas_fiscal)
+
+        self.campo_classe_imposto = QLineEdit()
+        self.campo_classe_imposto.setPlaceholderText("Ex: ISU")
+        self.campo_classe_imposto.setFixedHeight(32)
+        form.addRow("Classe de Imposto:", self.campo_classe_imposto)
+
+        self.campo_cm = QLineEdit()
+        self.campo_cm.setPlaceholderText("Ex: C")
+        self.campo_cm.setFixedHeight(32)
+        form.addRow("C-M:", self.campo_cm)
+
+        layout.addLayout(form)
+
+        linha_btns = QHBoxLayout()
+        linha_btns.setSpacing(8)
+
+        btn_salvar = QPushButton("Salvar")
+        btn_salvar.setFixedHeight(32)
+        btn_salvar.setStyleSheet(
+            "background-color: #16a34a; color: #fff; border: none; border-radius: 8px; "
+            "padding: 6px 20px; font-size: 13px; font-weight: 600;"
+        )
+        btn_salvar.clicked.connect(self._salvar_item)
+        linha_btns.addWidget(btn_salvar)
+
+        btn_excluir = QPushButton("Excluir Selecionado")
+        btn_excluir.setFixedHeight(32)
+        btn_excluir.setStyleSheet(
+            "background-color: #ef4444; color: #fff; border: none; border-radius: 8px; "
+            "padding: 6px 20px; font-size: 13px; font-weight: 600;"
+        )
+        btn_excluir.clicked.connect(self._excluir_item)
+        linha_btns.addWidget(btn_excluir)
+
+        linha_btns.addStretch()
+        layout.addLayout(linha_btns)
+
+        self.tabela = QTableWidget(0, len(self.HEADERS))
+        self.tabela.setHorizontalHeaderLabels(self.HEADERS)
+        self.tabela.horizontalHeader().setStretchLastSection(True)
+        self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.tabela.setAlternatingRowColors(True)
+        self.tabela.verticalHeader().setVisible(False)
+        self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.tabela.doubleClicked.connect(self._preencher_campos_da_linha)
+        layout.addWidget(self.tabela)
+
+    def _caminho_json(self):
+        return _caminho_classificacao_fiscal_json()
+
+    def _carregar_dados(self):
+        caminho = self._caminho_json()
+        if not caminho:
+            return
+        self.tabela.setRowCount(0)
+        try:
+            with open(caminho, "r", encoding="utf-8") as f:
+                itens = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            itens = []
+        for item in itens:
+            row = self.tabela.rowCount()
+            self.tabela.insertRow(row)
+            self.tabela.setItem(row, 0, QTableWidgetItem(item.get("item", "")))
+            self.tabela.setItem(row, 1, QTableWidgetItem(item.get("classificacao_fiscal", "")))
+            self.tabela.setItem(row, 2, QTableWidgetItem(item.get("classe_imposto", "")))
+            self.tabela.setItem(row, 3, QTableWidgetItem(item.get("cm", "")))
+
+    def _ler_json(self):
+        caminho = self._caminho_json()
+        if not caminho:
+            return []
+        try:
+            with open(caminho, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return []
+
+    def _gravar_json(self, itens):
+        caminho = self._caminho_json()
+        if not caminho:
+            return
+        with open(caminho, "w", encoding="utf-8") as f:
+            json.dump(itens, f, ensure_ascii=False, indent=2)
+
+    def _salvar_item(self):
+        item = self.campo_item.text().strip().upper()
+        if not item:
+            QMessageBox.warning(self, "Campo obrigatório", "Preencha o campo Item.")
+            return
+        clas = self.campo_clas_fiscal.text().strip()
+        classe = self.campo_classe_imposto.text().strip().upper()
+        cm = self.campo_cm.text().strip().upper()
+
+        itens = self._ler_json()
+
+        # Update if item already exists, otherwise append
+        encontrado = False
+        for entrada in itens:
+            if entrada.get("item", "").upper() == item:
+                entrada["classificacao_fiscal"] = clas
+                entrada["classe_imposto"] = classe
+                entrada["cm"] = cm
+                encontrado = True
+                break
+        if not encontrado:
+            itens.append({
+                "item": item,
+                "classificacao_fiscal": clas,
+                "classe_imposto": classe,
+                "cm": cm,
+            })
+
+        self._gravar_json(itens)
+        self._carregar_dados()
+
+        # Clear fields
+        self.campo_item.clear()
+        self.campo_clas_fiscal.clear()
+        self.campo_classe_imposto.clear()
+        self.campo_cm.clear()
+
+    def _excluir_item(self):
+        row = self.tabela.currentRow()
+        if row < 0:
+            return
+        item_obj = self.tabela.item(row, 0)
+        if not item_obj:
+            return
+        item_nome = item_obj.text().upper()
+
+        itens = self._ler_json()
+        itens = [e for e in itens if e.get("item", "").upper() != item_nome]
+        self._gravar_json(itens)
+        self._carregar_dados()
+
+    def _preencher_campos_da_linha(self, index):
+        """Double-click a row to fill the form fields for editing."""
+        row = index.row()
+        self.campo_item.setText(self.tabela.item(row, 0).text() if self.tabela.item(row, 0) else "")
+        self.campo_clas_fiscal.setText(self.tabela.item(row, 1).text() if self.tabela.item(row, 1) else "")
+        self.campo_classe_imposto.setText(self.tabela.item(row, 2).text() if self.tabela.item(row, 2) else "")
+        self.campo_cm.setText(self.tabela.item(row, 3).text() if self.tabela.item(row, 3) else "")
+
+
+class IDButton(QPushButton):
+    """A custom button that supports a context menu (right-click) to remove itself."""
+
+    def __init__(self, text, id_valor, parent_page):
+        super().__init__(text)
+        self.id_valor = id_valor
+        self.parent_page = parent_page
+        self.setFixedHeight(28)
+        self.setStyleSheet(
+            "background-color: #f59e0b; color: #fff; border: none; border-radius: 6px; "
+            "padding: 4px 14px; font-size: 12px; font-weight: 700;"
+        )
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._mostrar_menu)
+
+    def _mostrar_menu(self, pos):
+        from PySide6.QtWidgets import QMenu
+        menu = QMenu(self)
+        acao_remover = menu.addAction("Remover")
+        acao_remover.triggered.connect(self._remover)
+        menu.exec(self.mapToGlobal(pos))
+
+    def _remover(self):
+        self.parent_page._remover_id_button(self.id_valor, self)

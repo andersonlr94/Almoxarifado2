@@ -1,8 +1,4 @@
-﻿import os
-import sys
-
-os.environ["QT_API"] = "PySide6"
-
+﻿import sys
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
 from qfluentwidgets import setTheme, Theme

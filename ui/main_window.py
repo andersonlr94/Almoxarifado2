@@ -23,6 +23,7 @@ from ui.pages.testar_contas_page import TestarContasPage
 from ui.pages.baixa_3_7_page import Baixa37Page
 from ui.pages.acuracidade_page import AcuracidadePage
 from ui.pages.fresh_start_page import FreshStartPage
+from ui.pages.lembretes_page import LembretesPage
 
 
 SIDEBAR_WIDTH = 240
@@ -36,6 +37,7 @@ NAV_ICONS = {
     "pedidos_pendentes": ("mdi6.clock-outline", "clock"),
     "programacao_agulhas": ("mdi6.format-align-justify", "agulhas"),
     "fresh_start": ("mdi6.sprout-outline", "sprout"),
+    "lembretes": ("mdi6.note-text-outline", "note"),
     "digitar_ae": ("mdi6.pencil-outline", "pencil"),
     "transferencia": ("mdi6.swap-horizontal", "swap"),
     "remove_loc_duplicadas": ("mdi6.delete-sweep-outline", "delete"),
@@ -175,6 +177,7 @@ class MainWindow(QMainWindow):
             ("pedidos_pendentes", "Pedidos Pendentes",     False),
             ("programacao_agulhas", "Prog. de Agulhas",    False),
             ("fresh_start",         "Fresh Start",         False),
+            ("lembretes",           "Lembretes",           False),
             (None, "Automações", False),
             ("digitar_ae",        "Digitar AE",            True),
             ("transferencia",     "Transferência",         True),
@@ -268,6 +271,7 @@ class MainWindow(QMainWindow):
             ("pedidos_pendentes",     PedidosPendentesPage),
             ("programacao_agulhas",   ProgramacaoAgulhasPage),
             ("fresh_start",           FreshStartPage),
+            ("lembretes",             LembretesPage),
             ("digitar_ae",            DigitarAEPage),
             ("transferencia",         TransferenciaPage),
             ("remove_loc_duplicadas", RemoveLocDuplicadasPage),
