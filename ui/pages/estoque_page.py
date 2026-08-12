@@ -39,7 +39,7 @@ def _caminho_json():
 
 
 class EstoquePage(QWidget):
-    COLUNAS_RESUMIDAS = [1, 2, 3, 4, 5, 6, 7, 8, 20, 22]
+    COLUNAS_RESUMIDAS = [1, 2, 3, 4, 5, 6, 7, 40, 41, 8, 20, 22]
 
     HEADERS_RESUMIDOS = [
         "Kardex",
@@ -49,6 +49,8 @@ class EstoquePage(QWidget):
         "Qtde novo",
         "Loc retorno",
         "Qtde retorno",
+        "QtdeDPH",
+        "Qtde QAD",
         "Fornecedor",
         "Custo",
         "Consumo médio",
@@ -65,6 +67,7 @@ class EstoquePage(QWidget):
         "Separar p/ holder", "Separar p/ mesa", "Item de estoque",
         "Pino de contato", "Ativo/Obsol.", "Classificação Fiscal", "IPI",
         "Observações", "Doc. evidência", "Descrição de evidência",
+        "QtdeDPH", "Qtde QAD",
     ]
 
     CHAVES = [
@@ -78,6 +81,7 @@ class EstoquePage(QWidget):
         "Separar p/ holder", "Separar p/ mesa", "Item de estoque",
         "Pino de contato", "Ativo/Obsol.", "Classificação Fiscal", "IPI",
         "Observações", "Doc. evidência", "Descrição de evidência",
+        "QtdeDPH", "Qtde QAD",
     ]
 
     CAMPOS_DETALHES = [
@@ -652,6 +656,18 @@ class EstoquePage(QWidget):
                     c,
                     c not in self.COLUNAS_RESUMIDAS
                 )
+
+            header = self.tabela.horizontalHeader()
+            ordem = [
+                self.COLUNAS.index(col)
+                for col in self.HEADERS_RESUMIDOS
+            ]
+
+            for i, logico in enumerate(ordem):
+                pos = header.visualIndex(logico)
+
+                if pos != i:
+                    header.moveSection(pos, i)
         else:
             for c in range(len(self.COLUNAS)):
                 self.tabela.setColumnHidden(c, False)
@@ -793,7 +809,7 @@ class EstoquePage(QWidget):
         )
 
     def _fazer_atualizacao_completa(self, linhas):
-        self.dados.clear()
+        novos_por_kardex = {}
 
         for linha in linhas:
             partes = linha.split("\t")
@@ -804,13 +820,35 @@ class EstoquePage(QWidget):
             item = {}
 
             for col, chave in enumerate(self.CHAVES):
-                item[chave] = (
-                    partes[col].strip()
-                    if col < len(partes)
-                    else ""
-                )
+                if col < len(partes):
+                    item[chave] = partes[col].strip()
 
-            self.dados.append(item)
+            chave_kardex = str(
+                item.get("Kardex", "")
+            ).strip()
+
+            if chave_kardex:
+                novos_por_kardex[
+                    chave_kardex
+                ] = item
+
+        existentes_por_kardex = {
+            str(item.get("Kardex", "")).strip(): item
+            for item in self.dados
+            if str(item.get("Kardex", "")).strip()
+        }
+
+        for kardex, item_novo in (
+            novos_por_kardex.items()
+        ):
+            item_atual = (
+                existentes_por_kardex.get(kardex)
+            )
+
+            if item_atual is not None:
+                item_atual.update(item_novo)
+            else:
+                self.dados.append(item_novo)
 
         self._salvar_json()
         self._popular_tabela()
@@ -822,6 +860,9 @@ class EstoquePage(QWidget):
         consumo_medio_idx = 18
         loc_novo_idx = 5
         loc_retorno_idx = 3
+
+        dph_idx = -1
+        qad_idx = -1
 
         if header:
             mapa = self._obter_indices_parciais(header)
@@ -843,6 +884,12 @@ class EstoquePage(QWidget):
 
             if "Loc retorno" in mapa:
                 loc_retorno_idx = mapa["Loc retorno"]
+
+            if "QtdeDPH" in mapa:
+                dph_idx = mapa["QtdeDPH"]
+
+            if "Qtde QAD" in mapa:
+                qad_idx = mapa["Qtde QAD"]
 
         max_idx = max(
             kardex_idx,
@@ -895,6 +942,16 @@ class EstoquePage(QWidget):
             item["Loc retorno"] = (
                 partes[loc_retorno_idx].strip()
             )
+
+            if dph_idx >= 0 and len(partes) > dph_idx:
+                item["QtdeDPH"] = (
+                    partes[dph_idx].strip()
+                )
+
+            if qad_idx >= 0 and len(partes) > qad_idx:
+                item["Qtde QAD"] = (
+                    partes[qad_idx].strip()
+                )
 
             atualizou = True
 
@@ -985,6 +1042,13 @@ class EstoquePage(QWidget):
             "locretorno": "Loc retorno",
             "localretorno": "Loc retorno",
             "localizacaoretorno": "Loc retorno",
+
+            "qtedph": "QtdeDPH",
+            "qtdedph": "QtdeDPH",
+            "qtdph": "QtdeDPH",
+
+            "qtdeqad": "Qtde QAD",
+            "qtdqad": "Qtde QAD",
         }
 
         for indice, coluna in enumerate(header):

@@ -149,6 +149,26 @@ class FreshStartPage(QWidget):
         self.label_total_zcentral.setObjectName("statusLabel")
         self.label_total_zcentral.setStyleSheet("font-size: 15px; font-weight: 700; color: #6366f1;")
         total_row.addWidget(self.label_total_zcentral)
+
+        total_row.addSpacing(24)
+
+        label_total_dph = QLabel("Valor DPH:")
+        label_total_dph.setObjectName("statusLabel")
+        total_row.addWidget(label_total_dph)
+        self.label_total_dph = QLabel("R$ 0,00")
+        self.label_total_dph.setObjectName("statusLabel")
+        self.label_total_dph.setStyleSheet("font-size: 15px; font-weight: 700; color: #16a34a;")
+        total_row.addWidget(self.label_total_dph)
+
+        total_row.addSpacing(24)
+
+        label_total_dif = QLabel("Valor Central zCentral-DPH:")
+        label_total_dif.setObjectName("statusLabel")
+        total_row.addWidget(label_total_dif)
+        self.label_total_dph_dif = QLabel("R$ 0,00")
+        self.label_total_dph_dif.setObjectName("statusLabel")
+        self.label_total_dph_dif.setStyleSheet("font-size: 15px; font-weight: 700; color: #ea580c;")
+        total_row.addWidget(self.label_total_dph_dif)
         table_card_layout.addLayout(total_row)
 
         layout.addWidget(table_card)
@@ -171,6 +191,7 @@ class FreshStartPage(QWidget):
         ]
         self._popular_tabela()
         self._calcular_total_zcentral()
+        self._calcular_total_dph()
 
     def _salvar_json(self):
         caminho = _caminho_json()
@@ -255,6 +276,7 @@ class FreshStartPage(QWidget):
         self._salvar_json()
         self._popular_tabela()
         self._calcular_total_zcentral()
+        self._calcular_total_dph()
 
     # ── Custo zCentral ──
     def _ler_custos_unitarios(self):
@@ -288,6 +310,33 @@ class FreshStartPage(QWidget):
             qtde = _parse_numero(str(item.get("qtde_qad", "")))
             total += custo * qtde
         self.label_total_zcentral.setText(f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+    def _calcular_total_dph(self):
+        total = 0.0
+        custos = self._ler_custos_unitarios()
+        caminho = _caminho_estoque()
+        if caminho and os.path.exists(caminho):
+            try:
+                with open(caminho, "r", encoding="utf-8") as f:
+                    for item in json.load(f):
+                        kardex = str(item.get("Kardex", "")).strip()
+                        if not kardex:
+                            continue
+                        qtde = _parse_numero(str(item.get("QtdeDPH", "0")))
+                        if qtde <= 0:
+                            continue
+                        custo = custos.get(kardex.upper(), 0.0)
+                        total += custo * qtde
+            except (FileNotFoundError, json.JSONDecodeError):
+                pass
+        self.label_total_dph.setText(f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        self._atualizar_total_central_dph()
+
+    def _atualizar_total_central_dph(self):
+        zcentral = _parse_numero(self.label_total_zcentral.text().replace("R$", "").strip())
+        dph = _parse_numero(self.label_total_dph.text().replace("R$", "").strip())
+        valor = zcentral - dph
+        self.label_total_dph_dif.setText(f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
     # ── Tabela ──
     def _popular_tabela(self):
@@ -349,6 +398,7 @@ class FreshStartPage(QWidget):
         self._salvar_json()
         if chave == "qtde_qad":
             self._calcular_total_zcentral()
+            self._atualizar_total_central_dph()
 
     def _aplicar_filtro(self):
         self._popular_tabela()
