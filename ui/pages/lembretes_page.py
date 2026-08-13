@@ -193,7 +193,7 @@ class QuadroLembretes(QWidget):
         self._limpar_layout(self.layout_finalizados)
 
         lembretes = self._ler_lembretes()
-        lembretes.sort(key=lambda item: item.get("id", ""))
+        lembretes.sort(key=lambda item: item.get("id", ""), reverse=True)
         self.todos_lembretes = lembretes
         self._renderizar_cards(lembretes)
 
