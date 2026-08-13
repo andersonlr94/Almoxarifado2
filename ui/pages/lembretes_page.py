@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QPlainTextEdit, QScrollArea, QFrame,
     QInputDialog, QMessageBox, QDialog, QFormLayout, QGridLayout, QCheckBox,
+    QTabWidget,
 )
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QFont, QIcon
@@ -72,30 +73,37 @@ class QuadroLembretes(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
         # Cabeçalho do quadro
         linha_cabecalho = QHBoxLayout()
         titulo = QLabel(self.titulo_ativos)
-        titulo.setStyleSheet("font-size: 15px; font-weight: 700; color: #1e293b;")
+        titulo.setStyleSheet("font-size: 16px; font-weight: 700; color: #1e293b;")
         linha_cabecalho.addWidget(titulo)
 
         linha_cabecalho.addStretch()
 
         self.campo_busca = QLineEdit()
         self.campo_busca.setPlaceholderText("Buscar...")
-        self.campo_busca.setFixedWidth(140)
-        self.campo_busca.setFixedHeight(32)
-        self.campo_busca.setStyleSheet("border-radius: 8px; padding: 4px 10px; border: 1px solid #cbd5e1;")
+        self.campo_busca.setFixedWidth(160)
+        self.campo_busca.setFixedHeight(34)
+        self.campo_busca.setStyleSheet(
+            "QLineEdit { border-radius: 10px; padding: 4px 12px; "
+            "border: 1.5px solid #e5e7eb; background: #ffffff; font-size: 13px; }"
+            "QLineEdit:focus { border-color: #6366f1; background: #ffffff; }"
+        )
         self.campo_busca.textChanged.connect(self._filtrar_lembretes)
         linha_cabecalho.addWidget(self.campo_busca)
 
-        btn_novo = QPushButton("Novo")
-        btn_novo.setFixedHeight(32)
+        btn_novo = QPushButton("+ Novo")
+        btn_novo.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_novo.setFixedHeight(34)
         btn_novo.setStyleSheet(
-            "background-color: #4f46e5; color: #fff; border: none; border-radius: 8px; "
-            "padding: 4px 14px; font-size: 12px; font-weight: 600;"
+            "QPushButton { background-color: #4f46e5; color: #fff; border: none; border-radius: 10px; "
+            "padding: 4px 16px; font-size: 12px; font-weight: 600; }"
+            "QPushButton:hover { background-color: #4338ca; }"
+            "QPushButton:pressed { background-color: #3730a3; }"
         )
         btn_novo.clicked.connect(self._novo_lembrete)
         linha_cabecalho.addWidget(btn_novo)
@@ -105,20 +113,27 @@ class QuadroLembretes(QWidget):
         # Área superior: lembretes ativos
         self.scroll_ativos = QScrollArea()
         self.scroll_ativos.setWidgetResizable(True)
-        self.scroll_ativos.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        self.scroll_ativos.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            "QScrollBar:vertical { background: transparent; width: 8px; margin: 0; }"
+            "QScrollBar::handle:vertical { background: #cbd5e1; border-radius: 4px; min-height: 30px; }"
+            "QScrollBar::handle:vertical:hover { background: #94a3b8; }"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }"
+        )
 
         self.container_ativos = QWidget()
         self.container_ativos.setStyleSheet("background: transparent;")
         self.layout_ativos = QVBoxLayout(self.container_ativos)
         self.layout_ativos.setContentsMargins(0, 0, 0, 0)
-        self.layout_ativos.setSpacing(4)
+        self.layout_ativos.setSpacing(6)
         self.layout_ativos.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.scroll_ativos.setWidget(self.container_ativos)
 
         # Divisor central fixo
         divisao = QFrame()
         divisao.setFrameShape(QFrame.Shape.HLine)
-        divisao.setStyleSheet("color: #cbd5e1; background: #cbd5e1; max-height: 2px;")
+        divisao.setStyleSheet("color: #e2e8f0; background: #e2e8f0; max-height: 1px;")
 
         # Rótulo da seção finalizados
         label_finalizados = QLabel("Finalizados")
@@ -126,10 +141,10 @@ class QuadroLembretes(QWidget):
 
         self.btn_alternar = QPushButton("▼")
         self.btn_alternar.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_alternar.setFixedSize(22, 22)
+        self.btn_alternar.setFixedSize(24, 24)
         self.btn_alternar.setStyleSheet(
-            "QPushButton { background: transparent; color: #64748b; border: none; font-size: 10px; }"
-            "QPushButton:hover { color: #4f46e5; }"
+            "QPushButton { background: transparent; color: #64748b; border: none; font-size: 11px; border-radius: 12px; }"
+            "QPushButton:hover { color: #4f46e5; background: #eef2ff; }"
         )
         self.btn_alternar.clicked.connect(self._alternar_finalizados)
 
@@ -143,13 +158,20 @@ class QuadroLembretes(QWidget):
         # Área inferior: lembretes finalizados
         self.scroll_finalizados = QScrollArea()
         self.scroll_finalizados.setWidgetResizable(True)
-        self.scroll_finalizados.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        self.scroll_finalizados.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            "QScrollBar:vertical { background: transparent; width: 8px; margin: 0; }"
+            "QScrollBar::handle:vertical { background: #cbd5e1; border-radius: 4px; min-height: 30px; }"
+            "QScrollBar::handle:vertical:hover { background: #94a3b8; }"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }"
+        )
 
         self.container_finalizados = QWidget()
         self.container_finalizados.setStyleSheet("background: transparent;")
         self.layout_finalizados = QVBoxLayout(self.container_finalizados)
         self.layout_finalizados.setContentsMargins(0, 0, 0, 0)
-        self.layout_finalizados.setSpacing(4)
+        self.layout_finalizados.setSpacing(6)
         self.layout_finalizados.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.scroll_finalizados.setWidget(self.container_finalizados)
 
@@ -212,19 +234,21 @@ class QuadroLembretes(QWidget):
     def _criar_card_widget(self, dados):
         card = QFrame()
         card.setFrameShape(QFrame.Shape.StyledPanel)
-        card.setFixedHeight(50)
+        card.setMinimumHeight(52)
         if dados.get("status") == "finalizado":
             card.setStyleSheet(
-                "QFrame { background-color: transparent; border: none; }"
+                "QFrame { background-color: #f8fafc; border: 1px solid #eef1f6; "
+                "border-radius: 12px; }"
             )
         else:
             card.setStyleSheet(
-                "QFrame { background-color: #ffffff; border: 1px solid #e2e8f0; "
-                "border-radius: 12px; } QFrame:hover { border-color: #cbd5e1; }"
+                "QFrame { background-color: #ffffff; border: 1px solid #eef1f6; "
+                "border-radius: 12px; } QFrame:hover { border-color: #c7d2fe; "
+                "background-color: #fbfaff; }"
             )
 
         layout_card = QHBoxLayout(card)
-        layout_card.setContentsMargins(10, 0, 16, 0)
+        layout_card.setContentsMargins(14, 0, 12, 0)
         layout_card.setSpacing(12)
 
         # Status checkbox
@@ -232,9 +256,9 @@ class QuadroLembretes(QWidget):
         check.setCursor(Qt.CursorShape.PointingHandCursor)
         check.setStyleSheet(
             "QCheckBox { background: transparent; }"
-            "QCheckBox::indicator { width: 14px; height: 14px; border-radius: 4px; "
+            "QCheckBox::indicator { width: 18px; height: 18px; border-radius: 6px; "
             "border: 2px solid #cbd5e1; background: #ffffff; }"
-            "QCheckBox::indicator:hover { border-color: #4f46e5; background: #eef2ff; }"
+            "QCheckBox::indicator:hover { border-color: #6366f1; background: #eef2ff; }"
             "QCheckBox::indicator:checked { background-color: #4f46e5; border-color: #4f46e5; "
             "image: none; }"
             "QCheckBox::indicator:checked:hover { background-color: #4338ca; border-color: #4338ca; }"
@@ -269,8 +293,8 @@ class QuadroLembretes(QWidget):
         btn_editar = QPushButton("Editar")
         btn_editar.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_editar.setStyleSheet(
-            "QPushButton { background: transparent; color: #0284c7; border: none; font-size: 12px; font-weight: 600; }"
-            "QPushButton:hover { color: #0369a1; }"
+            "QPushButton { background: transparent; color: #0284c7; border: none; font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 8px; }"
+            "QPushButton:hover { color: #0369a1; background: #f0f9ff; }"
         )
         btn_editar.clicked.connect(lambda: self._editar_lembrete(dados))
         layout_card.addWidget(btn_editar)
@@ -279,8 +303,8 @@ class QuadroLembretes(QWidget):
         btn_deletar = QPushButton("Deletar")
         btn_deletar.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_deletar.setStyleSheet(
-            "QPushButton { background: transparent; color: #ef4444; border: none; font-size: 12px; font-weight: 600; }"
-            "QPushButton:hover { color: #dc2626; }"
+            "QPushButton { background: transparent; color: #ef4444; border: none; font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 8px; }"
+            "QPushButton:hover { color: #dc2626; background: #fef2f2; }"
         )
         btn_deletar.clicked.connect(lambda: self._deletar_lembrete(dados))
         layout_card.addWidget(btn_deletar)
@@ -297,12 +321,12 @@ class QuadroLembretes(QWidget):
         self._remover_linha_nova()
 
         linha = QWidget()
-        linha.setFixedHeight(50)
+        linha.setMinimumHeight(52)
         linha.setStyleSheet(
-            "QWidget { background-color: #ffffff; border: 2px dashed #4f46e5; border-radius: 12px; }"
+            "QWidget { background-color: #ffffff; border: 2px dashed #a5b4fc; border-radius: 12px; }"
         )
         h = QHBoxLayout(linha)
-        h.setContentsMargins(12, 0, 12, 0)
+        h.setContentsMargins(14, 0, 14, 0)
 
         campo = QLineEdit()
         campo.setPlaceholderText("Digite o lembrete e pressione Enter...")
@@ -387,7 +411,7 @@ class QuadroLembretes(QWidget):
 
 
 class LembretesPage(QWidget):
-    """Página com dois quadros de lembretes lado a lado: time e pessoal."""
+    """Página com dois quadros de lembretes em abas: time e pessoal."""
 
     def __init__(self):
         super().__init__()
@@ -404,9 +428,10 @@ class LembretesPage(QWidget):
         titulo.setStyleSheet("font-size: 24px; font-weight: 700; color: #1e293b;")
         layout.addWidget(titulo)
 
-        linha_quadros = QHBoxLayout()
-        linha_quadros.setSpacing(16)
-
+        self.quadro_sa_pendente = QuadroLembretes(
+            "Lembrete de SA pendente",
+            _caminho_lembretes_json("Lembrete de SA pendente.json"),
+        )
         self.quadro_time = QuadroLembretes(
             "Lembrete do time",
             _caminho_lembretes_json("Lembretes.json"),
@@ -416,9 +441,21 @@ class LembretesPage(QWidget):
             _caminho_lembretes_pessoais_json(),
         )
 
-        linha_quadros.addWidget(self.quadro_time, 1)
-        linha_quadros.addWidget(self.quadro_pessoal, 1)
-        layout.addLayout(linha_quadros, 1)
+        tabs = QTabWidget()
+        tabs.setDocumentMode(True)
+        tabs.setStyleSheet(
+            "QTabWidget::pane { background: #ffffff; border: 1px solid #eef1f6; "
+            "border-radius: 16px; top: -1px; }"
+            "QTabBar::tab { background: transparent; color: #64748b; padding: 10px 22px; "
+            "font-size: 13px; font-weight: 600; border: none; margin-right: 4px; }"
+            "QTabBar::tab:hover { color: #4f46e5; }"
+            "QTabBar::tab:selected { color: #4f46e5; background: #eef2ff; "
+            "border-radius: 10px; }"
+        )
+        tabs.addTab(self.quadro_sa_pendente, "Lembrete de SA pendente")
+        tabs.addTab(self.quadro_time, "Lembrete do time")
+        tabs.addTab(self.quadro_pessoal, "Lembretes pessoal")
+        layout.addWidget(tabs, 1)
 
 
 class LembreteDialog(QDialog):

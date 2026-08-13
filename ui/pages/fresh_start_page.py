@@ -1,14 +1,27 @@
 import json
 import os
+from datetime import datetime
+
+import matplotlib
+matplotlib.use("QtAgg")
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 import qtawesome
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QStyledItemDelegate,
+    QStyledItemDelegate, QFileDialog, QMessageBox,
 )
 from PySide6.QtCore import Qt, QSize
+
+try:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+    OPENPYXL_DISPONIVEL = True
+except ImportError:
+    OPENPYXL_DISPONIVEL = False
 
 import config
 
@@ -25,6 +38,13 @@ def _caminho_zcentral():
     if not base:
         return ""
     return os.path.normpath(os.path.join(base, "Almox", "zCentral.prn"))
+
+
+def _caminho_dados_fresh_start():
+    base = config.obter_caminho_jsons()
+    if not base:
+        return ""
+    return os.path.normpath(os.path.join(base, "Almox", "FreshStart", "DadosFreshStart", "DadosFreshStart.json"))
 
 
 def _caminho_estoque():
@@ -46,6 +66,33 @@ def _parse_numero(texto):
     if not texto:
         return 0.0
     return float(texto.replace(".", "").replace(",", "."))
+
+
+def _carregar_historico():
+    caminho = _caminho_dados_fresh_start()
+    if not caminho or not os.path.isfile(caminho):
+        return []
+    try:
+        with open(caminho, "r", encoding="utf-8") as f:
+            conteudo = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+    if not isinstance(conteudo, list):
+        return []
+    registros = []
+    for item in conteudo:
+        if not isinstance(item, str) or " - " not in item:
+            continue
+        data, _, valores = item.partition(" - ")
+        partes = [v.strip() for v in valores.split(",")]
+        if len(partes) != 3:
+            continue
+        try:
+            numeros = tuple(_parse_numero(v) for v in partes)
+        except ValueError:
+            continue
+        registros.append((data.strip(), *numeros))
+    return registros
 
 
 class EditorDelegate(QStyledItemDelegate):
@@ -104,6 +151,12 @@ class FreshStartPage(QWidget):
         btn_atualizar.setFixedHeight(32)
         btn_atualizar.clicked.connect(self._atualizar_do_prn)
         filter_row.addWidget(btn_atualizar)
+
+        btn_exportar = QPushButton(qtawesome.icon('fa6s.file-excel', color='#ffffff'), "  Exportar Excel")
+        btn_exportar.setObjectName("btnPrimary")
+        btn_exportar.setFixedHeight(32)
+        btn_exportar.clicked.connect(self._exportar_excel)
+        filter_row.addWidget(btn_exportar)
 
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("Pesquisar...")
@@ -173,6 +226,30 @@ class FreshStartPage(QWidget):
 
         layout.addWidget(table_card)
 
+        # ── Gráfico de histórico ──
+        chart_card = QWidget()
+        chart_card.setObjectName("pageCard")
+        chart_card_layout = QVBoxLayout(chart_card)
+        chart_card_layout.setContentsMargins(18, 14, 18, 14)
+        chart_card_layout.setSpacing(10)
+
+        chart_header = QHBoxLayout()
+        chart_titulo = QLabel("Evolução dos valores")
+        chart_titulo.setObjectName("pageSubtitle")
+        chart_header.addWidget(chart_titulo)
+        chart_header.addStretch()
+        chart_card_layout.addLayout(chart_header)
+
+        self.figure = Figure(figsize=(8, 3.2), facecolor="none")
+        self.figure.subplots_adjust(left=0.06, right=0.98, top=0.92, bottom=0.18)
+        self.canvas = FigureCanvas(self.figure)
+        self.canvas.setMinimumHeight(260)
+        chart_card_layout.addWidget(self.canvas)
+
+        layout.addWidget(chart_card)
+
+        self._atualizar_grafico()
+
         self._inserir_linha_vazia()
 
     # ── Dados ──
@@ -192,6 +269,7 @@ class FreshStartPage(QWidget):
         self._popular_tabela()
         self._calcular_total_zcentral()
         self._calcular_total_dph()
+        self._atualizar_grafico()
 
     def _salvar_json(self):
         caminho = _caminho_json()
@@ -236,6 +314,8 @@ class FreshStartPage(QWidget):
         if not novos:
             return
 
+        self.dados = []
+
         estoque_por_kardex = {}
         caminho_estoque = _caminho_estoque()
         if caminho_estoque and os.path.exists(caminho_estoque):
@@ -277,6 +357,85 @@ class FreshStartPage(QWidget):
         self._popular_tabela()
         self._calcular_total_zcentral()
         self._calcular_total_dph()
+        self._registrar_atualizacao()
+        self._atualizar_grafico()
+
+    # ── Histórico de atualizações ──
+    def _registrar_atualizacao(self):
+        caminho = _caminho_dados_fresh_start()
+        if not caminho:
+            return
+        zcentral = _parse_numero(self.label_total_zcentral.text().replace("R$", "").strip())
+        dph = _parse_numero(self.label_total_dph.text().replace("R$", "").strip())
+        valor = zcentral - dph
+
+        dados = []
+        try:
+            with open(caminho, "r", encoding="utf-8") as f:
+                dados = json.load(f)
+                if not isinstance(dados, list):
+                    dados = []
+        except (FileNotFoundError, json.JSONDecodeError):
+            dados = []
+
+        registro = (
+            f"{datetime.now():%d/%m/%Y} - {zcentral}, {dph}, {valor}"
+        )
+        dados.append(registro)
+
+        try:
+            os.makedirs(os.path.dirname(caminho), exist_ok=True)
+            with open(caminho, "w", encoding="utf-8") as f:
+                json.dump(dados, f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass
+
+    # ── Gráfico ──
+    def _atualizar_grafico(self):
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+        ax.set_facecolor("none")
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        ax.tick_params(colors="#94a3b8", length=0)
+        ax.grid(axis="y", color="#e2e8f0", linewidth=0.8, alpha=0.6)
+
+        registros = _carregar_historico()
+        if not registros:
+            ax.tick_params(bottom=False, labelbottom=False)
+            ax.text(
+                0.5, 0.5, "Sem dados no histórico ainda",
+                transform=ax.transAxes,
+                ha="center", va="center",
+                fontsize=12, color="#94a3b8",
+            )
+            self.canvas.draw()
+            return
+
+        datas = [r[0] for r in registros]
+        series = [
+            ([r[1] for r in registros], "zCentral", "#6366f1"),
+            ([r[2] for r in registros], "DPH", "#22c55e"),
+            ([r[3] for r in registros], "zCentral - DPH", "#f97316"),
+        ]
+        xs = list(range(len(registros)))
+
+        for valores, nome, cor in series:
+            ax.plot(
+                xs, valores,
+                label=nome, color=cor, linewidth=2.5, zorder=3,
+                marker="o", markersize=5,
+                markerfacecolor="#ffffff", markeredgecolor=cor, markeredgewidth=2,
+            )
+            ax.fill_between(xs, valores, color=cor, alpha=0.08, zorder=2)
+
+        ax.set_xticks(xs)
+        ax.set_xticklabels(datas, rotation=30, ha="right", fontsize=8, color="#94a3b8")
+        ax.legend(
+            loc="upper left", frameon=False, fontsize=9,
+            labelcolor="#334155",
+        )
+        self.canvas.draw()
 
     # ── Custo zCentral ──
     def _ler_custos_unitarios(self):
@@ -402,6 +561,54 @@ class FreshStartPage(QWidget):
 
     def _aplicar_filtro(self):
         self._popular_tabela()
+
+    # ── Exportar Excel ──
+    def _exportar_excel(self):
+        if not OPENPYXL_DISPONIVEL:
+            QMessageBox.warning(
+                self, "Exportar Excel",
+                "A biblioteca 'openpyxl' não está instalada.\n"
+                "Instale com: pip install openpyxl",
+            )
+            return
+
+        linhas = []
+        for row in range(self.tabela.rowCount() - 1):
+            linha = []
+            for col in range(len(self.COLUNAS)):
+                cell = self.tabela.item(row, col)
+                linha.append(cell.text() if cell else "")
+            linhas.append(linha)
+
+        if not linhas:
+            QMessageBox.information(self, "Exportar Excel", "Não há dados para exportar.")
+            return
+
+        caminho, _ = QFileDialog.getSaveFileName(
+            self, "Exportar para Excel", "fresh_start.xlsx", "Arquivos Excel (*.xlsx)"
+        )
+        if not caminho:
+            return
+        if not caminho.lower().endswith(".xlsx"):
+            caminho += ".xlsx"
+
+        try:
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Fresh Start"
+            ws.append(list(self.COLUNAS))
+            for celula in ws[1]:
+                celula.font = Font(bold=True)
+            for linha in linhas:
+                ws.append(linha)
+            for col, largura in enumerate([50, 140, 200, 100, 100, 100, 100, 150, 100, 200], start=1):
+                ws.column_dimensions[chr(64 + col)].width = max(largura, 8)
+            wb.save(caminho)
+        except OSError as erro:
+            QMessageBox.critical(self, "Exportar Excel", f"Não foi possível salvar o arquivo.\n{erro}")
+            return
+
+        QMessageBox.information(self, "Exportar Excel", f"Tabela exportada com sucesso:\n{caminho}")
 
     def _atualizar_contador(self):
         total = max(0, self.tabela.rowCount() - 1)
