@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
 )
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtGui import QFont, QIcon, QShortcut, QKeySequence
 
 
 def _caminho_lembretes_json(nome_arquivo="Lembretes.json"):
@@ -82,6 +82,18 @@ class QuadroLembretes(QWidget):
         titulo.setStyleSheet("font-size: 16px; font-weight: 700; color: #1e293b;")
         linha_cabecalho.addWidget(titulo)
 
+        btn_novo = QPushButton("+ Novo")
+        btn_novo.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_novo.setFixedHeight(30)
+        btn_novo.setStyleSheet(
+            "QPushButton { background-color: #4f46e5; color: #fff; border: none; border-radius: 10px; "
+            "padding: 4px 12px; font-size: 12px; font-weight: 600; }"
+            "QPushButton:hover { background-color: #4338ca; }"
+            "QPushButton:pressed { background-color: #3730a3; }"
+        )
+        btn_novo.clicked.connect(self._novo_lembrete)
+        linha_cabecalho.addWidget(btn_novo)
+
         linha_cabecalho.addStretch()
 
         self.campo_busca = QLineEdit()
@@ -95,18 +107,6 @@ class QuadroLembretes(QWidget):
         )
         self.campo_busca.textChanged.connect(self._filtrar_lembretes)
         linha_cabecalho.addWidget(self.campo_busca)
-
-        btn_novo = QPushButton("+ Novo")
-        btn_novo.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_novo.setFixedHeight(34)
-        btn_novo.setStyleSheet(
-            "QPushButton { background-color: #4f46e5; color: #fff; border: none; border-radius: 10px; "
-            "padding: 4px 16px; font-size: 12px; font-weight: 600; }"
-            "QPushButton:hover { background-color: #4338ca; }"
-            "QPushButton:pressed { background-color: #3730a3; }"
-        )
-        btn_novo.clicked.connect(self._novo_lembrete)
-        linha_cabecalho.addWidget(btn_novo)
 
         layout.addLayout(linha_cabecalho)
 
@@ -179,6 +179,9 @@ class QuadroLembretes(QWidget):
         layout.addWidget(divisao)
         layout.addLayout(linha_finalizados)
         layout.addWidget(self.scroll_finalizados, 1)
+
+        self.scroll_finalizados.hide()
+        self.btn_alternar.setText("▲")
 
     def _ler_lembretes(self):
         if not self.caminho_json or not os.path.exists(self.caminho_json):
@@ -296,7 +299,7 @@ class QuadroLembretes(QWidget):
             "QPushButton { background: transparent; color: #0284c7; border: none; font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 8px; }"
             "QPushButton:hover { color: #0369a1; background: #f0f9ff; }"
         )
-        btn_editar.clicked.connect(lambda: self._editar_lembrete(dados))
+        btn_editar.clicked.connect(lambda: self._editar_lembrete(dados, card))
         layout_card.addWidget(btn_editar)
 
         # Delete button
@@ -332,6 +335,7 @@ class QuadroLembretes(QWidget):
         campo.setPlaceholderText("Digite o lembrete e pressione Enter...")
         campo.setStyleSheet("border: none; font-size: 13px; background: transparent;")
         campo.returnPressed.connect(lambda: self._salvar_novo(campo.text()))
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), campo).activated.connect(self._remover_linha_nova)
         h.addWidget(campo)
 
         self.linha_nova = linha
@@ -354,18 +358,42 @@ class QuadroLembretes(QWidget):
         self._remover_linha_nova()
         self._carregar_lembretes()
 
-    def _editar_lembrete(self, dados_originais):
-        dlg = LembreteDialog(self, dados_originais)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            novos_dados = dlg.obter_dados()
+    def _editar_lembrete(self, dados_originais, card):
+        layout = card.parentWidget().layout()
+        idx = layout.indexOf(card)
+
+        linha = QWidget()
+        linha.setMinimumHeight(52)
+        linha.setStyleSheet(
+            "QWidget { background-color: #ffffff; border: 2px dashed #a5b4fc; border-radius: 12px; }"
+        )
+        h = QHBoxLayout(linha)
+        h.setContentsMargins(14, 0, 14, 0)
+
+        campo = QLineEdit()
+        campo.setPlaceholderText("Edite o lembrete e pressione Enter...")
+        campo.setText(dados_originais.get("conteudo") or dados_originais.get("titulo", ""))
+        campo.setStyleSheet("border: none; font-size: 13px; background: transparent;")
+        campo.returnPressed.connect(lambda: self._salvar_edicao(dados_originais, campo.text()))
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), campo).activated.connect(self._carregar_lembretes)
+        h.addWidget(campo)
+
+        layout.replaceWidget(card, linha)
+        card.deleteLater()
+        campo.setFocus()
+        campo.selectAll()
+
+    def _salvar_edicao(self, dados_originais, texto):
+        texto = texto.strip()
+        if texto:
             lembretes = self._ler_lembretes()
             for item in lembretes:
                 if item.get("id") == dados_originais.get("id"):
-                    item["conteudo"] = novos_dados["conteudo"]
+                    item["conteudo"] = texto
                     item["data"] = datetime.now().strftime("%d/%m/%Y %H:%M") + " (editado)"
                     break
             self._salvar_lembretes(lembretes)
-            self._carregar_lembretes()
+        self._carregar_lembretes()
 
     def _deletar_lembrete(self, dados):
         resposta = QMessageBox.question(
@@ -442,12 +470,13 @@ class LembretesPage(QWidget):
         )
 
         tabs = QTabWidget()
+        self.tabs = tabs
         tabs.setDocumentMode(True)
         tabs.setStyleSheet(
             "QTabWidget::pane { background: #ffffff; border: 1px solid #eef1f6; "
             "border-radius: 16px; top: -1px; }"
             "QTabBar::tab { background: transparent; color: #64748b; padding: 10px 22px; "
-            "font-size: 13px; font-weight: 600; border: none; margin-right: 4px; }"
+            "font-size: 13px; font-weight: 600; border: none; margin-right: 4px; margin-top: 6px; }"
             "QTabBar::tab:hover { color: #4f46e5; }"
             "QTabBar::tab:selected { color: #4f46e5; background: #eef2ff; "
             "border-radius: 10px; }"
@@ -456,6 +485,14 @@ class LembretesPage(QWidget):
         tabs.addTab(self.quadro_time, "Lembrete do time")
         tabs.addTab(self.quadro_pessoal, "Lembretes pessoal")
         layout.addWidget(tabs, 1)
+
+        self.atalho_novo = QShortcut(QKeySequence("Ctrl+N"), self)
+        self.atalho_novo.activated.connect(self._novo_lembrete_na_aba_ativa)
+
+    def _novo_lembrete_na_aba_ativa(self):
+        quadro = self.tabs.currentWidget()
+        if isinstance(quadro, QuadroLembretes):
+            quadro._novo_lembrete()
 
 
 class LembreteDialog(QDialog):

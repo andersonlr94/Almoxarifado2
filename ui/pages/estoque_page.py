@@ -163,7 +163,9 @@ class EstoquePage(QWidget):
 
         btn_atualizar.clicked.connect(self._atualizar)
 
-        coluna_esquerda.addWidget(btn_atualizar)
+        linha_botoes = QHBoxLayout()
+        linha_botoes.setSpacing(10)
+        linha_botoes.addWidget(btn_atualizar)
 
         btn_exportar = QPushButton("📊 Exportar Excel")
         btn_exportar.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -186,7 +188,8 @@ class EstoquePage(QWidget):
         """)
         btn_exportar.clicked.connect(self._exportar_excel)
 
-        coluna_esquerda.addWidget(btn_exportar)
+        linha_botoes.addWidget(btn_exportar)
+        coluna_esquerda.addLayout(linha_botoes)
 
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("⌕   Pesquisar...")
@@ -219,7 +222,7 @@ class EstoquePage(QWidget):
         # =====================================================
         self.detalhes_box = QWidget()
         self.detalhes_box.setObjectName("detalhesBox")
-        self.detalhes_box.setMinimumHeight(205)
+        self.detalhes_box.setMinimumHeight(128)
         self.detalhes_box.setMaximumWidth(620)
 
         self.detalhes_box.setStyleSheet("""
@@ -236,19 +239,25 @@ class EstoquePage(QWidget):
         """)
 
         detalhes_layout = QVBoxLayout(self.detalhes_box)
-        detalhes_layout.setContentsMargins(18, 14, 18, 14)
-        detalhes_layout.setSpacing(8)
+        detalhes_layout.setContentsMargins(14, 6, 14, 6)
+        detalhes_layout.setSpacing(2)
 
         lbl_visao = QLabel("VISÃO GERAL DO ITEM SELECIONADO")
+        lbl_visao.setContentsMargins(0, 0, 0, 0)
+        lbl_visao.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         lbl_visao.setStyleSheet("""
             QLabel {
                 color: #65769d;
                 font-size: 10px;
                 font-weight: 700;
                 letter-spacing: 0.5px;
+                margin: 0;
+                padding: 0;
+                background: transparent;
+                border: none;
             }
         """)
-        detalhes_layout.addWidget(lbl_visao)
+        detalhes_layout.addWidget(lbl_visao, 0, Qt.AlignmentFlag.AlignTop)
 
         corpo_detalhes = QHBoxLayout()
         corpo_detalhes.setSpacing(20)
@@ -262,7 +271,7 @@ class EstoquePage(QWidget):
 
         def criar_linha(rotulo, chave, simbolo="", cor="#5f6cf5"):
             widget = QWidget()
-            widget.setMinimumHeight(39)
+            widget.setMinimumHeight(24)
 
             lay = QHBoxLayout(widget)
             lay.setContentsMargins(0, 0, 0, 0)
@@ -274,7 +283,7 @@ class EstoquePage(QWidget):
             icone.setStyleSheet(f"""
                 QLabel {{
                     color: {cor};
-                    font-size: 15px;
+                    font-size: 17px;
                     font-weight: 700;
                 }}
             """)
@@ -284,7 +293,7 @@ class EstoquePage(QWidget):
             lbl_nome.setStyleSheet("""
                 QLabel {
                     color: #7183aa;
-                    font-size: 10px;
+                    font-size: 12px;
                     font-weight: 600;
                 }
             """)
@@ -293,7 +302,7 @@ class EstoquePage(QWidget):
             lbl_valor.setStyleSheet("""
                 QLabel {
                     color: #17203f;
-                    font-size: 12px;
+                    font-size: 14px;
                     font-weight: 600;
                 }
             """)
@@ -374,15 +383,18 @@ class EstoquePage(QWidget):
         corpo_detalhes.addWidget(divisor_vertical)
         corpo_detalhes.addLayout(coluna_direita, 1)
 
-        detalhes_layout.addLayout(corpo_detalhes)
+        container_corpo = QWidget()
+        container_corpo.setLayout(corpo_detalhes)
+        detalhes_layout.addWidget(container_corpo, 0, Qt.AlignmentFlag.AlignTop)
+        detalhes_layout.addStretch(1)
         topo.addWidget(self.detalhes_box, 1)
 
         # =====================================================
         # CARD CONTADOR
         # =====================================================
         contador_box = QWidget()
-        contador_box.setFixedWidth(160)
-        contador_box.setFixedHeight(161)
+        contador_box.setFixedWidth(141)
+        contador_box.setFixedHeight(96)
 
         contador_box.setStyleSheet("""
             QWidget {
@@ -398,20 +410,20 @@ class EstoquePage(QWidget):
         """)
 
         contador_layout = QVBoxLayout(contador_box)
-        contador_layout.setContentsMargins(16, 12, 16, 12)
+        contador_layout.setContentsMargins(8, 5, 8, 5)
         contador_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        contador_layout.setSpacing(6)
+        contador_layout.setSpacing(2)
 
         circulo = QLabel("◇")
         circulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        circulo.setFixedSize(56, 56)
+        circulo.setFixedSize(34, 34)
         circulo.setStyleSheet("""
             QLabel {
                 background: #f0f1ff;
                 color: #5b61f6;
                 border: 1px solid #e0e3ff;
-                border-radius: 28px;
-                font-size: 30px;
+                border-radius: 17px;
+                font-size: 20px;
                 font-weight: 600;
             }
         """)
@@ -426,7 +438,7 @@ class EstoquePage(QWidget):
         self.label_contador.setStyleSheet("""
             QLabel {
                 color: #11163d;
-                font-size: 24px;
+                font-size: 20px;
                 font-weight: 700;
             }
         """)
@@ -449,7 +461,7 @@ class EstoquePage(QWidget):
         self.btn_toggle = QPushButton("⛶  Visão completa")
         self.btn_toggle.setObjectName("btnSecondary")
         self.btn_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_toggle.setFixedSize(160, 44)
+        self.btn_toggle.setFixedSize(141, 35)
         self.btn_toggle.setCheckable(True)
         self.btn_toggle.clicked.connect(self._alternar_modo)
 
@@ -475,7 +487,7 @@ class EstoquePage(QWidget):
         """)
 
         coluna_direita_superior = QWidget()
-        coluna_direita_superior.setFixedWidth(160)
+        coluna_direita_superior.setFixedWidth(141)
         coluna_superior_layout = QVBoxLayout(coluna_direita_superior)
         coluna_superior_layout.setContentsMargins(0, 0, 0, 0)
         coluna_superior_layout.setSpacing(12)
@@ -505,7 +517,7 @@ class EstoquePage(QWidget):
             }
 
             QTableWidget::item {
-                padding: 4px 7px;
+                padding: 0px;
                 border-bottom: 1px solid #eef1f5;
             }
 
@@ -516,13 +528,13 @@ class EstoquePage(QWidget):
 
             QScrollBar:vertical {
                 background: transparent;
-                width: 10px;
+                width: 16px;
                 margin: 4px;
             }
 
             QScrollBar::handle:vertical {
                 background: #cbd2df;
-                border-radius: 5px;
+                border-radius: 8px;
                 min-height: 30px;
             }
 
@@ -569,21 +581,23 @@ class EstoquePage(QWidget):
             )
 
             if c == 1:
-                largura = 165
+                largura = 132
             elif c == 2:
                 largura = 180
             elif c == 3:
                 largura = 290
             elif c in (4, 6):
-                largura = 125
+                largura = 100
             elif c in (5, 7):
-                largura = 110
+                largura = 79
             elif c == 8:
                 largura = 150
             elif c == 20:
                 largura = 110
             elif c == 22:
                 largura = 125
+            elif c in (40, 41):
+                largura = 66
             else:
                 largura = 120
 
@@ -602,8 +616,8 @@ class EstoquePage(QWidget):
         )
 
         self.tabela.setAlternatingRowColors(False)
-        self.tabela.verticalHeader().setDefaultSectionSize(36)
-        self.tabela.verticalHeader().setMinimumSectionSize(32)
+        self.tabela.verticalHeader().setDefaultSectionSize(24)
+        self.tabela.verticalHeader().setMinimumSectionSize(20)
         self.tabela.verticalHeader().setVisible(False)
 
         self.tabela.setHorizontalScrollMode(
@@ -653,6 +667,9 @@ class EstoquePage(QWidget):
             if self.modo_resumido:
                 ativo = str(item.get("Ativo/Obsol.", "")).strip().lower()
                 if "ativo" not in ativo:
+                    continue
+                codigo = str(item.get("Código", "")).strip().upper()
+                if codigo.endswith("AT") or codigo.endswith("(AT)"):
                     continue
 
             if filtro_texto:
@@ -1086,6 +1103,10 @@ class EstoquePage(QWidget):
 
     def _aplicar_filtro(self):
         self._popular_tabela()
+
+        if self.tabela.rowCount() == 1:
+            self.tabela.selectRow(0)
+            self._atualizar_detalhes()
 
     def _atualizar_detalhes(self):
         kardex = ""

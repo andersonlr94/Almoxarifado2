@@ -9,10 +9,10 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QStyledItemDelegate, QMenu, QInputDialog,
-    QDialog, QDialogButtonBox, QComboBox, QPlainTextEdit,
+    QDialog, QDialogButtonBox, QComboBox, QPlainTextEdit, QStyle,
 )
 from PySide6.QtCore import Qt, QSize, QTimer, QPoint
-from PySide6.QtGui import QColor, QBrush, QPainter, QPalette, QCursor, QShortcut, QKeySequence
+from PySide6.QtGui import QColor, QBrush, QPainter, QPalette, QCursor, QShortcut, QKeySequence, QPen
 
 
 def _caminho_fornecedores_json():
@@ -48,6 +48,15 @@ class EditorDelegate(QStyledItemDelegate):
             option.palette.setColor(QPalette.ColorRole.Highlight, Qt.GlobalColor.transparent)
             option.palette.setColor(QPalette.ColorRole.Base, Qt.GlobalColor.transparent)
         super().paint(painter, option, index)
+        if index.column() == 4 and option.state & QStyle.StateFlag.State_MouseOver and bg is not None:
+            brush = bg if isinstance(bg, QBrush) else QBrush(bg)
+            cor = brush.color()
+            if cor.alpha() > 0:
+                painter.save()
+                painter.setPen(QPen(cor, 2))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawRoundedRect(option.rect.adjusted(1, 1, -1, -1), 4, 4)
+                painter.restore()
 
     def sizeHint(self, option, index):
         base = super().sizeHint(option, index)
@@ -517,6 +526,7 @@ class ControlePedidosPage(QWidget):
 
     def _popular_tabela(self):
         # Salvar posições dos scrollbars e célula atual
+        busca_focada = self.campo_busca.hasFocus()
         v_scroll = self.tabela.verticalScrollBar().value()
         h_scroll = self.tabela.horizontalScrollBar().value()
         curr_row = self.tabela.currentRow()
@@ -601,12 +611,15 @@ class ControlePedidosPage(QWidget):
         self._atualizar_contador()
 
         # Restaurar célula selecionada e foco
-        if curr_row >= 0 and curr_row < self.tabela.rowCount() and curr_col >= 0 and curr_col < self.tabela.columnCount():
+        if not busca_focada and curr_row >= 0 and curr_row < self.tabela.rowCount() and curr_col >= 0 and curr_col < self.tabela.columnCount():
             self.tabela.setCurrentCell(curr_row, curr_col)
 
         # Restaurar posições dos scrollbars
         self.tabela.verticalScrollBar().setValue(v_scroll)
         self.tabela.horizontalScrollBar().setValue(h_scroll)
+
+        if busca_focada:
+            self.campo_busca.setFocus()
 
     def _inserir_linha_vazia(self):
         row = self.tabela.rowCount()

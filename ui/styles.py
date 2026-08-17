@@ -754,6 +754,49 @@ QTableWidget#tabelaItensZero QHeaderView::section {
     padding: 4px 6px;
 }
 
+/* ── Material para Holders ── */
+QWidget#holderCard {
+    background-color: #ffffff;
+    border: 1px solid #eef1f6;
+    border-radius: 12px;
+}
+
+QWidget#holderCard:hover {
+    border-color: #c7d2fe;
+}
+
+QLabel#holderTitle {
+    color: #1e1b4b;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+QPushButton#slotBtn {
+    background-color: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 0;
+}
+
+QPushButton#slotBtn:hover {
+    background-color: #eef2ff;
+    color: #4f46e5;
+    border-color: #c7d2fe;
+}
+
+QPushButton#slotBtn:pressed {
+    background-color: #c7d2fe;
+}
+
+QPushButton#slotBtn:checked {
+    background-color: #4f46e5;
+    color: #ffffff;
+    border-color: #4f46e5;
+}
+
 /* ── Detail Box (Estoque) ── */
 QWidget#detalhesBox {
     background-color: #f8fafc;

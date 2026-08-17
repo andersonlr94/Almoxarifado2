@@ -24,6 +24,7 @@ from ui.pages.baixa_3_7_page import Baixa37Page
 from ui.pages.acuracidade_page import AcuracidadePage
 from ui.pages.fresh_start_page import FreshStartPage
 from ui.pages.lembretes_page import LembretesPage
+from ui.pages.material_holders_page import MaterialHoldersPage
 
 
 SIDEBAR_WIDTH = 240
@@ -46,6 +47,7 @@ NAV_ICONS = {
     "fornecedores": ("mdi6.truck-outline", "truck"),
     "reajuste_precos": ("mdi6.tag-arrow-up-outline", "price"),
     "dpp_ativos": ("mdi6.archive-arrow-down-outline", "archive"),
+    "material_holders": ("mdi6.view-grid-outline", "grid"),
     "configuracoes": ("fa6s.gear", "gear"),
 }
 
@@ -178,6 +180,7 @@ class MainWindow(QMainWindow):
             ("programacao_agulhas", "Prog. de Agulhas",    False),
             ("fresh_start",         "Fresh Start",         False),
             ("lembretes",           "Lembretes",           False),
+            ("material_holders",    "Material Holders",    False),
             (None, "Automações", False),
             ("digitar_ae",        "Digitar AE",            True),
             ("transferencia",     "Transferência",         True),
@@ -272,6 +275,7 @@ class MainWindow(QMainWindow):
             ("programacao_agulhas",   ProgramacaoAgulhasPage),
             ("fresh_start",           FreshStartPage),
             ("lembretes",             LembretesPage),
+            ("material_holders",      MaterialHoldersPage),
             ("digitar_ae",            DigitarAEPage),
             ("transferencia",         TransferenciaPage),
             ("remove_loc_duplicadas", RemoveLocDuplicadasPage),
