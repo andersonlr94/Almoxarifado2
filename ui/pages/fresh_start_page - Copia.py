@@ -365,18 +365,11 @@ class FreshStartPage(QWidget):
         caminho = _caminho_dados_fresh_start()
         if not caminho:
             return
-
-        zcentral = _parse_numero(
-            self.label_total_zcentral.text().replace("R$", "").strip()
-        )
-        dph = _parse_numero(
-            self.label_total_dph.text().replace("R$", "").strip()
-        )
+        zcentral = _parse_numero(self.label_total_zcentral.text().replace("R$", "").strip())
+        dph = _parse_numero(self.label_total_dph.text().replace("R$", "").strip())
         valor = zcentral - dph
 
-        hoje = datetime.now().strftime("%d/%m/%Y")
-        registro = f"{hoje} - {zcentral}, {dph}, {valor}"
-
+        dados = []
         try:
             with open(caminho, "r", encoding="utf-8") as f:
                 dados = json.load(f)
@@ -385,17 +378,10 @@ class FreshStartPage(QWidget):
         except (FileNotFoundError, json.JSONDecodeError):
             dados = []
 
-        # Atualiza o registro do dia, se já existir
-        atualizado = False
-        for i, item in enumerate(dados):
-            if isinstance(item, str) and item.startswith(f"{hoje} - "):
-                dados[i] = registro
-                atualizado = True
-                break
-
-        # Se não existir, adiciona novo
-        if not atualizado:
-            dados.append(registro)
+        registro = (
+            f"{datetime.now():%d/%m/%Y} - {zcentral}, {dph}, {valor}"
+        )
+        dados.append(registro)
 
         try:
             os.makedirs(os.path.dirname(caminho), exist_ok=True)

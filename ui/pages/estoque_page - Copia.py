@@ -9,9 +9,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QGuiApplication
 
-from PySide6.QtWidgets import QFileDialog
-import pandas as pd
-
 
 class EditorDelegate(QStyledItemDelegate):
     def sizeHint(self, option, index):
@@ -162,31 +159,7 @@ class EstoquePage(QWidget):
         """)
 
         btn_atualizar.clicked.connect(self._atualizar)
-
         coluna_esquerda.addWidget(btn_atualizar)
-
-        btn_exportar = QPushButton("📊 Exportar Excel")
-        btn_exportar.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_exportar.setFixedSize(168, 44)
-        btn_exportar.setStyleSheet("""
-            QPushButton {
-                background-color: #16a34a;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 14px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #15803d;
-            }
-            QPushButton:pressed {
-                background-color: #166534;
-            }
-        """)
-        btn_exportar.clicked.connect(self._exportar_excel)
-
-        coluna_esquerda.addWidget(btn_exportar)
 
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("⌕   Pesquisar...")
@@ -888,8 +861,8 @@ class EstoquePage(QWidget):
         loc_novo_idx = 5
         loc_retorno_idx = 3
 
-        dph_idx = 7
-        qad_idx = 8
+        dph_idx = -1
+        qad_idx = -1
 
         if header:
             mapa = self._obter_indices_parciais(header)
@@ -911,6 +884,12 @@ class EstoquePage(QWidget):
 
             if "Loc retorno" in mapa:
                 loc_retorno_idx = mapa["Loc retorno"]
+
+            if "QtdeDPH" in mapa:
+                dph_idx = mapa["QtdeDPH"]
+
+            if "Qtde QAD" in mapa:
+                qad_idx = mapa["Qtde QAD"]
 
         max_idx = max(
             kardex_idx,
@@ -1169,63 +1148,3 @@ class EstoquePage(QWidget):
 
         except OSError:
             pass
-
-    def _exportar_excel(self):
-        if not self.dados:
-            QMessageBox.warning(
-                self,
-                "Aviso",
-                "Não existem dados para exportar."
-            )
-            return
-
-        arquivo, _ = QFileDialog.getSaveFileName(
-            self,
-            "Salvar Excel",
-            "estoque.xlsx",
-            "Arquivos Excel (*.xlsx)"
-        )
-
-        if not arquivo:
-            return
-
-        try:
-            dados_exportacao = []
-
-            for row in range(self.tabela.rowCount()):
-                linha = {}
-
-                for col in range(self.tabela.columnCount()):
-                    if self.tabela.isColumnHidden(col):
-                        continue
-
-                    cabecalho = self.COLUNAS[col]
-
-                    item = self.tabela.item(row, col)
-
-                    linha[cabecalho] = (
-                        item.text() if item else ""
-                    )
-
-                dados_exportacao.append(linha)
-
-            df = pd.DataFrame(dados_exportacao)
-
-            df.to_excel(
-                arquivo,
-                index=False,
-                engine="openpyxl"
-            )
-
-            QMessageBox.information(
-                self,
-                "Sucesso",
-                f"Arquivo exportado com sucesso:\n{arquivo}"
-            )
-
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Erro",
-                f"Falha ao exportar:\n{str(e)}"
-            )
