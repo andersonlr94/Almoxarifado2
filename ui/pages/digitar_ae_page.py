@@ -9,9 +9,11 @@ from PySide6.QtWidgets import (
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QPlainTextEdit, QSplitter,
     QApplication, QInputDialog, QMessageBox, QScrollArea, QFrame,
-    QDialog, QFormLayout,
+    QDialog, QFormLayout, QStyledItemDelegate, QStyle,
+    QStyleOptionViewItem,
 )
 from PySide6.QtCore import Qt, QEvent
+from PySide6.QtGui import QColor, QBrush, QPalette
 from ui.regras_automacao import esperar_inicio, digitar_texto, enter
 
 DADOS_AE = {
@@ -88,23 +90,103 @@ def _parse_comentario_nf(comentario):
         separated by "/"
       - Costs between "VALOR CONTÁBIL UNITÁRIO" and "- ATIVO",
         separated by "/"
+
+    If the comment contains "ATIVO COM MENOS DE 01 ANO DE USO", the item is the
+    number after "ATIVO:" or "AF", and the description is the text between
+    "Comentário NF:" and "- VALOR CONTÁBIL UNITÁRIO".
     """
-    resultado = {"id": "", "itens": [], "custos": [], "comentario_original": comentario}
+    resultado = {
+        "id": "",
+        "itens": [],
+        "custos": [],
+        "descricao": "",
+        "comentario_original": comentario,
+    }
 
     # Extract ID
     match_id = re.search(r'\bID\s*[:\s]*(\d+)', comentario, re.IGNORECASE)
     if match_id:
         resultado["id"] = match_id.group(1)
 
-    # Extract items: between "PRIMEIRA SAÍDA -" and "- VALOR CONTÁBIL UNITÁRIO"
-    match_itens = re.search(
-        r'PRIMEIRA\s+SA[IÍ]DA\s*[-–]\s*(.*?)\s*[-–]\s*VALOR\s+CONT[AÁ]BIL\s+UNIT[AÁ]RIO',
-        comentario, re.IGNORECASE
-    )
-    if match_itens:
-        texto_itens = match_itens.group(1).strip()
-        itens = [item.strip() for item in texto_itens.split("/") if item.strip()]
-        resultado["itens"] = itens
+    if (re.search(r'ATIVO\s+COM\s+MENOS\s+DE\s+01\s+ANO\s+DE\s+USO', comentario, re.IGNORECASE)
+            or "STATFIXO" in comentario):
+        # Extract item(s): the number(s) after "ATIVO:" ou "AF"
+        afs = []
+        # 1) "ATIVO: 77412/77413/77414"
+        match_item = re.search(r'ATIVO\s*:\s*([\d/]+)', comentario, re.IGNORECASE)
+        if match_item:
+            afs = [a for a in match_item.group(1).split("/") if a.strip()]
+        # 2) múltiplos blocos "ATIVO: 35565 - ASSET: .../ATIVO: 35566 - ASSET: ..."
+        if len(afs) <= 1:
+            ativos = re.findall(r'ATIVO\s*:\s*(\d+)', comentario, re.IGNORECASE)
+            if len(ativos) > 1:
+                afs = ativos
+        # 3) "AF: <num>"
+        if not afs:
+            match_af = re.search(r'\bAF\s*[:.\s]*([\d/]+)', comentario, re.IGNORECASE)
+            if match_af:
+                afs = [a for a in match_af.group(1).split("/") if a.strip()]
+
+        # Extract description: between "Comentário NF:" and "- VALOR CONTÁBIL UNITÁRIO"
+        match_desc = re.search(
+            r'COMENT[AÁ]RIO\s+NF\s*:\s*(.*?)\s*[-–]\s*VALOR\s+CONT[AÁ]BIL\s+UNIT[AÁ]RIO',
+            comentario, re.IGNORECASE | re.DOTALL
+        )
+
+        if afs:
+            if match_desc:
+                texto_desc = match_desc.group(1).strip()
+                desc_itens = [d.strip() for d in texto_desc.split("/") if d.strip()]
+                if len(afs) > 1 and len(desc_itens) > 1:
+                    # Múltiplos AFs e múltiplos itens: casa por índice
+                    resultado["itens"] = afs
+                    resultado["descricoes"] = desc_itens
+                else:
+                    resultado["itens"] = afs
+                    resultado["descricao"] = texto_desc
+            else:
+                resultado["itens"] = afs
+    else:
+        # Microcomputer pattern: "5 MICROCOMPUTADOR ( AR: ... AF's: 81082/81084/... E AF:81427 ...)"
+        match_micro = re.search(
+            r'(?<![\d])(?<!\bID\s)(\d+)\s+(.+?)\s*\(\s*AR:([^)]*)\)',
+            comentario, re.IGNORECASE
+        )
+        if match_micro:
+            afs = []
+            for m in re.finditer(r'\bAF\'?s?\s*:\s*([\d/]+)', match_micro.group(3), re.IGNORECASE):
+                afs.extend(a for a in m.group(1).split("/") if a.strip())
+            if afs:
+                resultado["itens"] = afs
+                resultado["descricao"] = match_micro.group(2).strip().upper()
+        else:
+            # Extract items: between "PRIMEIRA SAÍDA -" and "- VALOR CONTÁBIL UNITÁRIO"
+            match_itens = re.search(
+                r'PRIMEIRA\s+SA[IÍ]DA\s*[-–]\s*(.*?)\s*[-–]\s*VALOR\s+CONT[AÁ]BIL\s+UNIT[AÁ]RIO',
+                comentario, re.IGNORECASE
+            )
+            if match_itens:
+                texto_itens = match_itens.group(1).strip()
+                itens = [item.strip() for item in texto_itens.split("/") if item.strip()]
+
+                # Se item tiver "(AF:<número>" entre parênteses, o AF é o item e o texto
+                # antes do parênteses é a descrição. Ex: "LEITOR ZEBRA (AF:81110 AR: C04547)"
+                descricoes = []
+                novos_itens = []
+                tem_af = False
+                for it in itens:
+                    m_af = re.search(r'\(\s*AF\s*:\s*(\d+)', it, re.IGNORECASE)
+                    if m_af:
+                        tem_af = True
+                        novos_itens.append(m_af.group(1))
+                        desc = re.sub(r'\s*\(\s*AF\s*:.*$', '', it, flags=re.IGNORECASE).strip()
+                        descricoes.append(desc)
+                    else:
+                        novos_itens.append(it)
+                        descricoes.append("")
+                resultado["itens"] = novos_itens
+                if tem_af:
+                    resultado["descricoes"] = descricoes
 
     # Extract costs: between "VALOR CONTÁBIL UNITÁRIO" and "- ATIVO"
     match_custos = re.search(
@@ -132,6 +214,26 @@ HEADERS_TABELA = [
 
 INDICE_ITEM = 0
 INDICE_QTDE = 2
+
+
+class DelegateItemCor(QStyledItemDelegate):
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        if option.state & QStyle.StateFlag.State_Selected:
+            brush = index.data(Qt.ItemDataRole.ForegroundRole)
+            if isinstance(brush, QBrush) and brush.style() != Qt.BrushStyle.NoBrush:
+                option.palette.setBrush(QPalette.ColorRole.Text, brush)
+                option.palette.setBrush(QPalette.ColorRole.HighlightedText, brush)
+
+    def createEditor(self, parent, option, index):
+        editor = super().createEditor(parent, option, index)
+        if isinstance(editor, QLineEdit):
+            def aplicar_cor(texto):
+                cor = "red" if len(texto) > 18 else "#374151"
+                editor.setStyleSheet(f"color: {cor};")
+            aplicar_cor(index.data(Qt.ItemDataRole.DisplayRole) or "")
+            editor.textChanged.connect(aplicar_cor)
+        return editor
 
 
 class DigitarAEPage(QWidget):
@@ -301,6 +403,12 @@ class DigitarAEPage(QWidget):
         self.tabela.verticalHeader().setDefaultSectionSize(28)
         self.tabela.verticalHeader().setMinimumSectionSize(24)
         self.tabela.verticalHeader().setVisible(False)
+        self.tabela.setStyleSheet("""
+            QLineEdit { padding: 0; border-radius: 0; }
+        """)
+        self._aplicando_cor = False
+        self.tabela.itemChanged.connect(self._aplicar_cor_item)
+        self.tabela.setItemDelegate(DelegateItemCor())
         card_layout.addWidget(self.tabela)
 
         pagina_esquerda_layout.addWidget(card_principal)
@@ -432,6 +540,15 @@ class DigitarAEPage(QWidget):
         if not ok or not comentario.strip():
             return
 
+        if "STATFIXO" in comentario:
+            idx = self.combo_ae.findText("STATFIXO")
+            if idx >= 0:
+                self.combo_ae.setCurrentIndex(idx)
+        elif "STAFINDD" in comentario:
+            idx = self.combo_ae.findText("STAFINDD")
+            if idx >= 0:
+                self.combo_ae.setCurrentIndex(idx)
+
         dados = _parse_comentario_nf(comentario)
 
         if not dados["itens"]:
@@ -478,6 +595,7 @@ class DigitarAEPage(QWidget):
 
     def _popular_tabela_de_comentario(self, dados):
         """Populate the table from parsed comment data."""
+        self._limpar()
         itens = dados["itens"]
         custos = dados["custos"]
         comentario = dados.get("comentario_original", "")
@@ -505,23 +623,28 @@ class DigitarAEPage(QWidget):
                     return cf
             return None
 
-        # Determine default Classe based on comment content
-        classe_padrao = ""
-        if re.search(r'TRANSFERENCIA\s+DE\s+AF\s+PRIMEIRA\s+SA[IÍ]DA', comentario, re.IGNORECASE):
-            classe_padrao = "ISU"
+        forca_isu = "STAFINDD" in comentario
+        cf_classe_statfixo = "STATFIXO" in comentario
 
         for i, item_nome in enumerate(itens):
             row = self.tabela.rowCount()
             self.tabela.insertRow(row)
             
             nome_chave = item_nome.strip().upper()
-            cf_match = encontrar_correspondencia(nome_chave)
+            descricoes = dados.get("descricoes", [])
+            descricao = dados.get("descricao", "")
+            if i < len(descricoes) and descricoes[i].strip():
+                descricao = descricoes[i].strip()
+
+            # CF lookup usa a descrição quando disponível, senão o item
+            referencia_cf = descricao.upper() if descricao else nome_chave
+            cf_match = encontrar_correspondencia(referencia_cf)
 
             # Item (col 0) - use the item name
             self.tabela.setItem(row, 0, QTableWidgetItem(nome_chave))
 
-            # Descrição (col 1) - same as item name
-            self.tabela.setItem(row, 1, QTableWidgetItem(nome_chave))
+            # Descrição (col 1) - description from comment or same as item name
+            self.tabela.setItem(row, 1, QTableWidgetItem(descricao or nome_chave))
 
             # Qtde (col 2) - always 1
             self.tabela.setItem(row, 2, QTableWidgetItem("1"))
@@ -537,12 +660,12 @@ class DigitarAEPage(QWidget):
             clas_fiscal = cf_match.get("classificacao_fiscal", "") if cf_match else ""
             self.tabela.setItem(row, 5, QTableWidgetItem(clas_fiscal))
 
-            # Classe (col 6) - Matches CF lookup or falls back to "ISU" if comment matches transfer
+            # Classe (col 6) - ISU se comentário tem STAFINDD; STATFIXO usa a CF pela descrição
             classe_val = ""
-            if cf_match and cf_match.get("classe_imposto"):
-                classe_val = cf_match.get("classe_imposto")
-            else:
-                classe_val = classe_padrao
+            if forca_isu:
+                classe_val = "ISU"
+            elif cf_classe_statfixo and cf_match:
+                classe_val = cf_match.get("classe_imposto", "")
             self.tabela.setItem(row, 6, QTableWidgetItem(classe_val))
 
             # C-M (col 7)
@@ -650,8 +773,55 @@ class DigitarAEPage(QWidget):
                 for col, valor in enumerate(dados):
                     self.tabela.setItem(row_idx, col, QTableWidgetItem(valor))
 
+        self._completar_cf_pela_descricao()
+
+    def _buscar_cf(self, texto):
+        cf_caminho = _caminho_classificacao_fiscal_json()
+        try:
+            with open(cf_caminho, "r", encoding="utf-8") as f:
+                cf_dados = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return None
+        texto_upper = texto.strip().upper()
+        for cf in cf_dados:
+            item_cf = cf.get("item", "").strip().upper()
+            if not item_cf:
+                continue
+            if item_cf in texto_upper or texto_upper in item_cf:
+                return cf
+        return None
+
+    def _completar_cf_pela_descricao(self):
+        for r in range(self.tabela.rowCount()):
+            cf5 = self.tabela.item(r, 5)
+            cf6 = self.tabela.item(r, 6)
+            v5 = cf5.text() if cf5 else ""
+            v6 = cf6.text() if cf6 else ""
+            if v5.strip().upper() == "N/A" and v6.strip().upper() == "N/A":
+                desc_obj = self.tabela.item(r, 1)
+                desc = desc_obj.text() if desc_obj else ""
+                cf = self._buscar_cf(desc)
+                if cf:
+                    self.tabela.setItem(r, 5, QTableWidgetItem(cf.get("classificacao_fiscal", "")))
+                    self.tabela.setItem(r, 6, QTableWidgetItem(cf.get("classe_imposto", "")))
+
     def _limpar(self):
         self.tabela.setRowCount(0)
+
+    def _aplicar_cor_item(self, item):
+        if self._aplicando_cor or item.column() != 0:
+            return
+        self._aplicando_cor = True
+        try:
+            vermelho = len(item.text()) > 18
+            cor_atual = item.foreground().color().name().lower()
+            eh_vermelho = cor_atual in ("#ff0000", "red")
+            if vermelho and not eh_vermelho:
+                item.setForeground(QColor("red"))
+            elif not vermelho and eh_vermelho:
+                item.setForeground(QColor("#374151"))
+        finally:
+            self._aplicando_cor = False
 
     def _salvar_anotacoes(self):
         texto = self.campo_anotacoes.toPlainText()
@@ -747,6 +917,7 @@ class ClassificacaoFiscalDialog(QDialog):
         self.campo_item = QLineEdit()
         self.campo_item.setPlaceholderText("Ex: CAVITYPLUG")
         self.campo_item.setFixedHeight(32)
+        self.campo_item.textChanged.connect(self._filtrar_tabela)
         form.addRow("Item:", self.campo_item)
 
         self.campo_clas_fiscal = QLineEdit()
@@ -792,7 +963,19 @@ class ClassificacaoFiscalDialog(QDialog):
 
         self.tabela = QTableWidget(0, len(self.HEADERS))
         self.tabela.setHorizontalHeaderLabels(self.HEADERS)
-        self.tabela.horizontalHeader().setStretchLastSection(True)
+        header = self.tabela.horizontalHeader()
+        percentuais = [0.40, 0.25, 0.25, 0.10]
+        for c in range(self.tabela.columnCount()):
+            header.setSectionResizeMode(c, QHeaderView.ResizeMode.Interactive)
+        self._ajustar_colunas = lambda: [
+            header.resizeSection(c, max(30, int(self.tabela.viewport().width() * p)))
+            for c, p in enumerate(percentuais)
+        ] if self.tabela.viewport().width() > 0 else None
+        self.tabela.resizeEvent = lambda e: (
+            self._ajustar_colunas(),
+            QTableWidget.resizeEvent(self.tabela, e)
+        )
+        self._ajustar_colunas()
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabela.setAlternatingRowColors(True)
         self.tabela.verticalHeader().setVisible(False)
@@ -813,13 +996,21 @@ class ClassificacaoFiscalDialog(QDialog):
                 itens = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             itens = []
-        for item in itens:
+        for item in sorted(itens, key=lambda x: x.get("item", "").upper()):
             row = self.tabela.rowCount()
             self.tabela.insertRow(row)
             self.tabela.setItem(row, 0, QTableWidgetItem(item.get("item", "")))
             self.tabela.setItem(row, 1, QTableWidgetItem(item.get("classificacao_fiscal", "")))
             self.tabela.setItem(row, 2, QTableWidgetItem(item.get("classe_imposto", "")))
             self.tabela.setItem(row, 3, QTableWidgetItem(item.get("cm", "")))
+        self._filtrar_tabela(self.campo_item.text())
+
+    def _filtrar_tabela(self, texto):
+        texto = texto.strip().upper()
+        for row in range(self.tabela.rowCount()):
+            item_obj = self.tabela.item(row, 0)
+            nome = item_obj.text().upper() if item_obj else ""
+            self.tabela.setRowHidden(row, bool(texto) and texto not in nome)
 
     def _ler_json(self):
         caminho = self._caminho_json()
