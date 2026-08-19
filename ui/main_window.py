@@ -8,10 +8,7 @@ from PySide6.QtGui import QFont
 from ui.styles import FUSION_QSS
 from ui.pages.inicio_page import InicioPage
 from ui.pages.programacao_agulhas_page import ProgramacaoAgulhasPage
-from ui.pages.digitar_ae_page import DigitarAEPage
 from ui.pages.dpp_ativos_page import DppAtivosPage
-from ui.pages.transferencia_page import TransferenciaPage
-from ui.pages.remove_loc_duplicadas_page import RemoveLocDuplicadasPage
 from ui.pages.estoque_page import EstoquePage
 from ui.pages.itens_zero_page import ItensZeroPage
 from ui.pages.controle_pedidos_page import ControlePedidosPage
@@ -19,12 +16,11 @@ from ui.pages.reajuste_precos_page import ReajustePrecosPage
 from ui.pages.settings_page import SettingsPage
 from ui.pages.fornecedores_page import FornecedoresPage
 from ui.pages.pedidos_pendentes_page import PedidosPendentesPage
-from ui.pages.testar_contas_page import TestarContasPage
-from ui.pages.baixa_3_7_page import Baixa37Page
 from ui.pages.acuracidade_page import AcuracidadePage
 from ui.pages.fresh_start_page import FreshStartPage
 from ui.pages.lembretes_page import LembretesPage
 from ui.pages.material_holders_page import MaterialHoldersPage
+from ui.pages.automacoes_page import AutomacoesPage
 
 
 SIDEBAR_WIDTH = 240
@@ -48,6 +44,7 @@ NAV_ICONS = {
     "reajuste_precos": ("mdi6.tag-arrow-up-outline", "price"),
     "dpp_ativos": ("mdi6.archive-arrow-down-outline", "archive"),
     "material_holders": ("mdi6.view-grid-outline", "grid"),
+    "automacoes": ("fa6s.bolt", "bolt"),
     "configuracoes": ("fa6s.gear", "gear"),
 }
 
@@ -80,7 +77,6 @@ class MainWindow(QMainWindow):
         self.resize(1280, 800)
         self.setStyleSheet(FUSION_QSS)
         self._collapsed = False
-        self._automacoes_expanded = True
 
         container = QWidget()
         self.setCentralWidget(container)
@@ -181,78 +177,29 @@ class MainWindow(QMainWindow):
             ("fresh_start",         "Fresh Start",         False),
             ("lembretes",           "Lembretes",           False),
             ("material_holders",    "Material Holders",    False),
-            (None, "Automações", False),
-            ("digitar_ae",        "Digitar AE",            True),
-            ("transferencia",     "Transferência",         True),
-            ("remove_loc_duplicadas", "Remove Loc. Dup.",  True),
-            ("testar_contas",     "Testar Contas",         True),
-            ("baixa_3_7_page",    "Baixa 3.7",             True),
-            ("fornecedores",      "Fornecedores",          False),
-            ("reajuste_precos",   "Reajuste de Preços",    False),
-            ("dpp_ativos",        "DPP Ativos",            False),
-            ("configuracoes",     "Configurações",         False),
+            ("automacoes",          "Automações",          False),
+            ("fornecedores",        "Fornecedores",        False),
+            ("reajuste_precos",     "Reajuste de Preços",  False),
+            ("dpp_ativos",          "DPP Ativos",          False),
+            ("configuracoes",       "Configurações",       False),
         ]
 
-        self._subitem_keys = {
-            "digitar_ae", "transferencia", "remove_loc_duplicadas", "testar_contas", "baixa_3_7_page"
-        }
-
-        self._btn_automacoes = None
-        self._submenu_widget = QWidget()
-        submenu_layout = QVBoxLayout(self._submenu_widget)
-        submenu_layout.setContentsMargins(0, 0, 0, 0)
-        submenu_layout.setSpacing(2)
-        self._submenu_widget.setVisible(False)
-        self._subitem_buttons = []
-
         for key, label, is_subitem in self._nav_items:
-            if key is None:
-                btn = QPushButton(self._icon('fa6s.bolt', '#7c3aed'), f"  {label}")
-                btn.setObjectName("tabButton")
-                btn.setCheckable(False)
-                btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setFixedHeight(38)
-                btn.setStyleSheet(
-                    "QPushButton#tabButton { color: #7c3aed; font-weight: 600; "
-                    "font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }"
-                )
-                btn.setEnabled(False)
-                nav_layout.addWidget(btn)
-                self._btn_automacoes = btn
-                self._submenu_widget.setVisible(True)
-                nav_layout.addWidget(self._submenu_widget)
-            elif is_subitem:
-                icon_id = NAV_ICONS.get(key, ("mdi6.circle-outline",))[0]
-                icon = self._icon(icon_id, '#94a3b8')
-                btn = QPushButton(icon, f"  {label}") if icon else QPushButton(f"  •  {label}")
-                btn.setObjectName("tabSubButton")
-                btn.setCheckable(True)
-                btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setFixedHeight(34)
-                btn.clicked.connect(lambda checked, k=key: self._switch_tab(k))
-                submenu_layout.addWidget(btn)
-                self.tabs[key] = btn
-                self.buttons.append(btn)
-                self._subitem_buttons.append(btn)
-            else:
-                icon_id = NAV_ICONS.get(key, ("mdi6.circle-outline",))[0]
-                icon = self._icon(icon_id, '#64748b')
-                btn = QPushButton(icon, f"  {label}") if icon else QPushButton(f"  {label}")
-                btn.setObjectName("tabButton")
-                btn.setCheckable(True)
-                btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setFixedHeight(38)
-                btn.clicked.connect(lambda checked, k=key: self._switch_tab(k))
-                nav_layout.addWidget(btn)
-                self.tabs[key] = btn
-                self.buttons.append(btn)
+            icon_id = NAV_ICONS.get(key, ("mdi6.circle-outline",))[0]
+            icon = self._icon(icon_id, '#64748b')
+            btn = QPushButton(icon, f"  {label}") if icon else QPushButton(f"  {label}")
+            btn.setObjectName("tabButton")
+            btn.setCheckable(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(38)
+            btn.clicked.connect(lambda checked, k=key: self._switch_tab(k))
+            nav_layout.addWidget(btn)
+            self.tabs[key] = btn
+            self.buttons.append(btn)
 
         nav_layout.addStretch()
         sidebar_layout.addWidget(nav_scroll)
         self.sidebar.raise_()
-
-    def _toggle_automacoes(self):
-        pass
 
     def _build_content(self, root_layout):
         content = QWidget()
@@ -276,11 +223,7 @@ class MainWindow(QMainWindow):
             ("fresh_start",           FreshStartPage),
             ("lembretes",             LembretesPage),
             ("material_holders",      MaterialHoldersPage),
-            ("digitar_ae",            DigitarAEPage),
-            ("transferencia",         TransferenciaPage),
-            ("remove_loc_duplicadas", RemoveLocDuplicadasPage),
-            ("testar_contas",         TestarContasPage),
-            ("baixa_3_7_page",         Baixa37Page),
+            ("automacoes",            AutomacoesPage),
             ("fornecedores",          FornecedoresPage),
             ("reajuste_precos",       ReajustePrecosPage),
             ("dpp_ativos",            DppAtivosPage),
@@ -299,8 +242,6 @@ class MainWindow(QMainWindow):
             btn.setChecked(False)
         self.tabs[key].setChecked(True)
         self.stacked.setCurrentWidget(self.pages[key])
-        if key in self._subitem_keys and not self._automacoes_expanded:
-            self._toggle_automacoes()
 
     def _atualizar_margem_conteudo(self):
         if hasattr(self, "content_layout"):
@@ -312,13 +253,7 @@ class MainWindow(QMainWindow):
             self.subtitulo.setVisible(False)
             self.btn_toggle.setVisible(False)
             for key, label, is_subitem in self._nav_items:
-                if key is None:
-                    icon = self._icon('fa6s.bolt', '#7c3aed')
-                    if icon:
-                        self._btn_automacoes.setIcon(icon)
-                    self._btn_automacoes.setText("")
-                    self._btn_automacoes.setFixedWidth(58)
-                elif key in self.tabs:
+                if key in self.tabs:
                     icon_id = NAV_ICONS.get(key, ("mdi6.circle-outline",))[0]
                     icon = self._icon(icon_id, '#64748b')
                     if icon:
@@ -330,11 +265,7 @@ class MainWindow(QMainWindow):
             self.subtitulo.setVisible(True)
             self.btn_toggle.setVisible(True)
             for key, label, is_subitem in self._nav_items:
-                if key is None:
-                    self._btn_automacoes.setText(f"  Automações")
-                    self._btn_automacoes.setFixedWidth(0)
-                    self._btn_automacoes.setMaximumWidth(16777215)
-                elif key in self.tabs:
+                if key in self.tabs:
                     btn = self.tabs[key]
                     btn.setText(f"  {label}")
                     icon_id = NAV_ICONS.get(key, ("mdi6.circle-outline",))[0]

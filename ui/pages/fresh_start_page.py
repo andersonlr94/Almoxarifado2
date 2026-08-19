@@ -88,7 +88,7 @@ def _carregar_historico():
         if len(partes) != 3:
             continue
         try:
-            numeros = tuple(_parse_numero(v) for v in partes)
+            numeros = tuple(float(v.replace(" ", "")) for v in partes)
         except ValueError:
             continue
         registros.append((data.strip(), *numeros))
@@ -114,14 +114,15 @@ class FreshStartPage(QWidget):
     def __init__(self):
         super().__init__()
         self.dados = []
+        self._estado_grafico = 0
         self._setup_ui()
         self._carregar_dados()
 
     # ── UI ──
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(20, 20, 20, 20)
+        self.layout.setSpacing(16)
 
         header_layout = QHBoxLayout()
         header_texts = QVBoxLayout()
@@ -134,44 +135,44 @@ class FreshStartPage(QWidget):
         header_texts.addWidget(subtitulo)
         header_layout.addLayout(header_texts)
         header_layout.addStretch()
-        layout.addLayout(header_layout)
+        self.layout.addLayout(header_layout)
 
-        table_card = QWidget()
-        table_card.setObjectName("pageCard")
-        table_card_layout = QVBoxLayout(table_card)
+        self.table_card = QWidget()
+        self.table_card.setObjectName("pageCard")
+        table_card_layout = QVBoxLayout(self.table_card)
         table_card_layout.setContentsMargins(18, 14, 18, 14)
         table_card_layout.setSpacing(10)
 
         # ── Filtro ──
-        filter_row = QHBoxLayout()
-        filter_row.setSpacing(8)
+        self.filter_row = QHBoxLayout()
+        self.filter_row.setSpacing(8)
 
         btn_atualizar = QPushButton(qtawesome.icon('fa6s.rotate', color='#ffffff'), "  Atualizar")
         btn_atualizar.setObjectName("btnPrimary")
         btn_atualizar.setFixedHeight(32)
         btn_atualizar.clicked.connect(self._atualizar_do_prn)
-        filter_row.addWidget(btn_atualizar)
+        self.filter_row.addWidget(btn_atualizar)
 
         btn_exportar = QPushButton(qtawesome.icon('fa6s.file-excel', color='#ffffff'), "  Exportar Excel")
         btn_exportar.setObjectName("btnPrimary")
         btn_exportar.setFixedHeight(32)
         btn_exportar.clicked.connect(self._exportar_excel)
-        filter_row.addWidget(btn_exportar)
+        self.filter_row.addWidget(btn_exportar)
 
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("Pesquisar...")
         self.campo_filtro.setFixedHeight(30)
         self.campo_filtro.setFixedWidth(220)
         self.campo_filtro.textChanged.connect(self._aplicar_filtro)
-        filter_row.addWidget(self.campo_filtro)
+        self.filter_row.addWidget(self.campo_filtro)
 
-        filter_row.addStretch()
+        self.filter_row.addStretch()
 
         self.label_contador = QLabel("0 itens")
         self.label_contador.setObjectName("statusLabel")
-        filter_row.addWidget(self.label_contador)
+        self.filter_row.addWidget(self.label_contador)
 
-        table_card_layout.addLayout(filter_row)
+        table_card_layout.addLayout(self.filter_row)
 
         self.tabela = QTableWidget(0, len(self.COLUNAS))
         self.tabela.setObjectName("tabelaFreshStart")
@@ -192,61 +193,85 @@ class FreshStartPage(QWidget):
         self.tabela.itemChanged.connect(self._item_modificado)
         table_card_layout.addWidget(self.tabela)
 
-        total_row = QHBoxLayout()
-        total_row.setSpacing(8)
-        total_row.addStretch()
+        self.total_row = QHBoxLayout()
+        self.total_row.setSpacing(8)
+        self.total_row.addStretch()
         label_total = QLabel("Valor total zCentral:")
         label_total.setObjectName("statusLabel")
-        total_row.addWidget(label_total)
+        self.total_row.addWidget(label_total)
         self.label_total_zcentral = QLabel("R$ 0,00")
         self.label_total_zcentral.setObjectName("statusLabel")
         self.label_total_zcentral.setStyleSheet("font-size: 15px; font-weight: 700; color: #6366f1;")
-        total_row.addWidget(self.label_total_zcentral)
+        self.total_row.addWidget(self.label_total_zcentral)
 
-        total_row.addSpacing(24)
+        self.total_row.addSpacing(24)
 
         label_total_dph = QLabel("Valor DPH:")
         label_total_dph.setObjectName("statusLabel")
-        total_row.addWidget(label_total_dph)
+        self.total_row.addWidget(label_total_dph)
         self.label_total_dph = QLabel("R$ 0,00")
         self.label_total_dph.setObjectName("statusLabel")
         self.label_total_dph.setStyleSheet("font-size: 15px; font-weight: 700; color: #16a34a;")
-        total_row.addWidget(self.label_total_dph)
+        self.total_row.addWidget(self.label_total_dph)
 
-        total_row.addSpacing(24)
+        self.total_row.addSpacing(24)
 
         label_total_dif = QLabel("Valor Central zCentral-DPH:")
         label_total_dif.setObjectName("statusLabel")
-        total_row.addWidget(label_total_dif)
+        self.total_row.addWidget(label_total_dif)
         self.label_total_dph_dif = QLabel("R$ 0,00")
         self.label_total_dph_dif.setObjectName("statusLabel")
         self.label_total_dph_dif.setStyleSheet("font-size: 15px; font-weight: 700; color: #ea580c;")
-        total_row.addWidget(self.label_total_dph_dif)
-        table_card_layout.addLayout(total_row)
+        self.total_row.addWidget(self.label_total_dph_dif)
+        table_card_layout.addLayout(self.total_row)
 
-        layout.addWidget(table_card)
+        self.layout.addWidget(self.table_card)
 
         # ── Gráfico de histórico ──
-        chart_card = QWidget()
-        chart_card.setObjectName("pageCard")
-        chart_card_layout = QVBoxLayout(chart_card)
-        chart_card_layout.setContentsMargins(18, 14, 18, 14)
-        chart_card_layout.setSpacing(10)
+        self.chart_card = QWidget()
+        self.chart_card.setObjectName("pageCard")
+        self.chart_card_layout = QVBoxLayout(self.chart_card)
+        self.chart_card_layout.setContentsMargins(18, 14, 18, 14)
+        self.chart_card_layout.setSpacing(10)
 
         chart_header = QHBoxLayout()
         chart_titulo = QLabel("Evolução dos valores")
         chart_titulo.setObjectName("pageSubtitle")
         chart_header.addWidget(chart_titulo)
         chart_header.addStretch()
-        chart_card_layout.addLayout(chart_header)
+
+        self.botao_grafico = QPushButton()
+        self.botao_grafico.setObjectName("btnExpandirGrafico")
+        self.botao_grafico.setIcon(qtawesome.icon('fa6s.window-minimize', color='#94a3b8'))
+        self.botao_grafico.setIconSize(QSize(14, 14))
+        self.botao_grafico.setFixedSize(28, 28)
+        self.botao_grafico.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.botao_grafico.setToolTip("Expandir gráfico")
+        self.botao_grafico.setStyleSheet(
+            "QPushButton#btnExpandirGrafico {"
+            " background-color: transparent; border: 1px solid #e2e8f0;"
+            " border-radius: 8px;"
+            "}"
+            "QPushButton#btnExpandirGrafico:hover {"
+            " background-color: #eef2ff; border-color: #c7d2fe;"
+            "}"
+        )
+        self.botao_grafico.clicked.connect(self._alternar_grafico)
+        chart_header.addWidget(self.botao_grafico)
+
+        self.chart_card_layout.addLayout(chart_header)
 
         self.figure = Figure(figsize=(8, 3.2), facecolor="none")
         self.figure.subplots_adjust(left=0.06, right=0.98, top=0.92, bottom=0.18)
         self.canvas = FigureCanvas(self.figure)
-        self.canvas.setMinimumHeight(260)
-        chart_card_layout.addWidget(self.canvas)
+        self.chart_card_layout.addWidget(self.canvas)
 
-        layout.addWidget(chart_card)
+        self.layout.addWidget(self.chart_card)
+        self.layout.setStretch(0, 0)
+        self.layout.setStretch(1, 1)
+        self.layout.setStretch(2, 1)
+
+        self._aplicar_estado_grafico()
 
         self._atualizar_grafico()
 
@@ -450,6 +475,48 @@ class FreshStartPage(QWidget):
             labelcolor="#334155",
         )
         self.canvas.draw()
+
+    def _alternar_grafico(self):
+        self._estado_grafico = (self._estado_grafico + 1) % 3
+        self._aplicar_estado_grafico()
+
+    def _aplicar_estado_grafico(self):
+        maximizado = self._estado_grafico == 2
+        for i in range(self.filter_row.count()):
+            item = self.filter_row.itemAt(i)
+            if item.widget():
+                item.widget().setVisible(not maximizado)
+        self.tabela.setVisible(not maximizado)
+        if self._estado_grafico == 0:
+            self.canvas.setVisible(False)
+            self.chart_card.setFixedHeight(40)
+            self.chart_card_layout.setContentsMargins(10, 4, 10, 4)
+            self.chart_card_layout.setSpacing(0)
+            self.layout.setStretch(2, 0)
+            self.botao_grafico.setIcon(qtawesome.icon('fa6s.window-minimize', color='#94a3b8'))
+            self.botao_grafico.setToolTip("Expandir para meia tela")
+        elif self._estado_grafico == 1:
+            self.canvas.setVisible(True)
+            self.chart_card.setMinimumHeight(0)
+            self.chart_card.setMaximumHeight(16777215)
+            self.chart_card_layout.setContentsMargins(18, 14, 18, 14)
+            self.chart_card_layout.setSpacing(10)
+            self.canvas.setMinimumHeight(260)
+            self.canvas.setMaximumHeight(16777215)
+            self.layout.setStretch(2, 1)
+            self.botao_grafico.setIcon(qtawesome.icon('fa6s.window-restore', color='#6366f1'))
+            self.botao_grafico.setToolTip("Maximizar gráfico")
+        else:
+            self.canvas.setVisible(True)
+            self.chart_card.setMinimumHeight(0)
+            self.chart_card.setMaximumHeight(16777215)
+            self.chart_card_layout.setContentsMargins(18, 14, 18, 14)
+            self.chart_card_layout.setSpacing(10)
+            self.canvas.setMinimumHeight(260)
+            self.canvas.setMaximumHeight(16777215)
+            self.layout.setStretch(2, 8)
+            self.botao_grafico.setIcon(qtawesome.icon('fa6s.window-maximize', color='#6366f1'))
+            self.botao_grafico.setToolTip("Minimizar gráfico")
 
     # ── Custo zCentral ──
     def _ler_custos_unitarios(self):

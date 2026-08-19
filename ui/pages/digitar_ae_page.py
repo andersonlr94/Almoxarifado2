@@ -246,8 +246,8 @@ class DigitarAEPage(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 32, 32, 32)
-        layout.setSpacing(16)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(8)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setChildrenCollapsible(False)
@@ -260,8 +260,8 @@ class DigitarAEPage(QWidget):
         card_principal = QWidget()
         card_principal.setObjectName("pageCard")
         card_layout = QVBoxLayout(card_principal)
-        card_layout.setContentsMargins(28, 28, 28, 28)
-        card_layout.setSpacing(16)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(12)
 
         titulo = QLabel("Digitar AE")
         titulo.setObjectName("pageTitle")
@@ -415,6 +415,7 @@ class DigitarAEPage(QWidget):
         splitter.addWidget(pagina_esquerda)
 
         pagina_direita = QWidget()
+        pagina_direita.setMinimumWidth(200)
         pagina_direita_layout = QVBoxLayout(pagina_direita)
         pagina_direita_layout.setContentsMargins(0, 0, 0, 0)
         pagina_direita_layout.setSpacing(16)
@@ -422,7 +423,7 @@ class DigitarAEPage(QWidget):
         card_anotacoes = QWidget()
         card_anotacoes.setObjectName("pageCard")
         card_anotacoes_layout = QVBoxLayout(card_anotacoes)
-        card_anotacoes_layout.setContentsMargins(28, 28, 28, 28)
+        card_anotacoes_layout.setContentsMargins(16, 16, 16, 16)
         card_anotacoes_layout.setSpacing(12)
 
         linha_titulo_anotacoes = QHBoxLayout()
@@ -446,6 +447,7 @@ class DigitarAEPage(QWidget):
         card_anotacoes_layout.addLayout(linha_titulo_anotacoes)
 
         self.campo_anotacoes = QPlainTextEdit()
+        self.campo_anotacoes.setMinimumWidth(0)
         self.campo_anotacoes.setPlaceholderText("Digite suas anotações aqui...")
         self.campo_anotacoes.installEventFilter(self)
         card_anotacoes_layout.addWidget(self.campo_anotacoes)
@@ -453,8 +455,10 @@ class DigitarAEPage(QWidget):
         pagina_direita_layout.addWidget(card_anotacoes)
         splitter.addWidget(pagina_direita)
 
-        splitter.setStretchFactor(0, 20)
-        splitter.setStretchFactor(1, 15)
+        splitter.setStretchFactor(0, 8)
+        splitter.setStretchFactor(1, 2)
+        splitter.setSizes([928, 232])
+        splitter.setHandleWidth(8)
 
         layout.addWidget(splitter)
         self._preencher_dados_ae()
