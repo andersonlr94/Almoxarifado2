@@ -3,7 +3,7 @@ import os
 import subprocess
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QDialog, QFormLayout, QApplication
+    QPushButton, QDialog, QFormLayout, QApplication, QMessageBox
 )
 from ui.regras_automacao import digitar_texto, enter
 from urllib.parse import quote
@@ -75,6 +75,7 @@ class CredentialsDialog(QDialog):
 class DppAtivosPage(QWidget):
     def __init__(self):
         super().__init__()
+        self._credenciais = None
         self._setup_ui()
 
     from urllib.parse import quote
@@ -96,21 +97,32 @@ class DppAtivosPage(QWidget):
         if not winscp:
             raise Exception("WinSCP.com não encontrado.")
 
-        senha_url = quote(senha)
+        usuario_url = quote(usuario, safe="")
+        senha_url = quote(senha, safe="")
 
         comando = [
             winscp,
+            #"/ini=nul",
             "/command",
-            f"open sftp://{usuario}:{senha_url}@10.251.70.27/",
+            "option batch abort",
+            "option confirm off",
+            f"open sftp://{usuario_url}:{senha_url}@10.251.70.27:22/ ",
             f'get DPP.prn "{destino_local}"',
             "exit"
         ]
 
-        resultado = subprocess.run(
-            comando,
-            capture_output=True,
-            text=True
-        )
+        try:
+            resultado = subprocess.run(
+                comando,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+        except subprocess.TimeoutExpired as erro:
+            raise Exception(
+                "O WinSCP excedeu o limite de 60 segundos. "
+                "Verifique a conexão e o servidor SFTP."
+            ) from erro
 
         print(resultado.stdout)
         print(resultado.stderr)
@@ -207,21 +219,27 @@ class DppAtivosPage(QWidget):
             digitar_texto("DPP")
             enter(2)
 
-            dialog = CredentialsDialog(self)
+            if self._credenciais is None:
+                dialog = CredentialsDialog(self)
 
-            if dialog.exec() != QDialog.DialogCode.Accepted:
+                if dialog.exec() != QDialog.DialogCode.Accepted:
+                    self._atualizar_status(
+                        "Operação cancelada.",
+                        "#dc2626"
+                    )
+                    return
 
-                self._atualizar_status(
-                    "Operação cancelada.",
-                    "#dc2626"
-                )
+                dados = dialog.obter_dados()
+                self._credenciais = (dados["usuario"], dados["senha"])
+            else:
+                resposta = QMessageBox(self)
+                resposta.setWindowTitle("Relatório")
+                resposta.setText("Clicar em OK depois que o relatorio for gerado")
+                resposta.setIcon(QMessageBox.Icon.Information)
+                resposta.setStandardButtons(QMessageBox.StandardButton.Ok)
+                resposta.exec()
 
-                return
-
-            dados = dialog.obter_dados()
-
-            usuario = dados["usuario"]
-            senha = dados["senha"]
+            usuario, senha = self._credenciais
 
             pasta_almox = self._obter_pasta_almox()
 

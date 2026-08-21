@@ -1,6 +1,10 @@
 import json
 import os
+import shutil
+import subprocess
+import time
 from datetime import datetime
+from urllib.parse import quote
 
 import matplotlib
 matplotlib.use("QtAgg")
@@ -12,9 +16,12 @@ import qtawesome
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QStyledItemDelegate, QFileDialog, QMessageBox,
+    QStyledItemDelegate, QFileDialog, QMessageBox, QDialog,
 )
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QRect
+from PySide6.QtGui import QPainter, QColor
+from ui.regras_automacao import digitar_texto, enter
+from ui.pages.dpp_ativos_page import CredentialsDialog
 
 try:
     from openpyxl import Workbook
@@ -101,6 +108,52 @@ class EditorDelegate(QStyledItemDelegate):
         return QSize(base.width(), max(base.height(), 34))
 
 
+class ToggleSwitch(QPushButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setFixedSize(54, 26)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setText("QAD")
+        self.toggled.connect(self.update)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        rect = self.rect().adjusted(1, 1, -1, -1)
+        checked = self.isChecked()
+        track_color = QColor("#4f46e5") if checked else QColor("#e2e8f0")
+        border_color = QColor("#cbd5e1") if not checked else QColor("#4338ca")
+
+        painter.setPen(border_color)
+        painter.setBrush(track_color)
+        painter.drawRoundedRect(rect, 13, 13)
+
+        knob_size = 18
+        knob_margin = 4
+        knob_x = knob_margin if not checked else self.width() - knob_size - knob_margin
+        knob_rect = QRect(knob_x, 4, knob_size, self.height() - 8)
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#ffffff"))
+        painter.drawRoundedRect(knob_rect, 9, 9)
+
+        text = "QAD" if checked else "SCI"
+        painter.setPen(QColor("#ffffff") if checked else QColor("#334155"))
+        font = self.font()
+        font.setBold(True)
+        font.setPointSizeF(7)
+        painter.setFont(font)
+
+        if checked:
+            text_rect = QRect(8, 0, self.width() - 26, self.height())
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, text)
+        else:
+            text_rect = QRect(18, 0, self.width() - 26, self.height())
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, text)
+
+
 class FreshStartPage(QWidget):
     COLUNAS = [
         "Local", "Kardex", "Descrição", "Loc", "Qtde Qad", "Qtde Sci",
@@ -114,9 +167,89 @@ class FreshStartPage(QWidget):
     def __init__(self):
         super().__init__()
         self.dados = []
+        self._credenciais = None
         self._estado_grafico = 0
         self._setup_ui()
         self._carregar_dados()
+
+    def _atualizar_zcusto(self):
+        caminho = _caminho_zcusto()
+        if not caminho:
+            config.avisar_sem_pasta(self)
+            return
+
+        if not self._modo_busca_qad:
+            origem = os.path.normpath(r"C:\SciTemp\zCusto.prn")
+            if not os.path.isfile(origem):
+                QMessageBox.warning(
+                    self,
+                    "zCusto não encontrado",
+                    f"Não foi encontrado o arquivo zCusto.prn em:\n{origem}",
+                )
+                return
+            try:
+                os.makedirs(os.path.dirname(caminho), exist_ok=True)
+                shutil.copy2(origem, caminho)
+            except OSError as erro:
+                QMessageBox.warning(
+                    self,
+                    "Erro ao copiar zCusto",
+                    f"Não foi possível copiar o arquivo zCusto.prn.\n{erro}",
+                )
+                return
+        else:
+            try:
+                time.sleep(5)
+                digitar_texto("30.16.13.2")
+                enter(10)
+                digitar_texto("10912")
+                enter()
+                digitar_texto("10912")
+                enter()
+                digitar_texto("zcentral")
+                enter()
+                digitar_texto("zcentral")
+                enter(11)
+                digitar_texto("zCusto")
+                enter(3)
+
+                resposta = QMessageBox(self)
+                resposta.setWindowTitle("Relatório")
+                resposta.setText("Clicar em OK depois que o relatorio for gerado")
+                resposta.setIcon(QMessageBox.Icon.Information)
+                resposta.setStandardButtons(QMessageBox.StandardButton.Ok)
+                resposta.exec()
+
+                if self._credenciais is None:
+                    dialog = CredentialsDialog(self)
+                    if dialog.exec() != QDialog.DialogCode.Accepted:
+                        return
+                    dados = dialog.obter_dados()
+                    self._credenciais = (dados["usuario"], dados["senha"])
+
+                os.makedirs(os.path.dirname(caminho), exist_ok=True)
+                self._baixar_zcusto_com_winscp(
+                    self._credenciais[0], self._credenciais[1], caminho
+                )
+            except Exception as erro:
+                QMessageBox.warning(
+                    self,
+                    "Erro na automação zCusto",
+                    str(erro),
+                )
+                return
+
+            if not os.path.isfile(caminho) or os.path.getsize(caminho) == 0:
+                QMessageBox.warning(
+                    self,
+                    "zCusto não encontrado",
+                    "Não foi encontrado o arquivo zCusto.prn na pasta Almox.",
+                )
+                return
+
+        self._calcular_total_zcentral()
+        self._calcular_total_dph()
+        QMessageBox.information(self, "zCusto", "Valores do zCusto atualizados.")
 
     # ── UI ──
     def _setup_ui(self):
@@ -147,17 +280,24 @@ class FreshStartPage(QWidget):
         self.filter_row = QHBoxLayout()
         self.filter_row.setSpacing(8)
 
-        btn_atualizar = QPushButton(qtawesome.icon('fa6s.rotate', color='#ffffff'), "  Atualizar")
-        btn_atualizar.setObjectName("btnPrimary")
-        btn_atualizar.setFixedHeight(32)
-        btn_atualizar.clicked.connect(self._atualizar_do_prn)
-        self.filter_row.addWidget(btn_atualizar)
+        btn_zcentral = QPushButton(qtawesome.icon('fa6s.rotate', color='#ffffff'), "  zCentral")
+        btn_zcentral.setObjectName("btnPrimary")
+        btn_zcentral.setFixedHeight(32)
+        btn_zcentral.clicked.connect(self._atualizar_do_prn)
+        self.filter_row.addWidget(btn_zcentral)
 
-        btn_exportar = QPushButton(qtawesome.icon('fa6s.file-excel', color='#ffffff'), "  Exportar Excel")
-        btn_exportar.setObjectName("btnPrimary")
-        btn_exportar.setFixedHeight(32)
-        btn_exportar.clicked.connect(self._exportar_excel)
-        self.filter_row.addWidget(btn_exportar)
+        btn_zcusto = QPushButton(qtawesome.icon('fa6s.rotate', color='#ffffff'), "  zCusto")
+        btn_zcusto.setObjectName("btnPrimary")
+        btn_zcusto.setFixedHeight(32)
+        btn_zcusto.clicked.connect(self._atualizar_zcusto)
+        self.filter_row.addWidget(btn_zcusto)
+
+        self._modo_busca_qad = True
+        self.btn_busca = ToggleSwitch()
+        self.btn_busca.setChecked(True)
+        self.btn_busca.toggled.connect(self._alternar_busca)
+        self._atualizar_texto_busca()
+        self.filter_row.addWidget(self.btn_busca)
 
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("Pesquisar...")
@@ -171,6 +311,12 @@ class FreshStartPage(QWidget):
         self.label_contador = QLabel("0 itens")
         self.label_contador.setObjectName("statusLabel")
         self.filter_row.addWidget(self.label_contador)
+
+        btn_exportar = QPushButton(qtawesome.icon('fa6s.file-excel', color='#ffffff'), "  Exportar Excel")
+        btn_exportar.setObjectName("btnPrimary")
+        btn_exportar.setFixedHeight(32)
+        btn_exportar.clicked.connect(self._exportar_excel)
+        self.filter_row.addWidget(btn_exportar)
 
         table_card_layout.addLayout(self.filter_row)
 
@@ -314,6 +460,51 @@ class FreshStartPage(QWidget):
         if not caminho:
             config.avisar_sem_pasta(self)
             return
+
+        if self._modo_busca_qad:
+            try:
+                time.sleep(5)
+                for texto, quantidade in (
+                    ("3.6.6", 5),
+                    ("ZCENTRAL", 1),
+                    ("ZCENTRAL", 1),
+                    ("zCentral", 3),
+                ):
+                    digitar_texto(texto)
+                    enter(quantidade)
+
+                dialog = CredentialsDialog(self)
+                if dialog.exec() != dialog.DialogCode.Accepted:
+                    return
+
+                dados = dialog.obter_dados()
+                os.makedirs(os.path.dirname(caminho), exist_ok=True)
+                self._baixar_zcentral_com_winscp(
+                    dados["usuario"], dados["senha"], caminho
+                )
+            except Exception as erro:
+                QMessageBox.warning(self, "Erro ao baixar arquivo", str(erro))
+                return
+        else:
+            origem = os.path.normpath(r"C:\SciTemp\zCentral.prn")
+            if not os.path.exists(origem):
+                QMessageBox.warning(
+                    self,
+                    "Arquivo não encontrado",
+                    f"Não foi encontrado o arquivo zCentral.prn em:\n{origem}",
+                )
+                return
+            try:
+                os.makedirs(os.path.dirname(caminho), exist_ok=True)
+                shutil.copy2(origem, caminho)
+            except OSError:
+                QMessageBox.warning(
+                    self,
+                    "Erro ao copiar arquivo",
+                    "Não foi possível copiar o arquivo zCentral.prn da pasta SciTemp para a pasta Almox.",
+                )
+                return
+
         if not os.path.exists(caminho):
             config.avisar_sem_pasta(self)
             return
@@ -384,6 +575,69 @@ class FreshStartPage(QWidget):
         self._calcular_total_dph()
         self._registrar_atualizacao()
         self._atualizar_grafico()
+
+    def _baixar_zcentral_com_winscp(self, usuario, senha, destino_local):
+        caminhos = [
+            r"C:\Program Files (x86)\WinSCp-FTP\WinSCP.com",
+            r"C:\Program Files (x86)\WinSCp-FTP\WinSCP\WinSCP.com",
+        ]
+        winscp = next((caminho for caminho in caminhos if os.path.exists(caminho)), None)
+        if not winscp:
+            raise Exception("WinSCP.com não encontrado.")
+
+        comando = [
+            winscp,
+            #"/ini=nul",
+            "/command",
+            "option batch abort",
+            "option confirm off",
+            f"open sftp://{quote(usuario, safe='')}:{quote(senha, safe='')}@10.251.70.27/ ",
+            f'get zCentral.prn "{destino_local}"',
+            "exit",
+        ]
+        resultado = subprocess.run(comando, capture_output=True, text=True)
+        if resultado.returncode != 0:
+            raise Exception(resultado.stderr or resultado.stdout)
+        if not os.path.isfile(destino_local):
+            retorno = resultado.stderr or resultado.stdout
+            mensagem = "O WinSCP terminou, mas zCentral.prn não foi criado no destino."
+            if retorno:
+                mensagem += f"\n{retorno}"
+            raise Exception(mensagem)
+
+    def _baixar_zcusto_com_winscp(self, usuario, senha, destino_local):
+        caminhos = [
+            r"C:\Program Files (x86)\WinSCp-FTP\WinSCP.com",
+            r"C:\Program Files (x86)\WinSCp-FTP\WinSCP\WinSCP.com",
+        ]
+        winscp = next((caminho for caminho in caminhos if os.path.exists(caminho)), None)
+        if not winscp:
+            raise Exception("WinSCP.com não encontrado.")
+
+        comando = [
+            winscp,
+            #"/ini=nul",
+            "/command",
+            "option batch abort",
+            "option confirm off",
+            f"open sftp://{quote(usuario, safe='')}:{quote(senha, safe='')}@10.251.70.27:22/ ",
+            f'get zCusto.prn "{destino_local}"',
+            "exit",
+        ]
+        try:
+            resultado = subprocess.run(
+                comando,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+        except subprocess.TimeoutExpired as erro:
+            raise Exception("O WinSCP excedeu o limite de 60 segundos.") from erro
+
+        if resultado.returncode != 0:
+            raise Exception(resultado.stderr or resultado.stdout)
+        if not os.path.isfile(destino_local) or os.path.getsize(destino_local) == 0:
+            raise Exception("O WinSCP não criou o arquivo zCusto.prn no destino.")
 
     # ── Histórico de atualizações ──
     def _registrar_atualizacao(self):
@@ -583,10 +837,12 @@ class FreshStartPage(QWidget):
         self.tabela.blockSignals(True)
         self.tabela.setRowCount(0)
         filtro = self.campo_filtro.text().strip().lower()
+        campo_busca = "qtde_qad" if self._modo_busca_qad else "qtde_sci"
         for idx, item in enumerate(self.dados):
             if filtro:
-                texto = " ".join(str(v) for v in item.values()).lower()
-                if filtro not in texto:
+                texto_total = " ".join(str(v) for v in item.values()).lower()
+                texto_origem = str(item.get(campo_busca, "")).lower()
+                if filtro not in texto_total and filtro not in texto_origem:
                     continue
             row = self.tabela.rowCount()
             self.tabela.insertRow(row)
@@ -639,6 +895,16 @@ class FreshStartPage(QWidget):
         if chave == "qtde_qad":
             self._calcular_total_zcentral()
             self._atualizar_total_central_dph()
+
+    def _alternar_busca(self, ativado):
+        self._modo_busca_qad = ativado
+        self._atualizar_texto_busca()
+        self._aplicar_filtro()
+
+    def _atualizar_texto_busca(self):
+        texto = "Buscando do QAD" if self._modo_busca_qad else "Buscando do SCI"
+        self.btn_busca.setText("QAD" if self._modo_busca_qad else "SCI")
+        self.btn_busca.setToolTip(texto)
 
     def _aplicar_filtro(self):
         self._popular_tabela()
