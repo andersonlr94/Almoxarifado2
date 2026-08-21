@@ -281,8 +281,8 @@ def _carregar_historico():
 
 
 class ItensZeroPage(QWidget):
-    COLUNAS = ["Kardex", "Código", "Descrição", "Cons Med", "Qtde prog", "DPP", "Observação"]
-    CHAVES = ["kardex", "codigo", "descricao", "consumo_medio", "qtde_prog", "dpp", "observacao"]
+    COLUNAS = ["Kardex", "Código", "Descrição", "Fornecedor", "Cons Med", "Qtde prog", "DPP", "Observação"]
+    CHAVES = ["kardex", "codigo", "descricao", "fornecedor", "consumo_medio", "qtde_prog", "dpp", "observacao"]
     CORES = {
         "branco": "#FFFFFF",
         "azul": "#B3D9FF",
@@ -353,13 +353,62 @@ class ItensZeroPage(QWidget):
 
         card_layout.addLayout(linha_top)
 
-        info_linha = QHBoxLayout()
-        info_linha.setSpacing(16)
-        info_linha.addStretch()
+        filtro_linha = QHBoxLayout()
+        filtro_linha.setSpacing(6)
+        filtro_linha.setContentsMargins(0, 0, 0, 0)
+
+        self.campo_filtro = QLineEdit()
+        self.campo_filtro.setPlaceholderText("⌕   Pesquisar...")
+        self.campo_filtro.setFixedHeight(32)
+        self.campo_filtro.setMinimumWidth(200)
+        self.campo_filtro.setMaximumWidth(320)
+        self.campo_filtro.textChanged.connect(self._aplicar_filtro)
+        self.campo_filtro.setStyleSheet("""
+            QLineEdit {
+                background: white;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding-left: 10px;
+                padding-right: 10px;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #6366f1;
+            }
+        """)
+        filtro_linha.addWidget(self.campo_filtro)
+
+        self.btn_limpar_filtro = QPushButton("✕")
+        self.btn_limpar_filtro.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_limpar_filtro.setFixedSize(28, 28)
+        self.btn_limpar_filtro.setToolTip("Limpar filtro")
+        self.btn_limpar_filtro.clicked.connect(self._limpar_filtro)
+        self.btn_limpar_filtro.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #9ca3af;
+                border: none;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: #f3f4f6;
+                color: #6b7280;
+            }
+            QPushButton:pressed {
+                background: #e5e7eb;
+                color: #4b5563;
+            }
+        """)
+        filtro_linha.addWidget(self.btn_limpar_filtro)
+        filtro_linha.addStretch()
+
         self.label_contador = QLabel("0 itens")
         self.label_contador.setObjectName("statusLabel")
-        info_linha.addWidget(self.label_contador)
-        card_layout.addLayout(info_linha)
+        filtro_linha.addWidget(self.label_contador)
+        card_layout.addLayout(filtro_linha)
 
         self.tabela = TabelaReordenavel(0, len(self.COLUNAS))
         self.tabela.setObjectName("tabelaItensZero")
@@ -369,16 +418,20 @@ class ItensZeroPage(QWidget):
         for c in range(self.tabela.columnCount()):
             header.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(0, 140)
+        header.resizeSection(0, 126)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(1, 140)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(3, 80)
+        header.resizeSection(3, 140)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(4, 80)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(5, 80)
+        header.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(6, 80)
+        # ocultar coluna Cons Med (índice 4 após adição de Fornecedor)
+        self.tabela.setColumnHidden(4, True)
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabela.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
@@ -406,10 +459,24 @@ class ItensZeroPage(QWidget):
             self.dados = []
         self._popular_tabela()
 
+    def _aplicar_filtro(self):
+        self._popular_tabela()
+
+    def _limpar_filtro(self):
+        self.campo_filtro.clear()
+        self.campo_filtro.setFocus()
+
     def _popular_tabela(self):
         self.tabela.blockSignals(True)
         self.tabela.setRowCount(0)
+        filtro = ""
+        if hasattr(self, "campo_filtro"):
+            filtro = self.campo_filtro.text().strip().lower()
         for item in self.dados:
+            if filtro:
+                texto = " ".join(str(v) for v in item.values()).lower()
+                if filtro not in texto:
+                    continue
             row = self.tabela.rowCount()
             self.tabela.insertRow(row)
             cor = item.get("cor", "")
@@ -422,6 +489,8 @@ class ItensZeroPage(QWidget):
                     cell.setData(Qt.BackgroundRole, QBrush(QColor(cor_hex)))
                 self.tabela.setItem(row, col, cell)
         self.tabela.blockSignals(False)
+        # manter Cons Med oculta
+        self.tabela.setColumnHidden(4, True)
         self._atualizar_contador()
 
     def _aplicar_cor(self, nome_cor):
@@ -490,10 +559,16 @@ class ItensZeroPage(QWidget):
             if not kardex:
                 continue
             novos_kardex.add(kardex)
+            # tenta obter fornecedor da coluna 4 se existir, senão deixa vazio (será preenchido via _sincronizar)
+            fornecedor_val = partes[4].strip() if len(partes) > 4 else ""
+            # se parecer numérico (qtde/loc), ignora
+            if fornecedor_val and fornecedor_val.replace(".", "").replace(",", "").strip().isdigit():
+                fornecedor_val = ""
             item = {
                 "kardex": kardex,
                 "codigo": partes[2].strip(),
                 "descricao": partes[3].strip(),
+                "fornecedor": fornecedor_val,
                 "consumo_medio": partes[7].strip(),
                 "qtde_prog": partes[9].strip(),
                 "dpp": "",
@@ -548,6 +623,7 @@ class ItensZeroPage(QWidget):
                     "kardex": kard,
                     "codigo": item.get("Código", ""),
                     "descricao": item.get("Descrição", ""),
+                    "fornecedor": item.get("Fornecedor", ""),
                     "consumo_medio": item.get("Consumo médio", ""),
                     "qtde_prog": item.get("Pend. entrega compras", ""),
                     "dpp": "",
@@ -570,6 +646,7 @@ class ItensZeroPage(QWidget):
                 novo_item = mapa_novos[kardex]
                 dado["codigo"] = novo_item["codigo"]
                 dado["descricao"] = novo_item["descricao"]
+                dado["fornecedor"] = novo_item["fornecedor"]
                 dado["consumo_medio"] = novo_item["consumo_medio"]
                 dado["qtde_prog"] = novo_item["qtde_prog"]
 

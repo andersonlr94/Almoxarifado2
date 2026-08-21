@@ -4,9 +4,9 @@ import os
 import pyautogui
 import qtawesome
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
     QPushButton, QRadioButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView, QButtonGroup, QMessageBox, QFrame, QSizePolicy
+    QHeaderView, QAbstractItemView, QButtonGroup, QMessageBox, QFrame
 )
 from PySide6.QtCore import Qt
 from ui.regras_automacao import esperar_inicio, digitar_texto, enter
@@ -53,64 +53,82 @@ class TransferenciaPage(QWidget):
         card_layout.setContentsMargins(18, 16, 18, 16)
         card_layout.setSpacing(16)
 
-        # ── Conteúdo principal: coluna esquerda (formulário) + coluna direita (tabela) ──
-        main_content = QHBoxLayout()
-        main_content.setSpacing(16)
+        # ── Campos Origem / Destino ──
+        campos_container = QHBoxLayout()
+        campos_container.setSpacing(16)
 
-        # Helper — campo apenas com placeholder (sem título)
-        def _campo(placeholder, valor_padrao="", enabled=True):
+        # Helpers para criar campo com label
+        def _campo(label_text, placeholder, valor_padrao="", enabled=True):
+            wrap = QWidget()
+            v = QVBoxLayout(wrap)
+            v.setContentsMargins(0, 0, 0, 0)
+            v.setSpacing(4)
+            lbl = QLabel(label_text)
+            lbl.setObjectName("fieldLabel")
+            v.addWidget(lbl)
             edit = QLineEdit(valor_padrao)
             edit.setPlaceholderText(placeholder)
             edit.setFixedHeight(34)
             edit.setEnabled(enabled)
+            # deixa o QSS global cuidar do visual, mas garante largura mínima
             edit.setMinimumWidth(150)
-            return edit
+            v.addWidget(edit)
+            return wrap, edit
 
-        # ── Coluna Esquerda: origem → destino → modo → botões ──
-        left_widget = QWidget()
-        left_widget.setFixedWidth(320)
-        left_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
-        left_layout = QVBoxLayout(left_widget)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(12)
-
-        # Origem box — sem seta entre os quadros
+        # Origem box
         origem_box = QWidget()
         origem_box.setObjectName("detalhesBox")
         origem_layout = QVBoxLayout(origem_box)
         origem_layout.setContentsMargins(14, 12, 14, 12)
-        origem_layout.setSpacing(8)
+        origem_layout.setSpacing(10)
         origem_titulo = QLabel("ORIGEM")
         origem_titulo.setObjectName("fieldLabel")
         origem_titulo.setStyleSheet("color:#6366f1; font-weight:700; letter-spacing:0.6px;")
         origem_layout.addWidget(origem_titulo)
 
-        self.campo_de_local = _campo("De local", "10912")
-        self.campo_de_lugar = _campo("De lugar", "ZCENTRAL")
-        self.campo_de_lote = _campo("De lote", "")
-        for campo in (self.campo_de_local, self.campo_de_lugar, self.campo_de_lote):
-            origem_layout.addWidget(campo)
-        left_layout.addWidget(origem_box)
+        w_de_local, self.campo_de_local = _campo("De local", "Ex: 10912", "10912")
+        w_de_lugar, self.campo_de_lugar = _campo("De lugar", "Ex: ZCENTRAL", "ZCENTRAL")
+        w_de_lote, self.campo_de_lote = _campo("De lote", "Lote origem", "")
+        for w in (w_de_local, w_de_lugar, w_de_lote):
+            origem_layout.addWidget(w)
+        campos_container.addWidget(origem_box, 1)
 
-        # Destino box — abaixo do de origem (sem seta)
+        # Seta visual entre origem e destino
+        arrow_wrap = QVBoxLayout()
+        arrow_wrap.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        arrow_lbl = QLabel()
+        try:
+            arrow_lbl.setPixmap(qtawesome.icon('fa6s.arrow-right', color='#94a3b8').pixmap(22, 22))
+        except Exception:
+            arrow_lbl.setText("→")
+            arrow_lbl.setStyleSheet("color:#94a3b8; font-size:18px; font-weight:700;")
+        arrow_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        arrow_wrap.addWidget(arrow_lbl)
+        campos_container.addLayout(arrow_wrap)
+
+        # Destino box
         destino_box = QWidget()
         destino_box.setObjectName("detalhesBox")
         destino_layout = QVBoxLayout(destino_box)
         destino_layout.setContentsMargins(14, 12, 14, 12)
-        destino_layout.setSpacing(8)
+        destino_layout.setSpacing(10)
         destino_titulo = QLabel("DESTINO")
         destino_titulo.setObjectName("fieldLabel")
         destino_titulo.setStyleSheet("color:#10b981; font-weight:700; letter-spacing:0.6px;")
         destino_layout.addWidget(destino_titulo)
 
-        self.campo_para_local = _campo("Para local", "10912")
-        self.campo_para_lugar = _campo("Para lugar", "ZCENTRAL")
-        self.campo_para_lote = _campo("Para lote", "")
-        for campo in (self.campo_para_local, self.campo_para_lugar, self.campo_para_lote):
-            destino_layout.addWidget(campo)
-        left_layout.addWidget(destino_box)
+        w_para_local, self.campo_para_local = _campo("Para local", "Ex: 10912", "10912")
+        w_para_lugar, self.campo_para_lugar = _campo("Para lugar", "Ex: ZCENTRAL", "ZCENTRAL")
+        w_para_lote, self.campo_para_lote = _campo("Para lote", "Lote destino", "")
+        for w in (w_para_local, w_para_lugar, w_para_lote):
+            destino_layout.addWidget(w)
+        campos_container.addWidget(destino_box, 1)
 
-        # Modo box — abaixo do destino
+        # ── Painel lateral: modo + ações ──
+        lateral = QVBoxLayout()
+        lateral.setSpacing(12)
+
+        # Modo box
         modo_box = QWidget()
         modo_box.setObjectName("detalhesBox")
         modo_box_layout = QVBoxLayout(modo_box)
@@ -126,6 +144,7 @@ class TransferenciaPage(QWidget):
         self.radio_lote_inicial = QRadioButton("Usar lote inicial (da tabela)")
         self.radio_lote_destino = QRadioButton("Usar lote destino (da tabela)")
         self.radio_formulario.setChecked(True)
+        # tooltip explicativo
         self.radio_formulario.setToolTip("Usa os lotes digitados nos campos acima")
         self.radio_lote_inicial.setToolTip("Usa o lote da coluna da tabela como origem")
         self.radio_lote_destino.setToolTip("Usa o lote da coluna da tabela como destino")
@@ -133,16 +152,17 @@ class TransferenciaPage(QWidget):
             self.grupo_radio.addButton(rb)
             rb.setCursor(Qt.CursorShape.PointingHandCursor)
             modo_box_layout.addWidget(rb)
-        left_layout.addWidget(modo_box)
 
-        # Três botões abaixo do modo — coluna esquerda
+        lateral.addWidget(modo_box)
+
+        # Botões de ação — empilhados verticalmente com ícones
         self.btn_colar = QPushButton(qtawesome.icon('fa6s.paste', color='#6b7280'), "  Colar da área de transferência")
         self.btn_colar.setObjectName("btnSecondary")
         self.btn_colar.setFixedHeight(36)
         self.btn_colar.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_colar.setToolTip("Cola linhas tab-separated (Item \\t Qtde \\t Lote) da área de transferência")
         self.btn_colar.clicked.connect(self._colar)
-        left_layout.addWidget(self.btn_colar)
+        lateral.addWidget(self.btn_colar)
 
         self.btn_executar = QPushButton(qtawesome.icon('fa6s.play', color='#ffffff'), "  Executar automação")
         self.btn_executar.setObjectName("btnPrimary")
@@ -150,7 +170,7 @@ class TransferenciaPage(QWidget):
         self.btn_executar.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_executar.setToolTip("Inicia a automação no sistema (pyautogui)")
         self.btn_executar.clicked.connect(self._executar)
-        left_layout.addWidget(self.btn_executar)
+        lateral.addWidget(self.btn_executar)
 
         self.btn_limpar = QPushButton(qtawesome.icon('fa6s.broom', color='#ffffff'), "  Limpar tabela")
         self.btn_limpar.setObjectName("btnGradientRose")
@@ -158,21 +178,18 @@ class TransferenciaPage(QWidget):
         self.btn_limpar.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_limpar.setToolTip("Remove todos os itens da tabela")
         self.btn_limpar.clicked.connect(self._limpar)
-        left_layout.addWidget(self.btn_limpar)
+        lateral.addWidget(self.btn_limpar)
 
-        left_layout.addStretch()
-        main_content.addWidget(left_widget, 0)
+        lateral.addStretch()
+        campos_container.addLayout(lateral, 0)
 
-        # ── Coluna Direita: tabela ocupando altura total do quadro ──
-        right_widget = QWidget()
-        right_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        right_layout = QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(10)
+        card_layout.addLayout(campos_container)
 
-        # Linha contador + ações da tabela
+        # ── Linha contador + ações da tabela ──
         info_linha = QHBoxLayout()
         info_linha.setSpacing(8)
+
+        # Contador com ícone
         contador_wrap = QHBoxLayout()
         contador_wrap.setSpacing(6)
         try:
@@ -185,7 +202,9 @@ class TransferenciaPage(QWidget):
         self.label_contador.setObjectName("statusLabel")
         contador_wrap.addWidget(self.label_contador)
         info_linha.addLayout(contador_wrap)
+
         info_linha.addStretch()
+
         self.btn_remover_sel = QPushButton(qtawesome.icon('fa6s.trash-can', color='#64748b'), "  Remover selecionados")
         self.btn_remover_sel.setObjectName("btnGhost")
         self.btn_remover_sel.setFixedHeight(30)
@@ -193,15 +212,18 @@ class TransferenciaPage(QWidget):
         self.btn_remover_sel.setToolTip("Remove as linhas selecionadas")
         self.btn_remover_sel.clicked.connect(self._remover_selecionados)
         info_linha.addWidget(self.btn_remover_sel)
-        right_layout.addLayout(info_linha)
 
+        card_layout.addLayout(info_linha)
+
+        # Separador sutil
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setFrameShadow(QFrame.Shadow.Plain)
         sep.setStyleSheet("color:#f1f5f9; background-color:#f1f5f9; max-height:1px;")
         sep.setFixedHeight(1)
-        right_layout.addWidget(sep)
+        card_layout.addWidget(sep)
 
+        # ── Tabela ──
         self.tabela = QTableWidget(0, 3)
         self.tabela.setObjectName("tabelaTransferencia")
         self.tabela.setStyleSheet("""
@@ -243,17 +265,16 @@ class TransferenciaPage(QWidget):
         self.tabela.verticalHeader().setMinimumSectionSize(26)
         self.tabela.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         self.tabela.verticalHeader().setVisible(False)
-        self.tabela.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        # altura total do quadro — ocupa espaço restante
-        right_layout.addWidget(self.tabela, 1)
+        self.tabela.setMinimumHeight(220)
+        # placeholder empty text via overlay label
+        card_layout.addWidget(self.tabela)
 
+        # Hint de colagem
         hint = QLabel("Dica: copie 3 colunas da planilha (Item  •  Qtde  •  Lote) e clique em \"Colar da área de transferência\"")
         hint.setStyleSheet("color:#94a3b8; font-size:11px; padding-left:2px;")
         hint.setWordWrap(True)
-        right_layout.addWidget(hint)
+        card_layout.addWidget(hint)
 
-        main_content.addWidget(right_widget, 1)
-        card_layout.addLayout(main_content)
         layout.addWidget(card)
 
         # Conexões
@@ -264,6 +285,7 @@ class TransferenciaPage(QWidget):
         self._atualizar_bloqueio_lotes()
         self._atualizar_estado_botoes()
 
+        # Atalho para colar (Ctrl+V) quando a página tem foco
         try:
             from PySide6.QtGui import QShortcut, QKeySequence
             QShortcut(QKeySequence("Ctrl+V"), self, self._colar)
@@ -326,6 +348,8 @@ class TransferenciaPage(QWidget):
             self.tabela.setItem(row, 2, it_lote)
         self._atualizar_contador()
         self._atualizar_estado_botoes()
+
+        # overlay vazio: desabilita executar se vazio (já tratado)
         if self.tabela.rowCount() == 0:
             self.tabela.setToolTip("Nenhum item — cole dados da planilha")
         else:
@@ -347,13 +371,17 @@ class TransferenciaPage(QWidget):
         linhas = texto.strip().splitlines()
         if not linhas:
             return
+
         novos = 0
         for linha in linhas:
             if not linha.strip():
                 continue
             partes = [p.strip() for p in linha.split("\t")]
+            # remove vazios do meio? mantém lógica: filtra vazios mas preserva posição tab
+            # Se houver menos de 2 tabs, tenta split por espaço múltiplo
             if len(partes) < 2 and "  " in linha:
                 partes = [p.strip() for p in linha.split() if p.strip()]
+            # limpa vazios extras
             partes = [p for p in partes if p != ""]
             if not partes:
                 continue
@@ -369,6 +397,7 @@ class TransferenciaPage(QWidget):
             return
         self._salvar_json()
         self._popular_tabela()
+        # feedback sutil
         self.label_contador.setText(f"{self.tabela.rowCount()} itens  •  +{novos} colados")
 
     def _remover_selecionados(self):
@@ -386,12 +415,15 @@ class TransferenciaPage(QWidget):
         if self.tabela.rowCount() == 0:
             QMessageBox.information(self, "Executar", "Nenhum item na tabela.")
             return
+
         de_local = self.campo_de_local.text().strip().upper()
         de_lugar = self.campo_de_lugar.text().strip().upper()
         de_lote = self.campo_de_lote.text().strip().upper()
         para_local = self.campo_para_local.text().strip().upper()
         para_lugar = self.campo_para_lugar.text().strip().upper()
         para_lote = self.campo_para_lote.text().strip().upper()
+
+        # Validação básica
         if not de_local or not de_lugar or not para_local or not para_lugar:
             QMessageBox.warning(self, "Executar", "Preencha De local/lugar e Para local/lugar.")
             return
@@ -400,6 +432,8 @@ class TransferenciaPage(QWidget):
                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if ok != QMessageBox.StandardButton.Yes:
                 return
+
+        # Confirmação
         resp = QMessageBox.question(
             self, "Confirmar automação",
             f"Executar {self.tabela.rowCount()} transferência(s) de <b>{de_local}/{de_lugar}</b> para <b>{para_local}/{para_lugar}</b>?<br>"
@@ -408,21 +442,29 @@ class TransferenciaPage(QWidget):
         )
         if resp != QMessageBox.StandardButton.Yes:
             return
+
         esperar_inicio()
+
         for row in range(self.tabela.rowCount()):
             kardex = self.tabela.item(row, 0).text().upper() if self.tabela.item(row, 0) else ""
             qtde = self.tabela.item(row, 1).text().upper() if self.tabela.item(row, 1) else ""
             lote_tabela = self.tabela.item(row, 2).text().upper() if self.tabela.item(row, 2) else ""
+
             digitar_texto(kardex)
             enter()
+
             digitar_texto(qtde)
             enter(5)
+
             digitar_texto("TRANSFI")
             enter(2)
+
             digitar_texto(de_local)
             enter()
+
             digitar_texto(de_lugar)
             enter()
+
             if self.radio_formulario.isChecked():
                 digitar_texto(de_lote)
                 enter(2)
@@ -450,6 +492,7 @@ class TransferenciaPage(QWidget):
                 enter()
                 digitar_texto(lote_tabela)
                 enter(3)
+
             pyautogui.press("f4")
 
     def _limpar(self):

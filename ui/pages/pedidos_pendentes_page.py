@@ -23,6 +23,14 @@ class EditorDelegate(QStyledItemDelegate):
         return editor
 
 
+def _caminho_json():
+    import config
+    base = config.obter_caminho_jsons()
+    if not base:
+        return ""
+    return os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "PedidosPendentes", "PedidosPendentes.json"))
+
+
 class PedidosPendentesPage(QWidget):
     COLUNAS = [
         "N do pedido", "Kardex", "Código", "Fornecedor",
@@ -35,6 +43,7 @@ class PedidosPendentesPage(QWidget):
         super().__init__()
         self.dados = []
         self._setup_ui()
+        self._carregar_dados()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -103,11 +112,13 @@ class PedidosPendentesPage(QWidget):
         self.tabela.verticalHeader().setVisible(False)
         self.tabela.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.tabela.setItemDelegate(EditorDelegate(self.tabela))
+        self.tabela.setVisible(True)
         card_layout.addWidget(self.tabela)
 
         layout.addWidget(card)
 
     def _popular_tabela(self):
+        self.tabela.setVisible(True)
         self.tabela.blockSignals(True)
         self.tabela.setRowCount(0)
         filtro_texto = self.campo_filtro.text().strip().lower()
@@ -165,6 +176,16 @@ class PedidosPendentesPage(QWidget):
         self._popular_tabela()
         self._salvar_pedidos_pendentes()
 
+        # Também executa a lógica do botão Atualizar da página Controle de Pedidos
+        try:
+            main_win = self.window()
+            if main_win and hasattr(main_win, "pages"):
+                ctrl_page = main_win.pages.get("controle_pedidos")
+                if ctrl_page and hasattr(ctrl_page, "_adicionar_linha"):
+                    ctrl_page._adicionar_linha()
+        except Exception:
+            pass
+
         QMessageBox.information(
             self,
             "Sucesso",
@@ -209,5 +230,19 @@ class PedidosPendentesPage(QWidget):
         with open(caminho_arquivo, "w", encoding="utf-8") as f:
             json.dump(self.dados, f, ensure_ascii=False, indent=2)
 
+    def _carregar_dados(self):
+        try:
+            caminho = _caminho_json()
+            if caminho and os.path.isfile(caminho):
+                with open(caminho, "r", encoding="utf-8") as f:
+                    self.dados = json.load(f)
+            else:
+                self.dados = []
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            self.dados = []
+        self.tabela.setVisible(True)
+        self._popular_tabela()
+
     def _aplicar_filtro(self):
+        self.tabela.setVisible(True)
         self._popular_tabela()

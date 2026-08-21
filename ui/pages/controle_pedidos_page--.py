@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QStyledItemDelegate, QMenu, QInputDialog,
     QDialog, QDialogButtonBox, QComboBox, QPlainTextEdit, QStyle,
+    QSizePolicy,
 )
 from PySide6.QtCore import Qt, QSize, QTimer, QPoint
 from PySide6.QtGui import QColor, QBrush, QPainter, QPalette, QCursor, QShortcut, QKeySequence, QPen
@@ -47,16 +48,10 @@ class EditorDelegate(QStyledItemDelegate):
             painter.restore()
             option.palette.setColor(QPalette.ColorRole.Highlight, Qt.GlobalColor.transparent)
             option.palette.setColor(QPalette.ColorRole.Base, Qt.GlobalColor.transparent)
+        # colunas 5 (Status) e 6 (Email) são widgets -> sem padding, demais colunas mantêm padding 4px 10px
+        if index.column() not in (5, 6):
+            option.rect = option.rect.adjusted(10, 4, -10, -4)
         super().paint(painter, option, index)
-        if index.column() == 4 and option.state & QStyle.StateFlag.State_MouseOver and bg is not None:
-            brush = bg if isinstance(bg, QBrush) else QBrush(bg)
-            cor = brush.color()
-            if cor.alpha() > 0:
-                painter.save()
-                painter.setPen(QPen(cor, 2))
-                painter.setBrush(Qt.BrushStyle.NoBrush)
-                painter.drawRoundedRect(option.rect.adjusted(1, 1, -1, -1), 4, 4)
-                painter.restore()
 
     def sizeHint(self, option, index):
         base = super().sizeHint(option, index)
@@ -298,13 +293,12 @@ class ControlePedidosPage(QWidget):
         linha_top = QHBoxLayout()
         linha_top.setSpacing(8)
 
-        btn_adicionar = QPushButton(qtawesome.icon('mdi6.refresh', color='#ffffff'), "  Atualizar")
-        btn_adicionar.setObjectName("btnPrimary")
-        btn_adicionar.setFixedHeight(34)
-        btn_adicionar.clicked.connect(self._adicionar_linha)
-        btn_adicionar.setVisible(False)  # temporariamente oculto — para reexibir, troque para True
-        self.btn_atualizar = btn_adicionar  # referência para reexibir facilmente
-        linha_top.addWidget(btn_adicionar)
+        self.btn_atualizar = QPushButton(qtawesome.icon('mdi6.refresh', color='#ffffff'), "  Atualizar")
+        self.btn_atualizar.setObjectName("btnPrimary")
+        self.btn_atualizar.setFixedHeight(34)
+        self.btn_atualizar.clicked.connect(self._adicionar_linha)
+        self.btn_atualizar.setVisible(False)
+        linha_top.addWidget(self.btn_atualizar)
 
         btn_entregar = QPushButton(qtawesome.icon('fa6s.check', color='#ffffff'), "  Entregar")
         btn_entregar.setObjectName("btnGradientGreen")
@@ -338,15 +332,46 @@ class ControlePedidosPage(QWidget):
         self.campo_busca.setFixedHeight(32)
         self.campo_busca.setFixedWidth(200)
         self.campo_busca.textChanged.connect(self._aplicar_filtro)
+        self.campo_busca.setStyleSheet("""
+            QLineEdit {
+                background: white;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding-left: 10px;
+                padding-right: 10px;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #6366f1;
+            }
+        """)
         linha_top.addWidget(self.campo_busca)
 
-        self.btn_limpar_filtro = QPushButton(qtawesome.icon('fa6s.xmark', color='#64748b'), "")
-        self.btn_limpar_filtro.setObjectName("btnGhost")
-        self.btn_limpar_filtro.setFixedSize(32, 32)
-        self.btn_limpar_filtro.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_limpar_filtro.setToolTip("Limpar filtro")
-        self.btn_limpar_filtro.clicked.connect(self.campo_busca.clear)
-        linha_top.addWidget(self.btn_limpar_filtro)
+        self.btn_limpar_busca = QPushButton("✕")
+        self.btn_limpar_busca.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_limpar_busca.setFixedSize(28, 28)
+        self.btn_limpar_busca.setToolTip("Limpar filtro")
+        self.btn_limpar_busca.clicked.connect(self._limpar_filtro)
+        self.btn_limpar_busca.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #9ca3af;
+                border: none;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: #f3f4f6;
+                color: #6b7280;
+            }
+            QPushButton:pressed {
+                background: #e5e7eb;
+                color: #4b5563;
+            }
+        """)
+        linha_top.addWidget(self.btn_limpar_busca)
 
         self.label_contador = QLabel("0 itens")
         self.label_contador.setObjectName("statusLabel")
@@ -376,8 +401,8 @@ class ControlePedidosPage(QWidget):
                 outline: none;
             }
             QTableWidget#tabelaControle::item {
-                padding: 4px 10px;
-                border-bottom: 1px solid #f3f4f6;
+                padding: 0px;
+                border: none;
             }
             QTableWidget#tabelaControle::item:selected {
                 background-color: #eef2ff;
@@ -388,8 +413,11 @@ class ControlePedidosPage(QWidget):
             }
             QTableWidget#tabelaControle::item:focus {
                 outline: none;
-                border: 1.5px solid #6366f1;
-                border-radius: 4px;
+                border: none;
+            }
+            QTableWidget#tabelaControle::item:selected:focus {
+                outline: none;
+                border: none;
             }
         """)
         self.tabela.setHorizontalHeaderLabels(self.COLUNAS)
@@ -406,7 +434,7 @@ class ControlePedidosPage(QWidget):
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(4, 90) #dpp
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(5, 80) #status cor
+        header.resizeSection(5, 6) #status cor 6px
         header.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(6, 80) #email
         header.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch) #observação
@@ -534,6 +562,10 @@ class ControlePedidosPage(QWidget):
     def _aplicar_filtro(self):
         self._popular_tabela()
 
+    def _limpar_filtro(self):
+        self.campo_busca.clear()
+        self.campo_busca.setFocus()
+
     def _popular_tabela(self):
         # Salvar posições dos scrollbars e célula atual
         busca_focada = self.campo_busca.hasFocus()
@@ -577,10 +609,8 @@ class ControlePedidosPage(QWidget):
                         cell.setData(Qt.BackgroundRole, QBrush(QColor("#C8E6C9")))
                     self.tabela.setItem(row, col, cell)
                 elif col == 5:
-                    dpp_val = item.get("dpp", "").strip()
-                    if dpp_val:
-                        btn_container = self._criar_botao_cor(self._on_cor_clicado)
-                        self.tabela.setCellWidget(row, col, btn_container)
+                    btn_container = self._criar_botao_cor(self._on_cor_clicado)
+                    self.tabela.setCellWidget(row, col, btn_container)
                     
                     cell = QTableWidgetItem("")
                     cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -694,19 +724,15 @@ class ControlePedidosPage(QWidget):
         tabela.setHorizontalHeaderLabels(self.COLUNAS)
         for col, chave in enumerate(self.CHAVES):
             if col == 6:
-                dpp_val = str(item.get("dpp", "")).strip()
-                if dpp_val:
-                    btn_container = self._criar_botao_enviar(lambda checked=False, tbl=tabela: self._enviar_email_dialog(tbl))
-                    tabela.setCellWidget(0, col, btn_container)
+                btn_container = self._criar_botao_enviar(lambda checked=False, tbl=tabela: self._enviar_email_dialog(tbl))
+                tabela.setCellWidget(0, col, btn_container)
                 
                 celula = QTableWidgetItem("")
                 celula.setFlags(celula.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 tabela.setItem(0, col, celula)
             elif col == 5:
-                dpp_val = str(item.get("dpp", "")).strip()
-                if dpp_val:
-                    btn_container = self._criar_botao_cor(lambda checked=False, tbl=tabela: self._on_cor_dialog_clicado(tbl))
-                    tabela.setCellWidget(0, col, btn_container)
+                btn_container = self._criar_botao_cor(lambda checked=False, tbl=tabela: self._on_cor_dialog_clicado(tbl))
+                tabela.setCellWidget(0, col, btn_container)
                 
                 celula = QTableWidgetItem("")
                 celula.setFlags(celula.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -967,11 +993,12 @@ class ControlePedidosPage(QWidget):
                 if celula_origem:
                     celula_origem.setData(Qt.ItemDataRole.UserRole, novo_idx)
 
-                # Add "Cor"/Status button only if DPP is filled
-                dpp_val_novo = novo_item.get("dpp", "").strip()
-                if dpp_val_novo:
-                    btn_container_cor = self._criar_botao_cor(self._on_cor_clicado)
-                    self.tabela.setCellWidget(row, 5, btn_container_cor)
+                # Add "Cor" button
+                btn_container_cor = self._criar_botao_cor(self._on_cor_clicado)
+                self.tabela.setCellWidget(row, 5, btn_container_cor)
+
+                # Add the "Enviar" button to the newly added row if DPP is filled
+                if novo_item.get("dpp", "").strip():
                     btn_container = self._criar_botao_enviar(self._on_enviar_clicado)
                     self.tabela.setCellWidget(row, 6, btn_container)
 
@@ -1002,14 +1029,10 @@ class ControlePedidosPage(QWidget):
             QTimer.singleShot(0, lambda r=row: self.tabela.setCurrentCell(r, 1))
         if chave == "dpp":
             if valor.strip():
-                if not self.tabela.cellWidget(row, 5):
-                    btn_container_cor = self._criar_botao_cor(self._on_cor_clicado)
-                    self.tabela.setCellWidget(row, 5, btn_container_cor)
                 if not self.tabela.cellWidget(row, 6):
                     btn_container = self._criar_botao_enviar(self._on_enviar_clicado)
                     self.tabela.setCellWidget(row, 6, btn_container)
             else:
-                self.tabela.removeCellWidget(row, 5)
                 self.tabela.removeCellWidget(row, 6)
         self._salvar_json()
 
@@ -1088,17 +1111,20 @@ class ControlePedidosPage(QWidget):
 
     def _criar_botao_cor(self, clicked_slot):
         container = QWidget()
+        container.setStyleSheet("background: transparent; border: none; margin: 0px; padding: 0px;")
         layout_btn = QHBoxLayout(container)
         layout_btn.setContentsMargins(0, 0, 0, 0)
-        layout_btn.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout_btn.setSpacing(0)
         
         btn = QPushButton("")
-        btn.setFixedSize(36, 18)
+        btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         btn.setStyleSheet("""
             QPushButton {
                 background-color: #cbd5e1;
-                border: 1px solid #94a3b8;
-                border-radius: 5px;
+                border: none;
+                border-radius: 0px;
+                margin: 0px;
+                padding: 0px;
             }
             QPushButton:hover {
                 background-color: #94a3b8;

@@ -191,9 +191,14 @@ class EstoquePage(QWidget):
         linha_botoes.addWidget(btn_exportar)
         coluna_esquerda.addLayout(linha_botoes)
 
+        filtro_layout = QHBoxLayout()
+        filtro_layout.setSpacing(6)
+        filtro_layout.setContentsMargins(0, 0, 0, 0)
+
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("⌕   Pesquisar...")
-        self.campo_filtro.setFixedSize(250, 44)
+        self.campo_filtro.setFixedHeight(44)
+        self.campo_filtro.setMinimumWidth(200)
         self.campo_filtro.textChanged.connect(self._aplicar_filtro)
 
         self.campo_filtro.setStyleSheet("""
@@ -203,7 +208,7 @@ class EstoquePage(QWidget):
                 border: 1px solid #dce3ee;
                 border-radius: 10px;
                 padding-left: 15px;
-                padding-right: 12px;
+                padding-right: 40px;
                 font-size: 13px;
             }
 
@@ -212,7 +217,34 @@ class EstoquePage(QWidget):
             }
         """)
 
-        coluna_esquerda.addWidget(self.campo_filtro)
+        self.btn_limpar_filtro = QPushButton("✕")
+        self.btn_limpar_filtro.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_limpar_filtro.setFixedSize(32, 32)
+        self.btn_limpar_filtro.setToolTip("Limpar filtro")
+        self.btn_limpar_filtro.clicked.connect(self._limpar_filtro)
+        self.btn_limpar_filtro.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #9ca3af;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: #f3f4f6;
+                color: #6b7280;
+            }
+            QPushButton:pressed {
+                background: #e5e7eb;
+                color: #4b5563;
+            }
+        """)
+
+        filtro_layout.addWidget(self.campo_filtro)
+        filtro_layout.addWidget(self.btn_limpar_filtro)
+
+        coluna_esquerda.addLayout(filtro_layout)
         coluna_esquerda.addStretch()
 
         topo.addLayout(coluna_esquerda)
@@ -1107,6 +1139,10 @@ class EstoquePage(QWidget):
         if self.tabela.rowCount() == 1:
             self.tabela.selectRow(0)
             self._atualizar_detalhes()
+
+    def _limpar_filtro(self):
+        self.campo_filtro.clear()
+        self.campo_filtro.setFocus()
 
     def _atualizar_detalhes(self):
         kardex = ""
