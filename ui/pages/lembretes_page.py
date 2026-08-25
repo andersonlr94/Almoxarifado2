@@ -12,8 +12,34 @@ from PySide6.QtWidgets import (
     QInputDialog, QMessageBox, QDialog, QFormLayout, QGridLayout, QCheckBox,
     QTabWidget,
 )
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import QEvent, Qt, QSize, Signal
 from PySide6.QtGui import QFont, QIcon, QShortcut, QKeySequence
+
+
+class LembreteEdit(QLineEdit):
+    focusLost = Signal()
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.focusLost.emit()
+
+
+class LembreteCard(QFrame):
+    doubleClicked = Signal()
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.doubleClicked.emit()
+        super().mouseDoubleClickEvent(event)
+
+    def eventFilter(self, watched, event):
+        if (
+            event.type() == QEvent.Type.MouseButtonDblClick
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
+            self.doubleClicked.emit()
+            return True
+        return super().eventFilter(watched, event)
 
 
 def _caminho_lembretes_json(nome_arquivo="Lembretes.json"):
@@ -235,7 +261,8 @@ class QuadroLembretes(QWidget):
                 self.layout_ativos.addWidget(card)
 
     def _criar_card_widget(self, dados):
-        card = QFrame()
+        card = LembreteCard()
+        card.doubleClicked.connect(lambda: self._editar_lembrete(dados, card))
         card.setFrameShape(QFrame.Shape.StyledPanel)
         card.setMinimumHeight(52)
         if dados.get("status") == "finalizado":
@@ -275,6 +302,7 @@ class QuadroLembretes(QWidget):
         label_conteudo.setStyleSheet("font-size: 13px; color: #475569; border: none;")
         label_conteudo.setWordWrap(True)
         label_conteudo.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        label_conteudo.installEventFilter(card)
         layout_card.addWidget(label_conteudo, 1)
 
         layout_card.addStretch()
@@ -290,6 +318,7 @@ class QuadroLembretes(QWidget):
             texto_data = f"C {timestamp}"
         label_data = QLabel(texto_data)
         label_data.setStyleSheet("font-size: 11px; color: #94a3b8; border: none;")
+        label_data.installEventFilter(card)
         layout_card.addWidget(label_data)
 
         # Edit button
@@ -370,11 +399,12 @@ class QuadroLembretes(QWidget):
         h = QHBoxLayout(linha)
         h.setContentsMargins(14, 0, 14, 0)
 
-        campo = QLineEdit()
+        campo = LembreteEdit()
         campo.setPlaceholderText("Edite o lembrete e pressione Enter...")
         campo.setText(dados_originais.get("conteudo") or dados_originais.get("titulo", ""))
         campo.setStyleSheet("border: none; font-size: 13px; background: transparent;")
         campo.returnPressed.connect(lambda: self._salvar_edicao(dados_originais, campo.text()))
+        campo.focusLost.connect(lambda: self._salvar_edicao(dados_originais, campo.text()))
         QShortcut(QKeySequence(Qt.Key.Key_Escape), campo).activated.connect(self._carregar_lembretes)
         h.addWidget(campo)
 
