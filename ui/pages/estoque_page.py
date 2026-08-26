@@ -5,12 +5,211 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QStyledItemDelegate, QMessageBox, QFrame,
+    QDialog, QGroupBox, QComboBox, QRadioButton, QButtonGroup,
+    QFormLayout, QDialogButtonBox,
 )
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QIntValidator, QPainter, QKeySequence, QShortcut
+from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
 
 from PySide6.QtWidgets import QFileDialog
 import pandas as pd
+
+
+class DetalhesEstoqueDialog(QDialog):
+    def __init__(self, item, parent=None):
+        super().__init__(parent)
+        self.item = item
+        self.setWindowTitle("Detalhes do item")
+        self.setMinimumWidth(600)
+        self._montar_ui()
+
+    def _montar_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(14)
+
+        cabecalho = QLabel(
+            f"Kardex: {self.item.get('Kardex', '')}   |   "
+            f"Código: {self.item.get('Código', '')}"
+        )
+        cabecalho.setStyleSheet("font-size: 16px; font-weight: 700; color: #11163d;")
+        layout.addWidget(cabecalho)
+
+        descricao = QLabel(str(self.item.get("Descrição", "")))
+        descricao.setWordWrap(True)
+        descricao.setStyleSheet("color: #52648f; font-size: 13px;")
+        layout.addWidget(descricao)
+
+        colunas = QHBoxLayout()
+        colunas.setSpacing(14)
+
+        locais = QGroupBox("Locações")
+        locais.setFixedWidth(300)
+        locais_form = QFormLayout(locais)
+        self.campo_loc_novo = QLineEdit(str(self.item.get("Loc novo", "")))
+        self.campo_loc_retorno = QLineEdit(str(self.item.get("Loc retorno", "")))
+        self.campo_loc_aux = QLineEdit(str(self.item.get("Loc aux", "")))
+        for campo in (self.campo_loc_novo, self.campo_loc_retorno, self.campo_loc_aux):
+            campo.setFixedWidth(140)
+        self.campo_qtde_loc_novo = QLineEdit(str(self.item.get("Qtde novo", "")))
+        self.campo_qtde_loc_retorno = QLineEdit(str(self.item.get("Qtde retorno", "")))
+        self.campo_qtde_loc_aux = QLineEdit(str(self.item.get("Qtde aux", "")))
+        self.campo_entrada_loc_novo = QLineEdit(str(self.item.get("Entrada novo", "")))
+        self.campo_entrada_loc_retorno = QLineEdit(str(self.item.get("Entrada retorno", "")))
+        self.campo_entrada_loc_aux = QLineEdit(str(self.item.get("Entrada aux", "")))
+        for campo in (self.campo_qtde_loc_novo, self.campo_qtde_loc_retorno, self.campo_qtde_loc_aux):
+            campo.setPlaceholderText("Qtde")
+            campo.setValidator(QIntValidator(0, 999999, self))
+            campo.setFixedWidth(70)
+        for campo in (self.campo_entrada_loc_novo, self.campo_entrada_loc_retorno, self.campo_entrada_loc_aux):
+            campo.setFixedWidth(70)
+
+        def criar_linha_local(titulo, campos):
+            linha = QWidget()
+            linha_layout = QVBoxLayout(linha)
+            linha_layout.setContentsMargins(0, 0, 0, 0)
+            linha_layout.setSpacing(4)
+
+            titulo_label = QLabel(titulo)
+            titulo_label.setStyleSheet("font-weight: 600; color: #52648f;")
+            linha_layout.addWidget(titulo_label)
+
+            campos_layout = QHBoxLayout()
+            campos_layout.setContentsMargins(0, 0, 0, 0)
+            campos_layout.setSpacing(8)
+            for rotulo, campo in campos:
+                grupo = QWidget()
+                grupo_layout = QVBoxLayout(grupo)
+                grupo_layout.setContentsMargins(0, 0, 0, 0)
+                grupo_layout.setSpacing(2)
+                grupo_layout.addWidget(QLabel(rotulo))
+                grupo_layout.addWidget(campo)
+                campos_layout.addWidget(grupo, 1)
+            linha_layout.addLayout(campos_layout)
+            return linha
+
+        locais_form.addRow(criar_linha_local("Novo", (
+            ("Localização", self.campo_loc_novo),
+            ("Qtde", self.campo_qtde_loc_novo),
+            ("Entrada", self.campo_entrada_loc_novo),
+        )))
+        locais_form.addRow(criar_linha_local("Retorno", (
+            ("Localização", self.campo_loc_retorno),
+            ("Qtde", self.campo_qtde_loc_retorno),
+            ("Entrada", self.campo_entrada_loc_retorno),
+        )))
+        locais_form.addRow(criar_linha_local("Aux", (
+            ("Localização", self.campo_loc_aux),
+            ("Qtde", self.campo_qtde_loc_aux),
+            ("Entrada", self.campo_entrada_loc_aux),
+        )))
+        colunas.addWidget(locais, 1)
+
+        transferencia = QGroupBox("Transferência")
+        transferencia_form = QFormLayout(transferencia)
+        self.campo_qtde_transferencia = QLineEdit()
+        self.campo_qtde_transferencia.setValidator(QIntValidator(1, 999999, self))
+        transferencia_form.addRow("Qtde", self.campo_qtde_transferencia)
+        tipos = QWidget()
+        tipos_layout = QHBoxLayout(tipos)
+        tipos_layout.setContentsMargins(0, 0, 0, 0)
+        self.grupo_tipo = QButtonGroup(self)
+        for texto in ("Novo", "Retorno", "Aux"):
+            radio = QRadioButton(texto)
+            self.grupo_tipo.addButton(radio)
+            tipos_layout.addWidget(radio)
+            if texto == "Novo":
+                radio.setChecked(True)
+        transferencia_form.addRow("Tipo", tipos)
+        self.combo_destino = QComboBox()
+        self.combo_destino.addItem("Manutenção")
+        transferencia_form.addRow("Destino", self.combo_destino)
+        self.btn_transferir = QPushButton("Transferir")
+        self.btn_transferir.clicked.connect(self._transferir)
+        transferencia_form.addRow("", self.btn_transferir)
+
+        coluna_direita = QWidget()
+        coluna_direita_layout = QVBoxLayout(coluna_direita)
+        coluna_direita_layout.setContentsMargins(0, 0, 0, 0)
+        coluna_direita_layout.setSpacing(14)
+        coluna_direita_layout.addWidget(transferencia)
+
+        imprimir = QGroupBox("Imprimir")
+        imprimir.setFixedWidth(300)
+        imprimir_form = QFormLayout(imprimir)
+        self.combo_impressoras = QComboBox()
+        impressoras = QPrinterInfo.availablePrinterNames()
+        self.combo_impressoras.addItems(impressoras or ["Nenhuma impressora disponível"])
+        imprimir_form.addRow("Impressora", self.combo_impressoras)
+        quantidades = QWidget()
+        quantidades_layout = QHBoxLayout(quantidades)
+        quantidades_layout.setContentsMargins(0, 0, 0, 0)
+        self.campo_qtde_item = QLineEdit("1")
+        self.campo_qtde_item.setValidator(QIntValidator(1, 999999, self))
+        self.campo_qtde_etiqueta = QLineEdit("1")
+        self.campo_qtde_etiqueta.setValidator(QIntValidator(1, 999999, self))
+        quantidades_layout.addWidget(QLabel("Qtde item"))
+        quantidades_layout.addWidget(self.campo_qtde_item)
+        quantidades_layout.addWidget(QLabel("Qtde etiqueta"))
+        quantidades_layout.addWidget(self.campo_qtde_etiqueta)
+        imprimir_form.addRow("Quantidade", quantidades)
+        locais_radio = QWidget()
+        locais_radio_layout = QHBoxLayout(locais_radio)
+        locais_radio_layout.setContentsMargins(0, 0, 0, 0)
+        self.grupo_local_impressao = QButtonGroup(self)
+        for texto in ("Loc novo", "Loc retorno"):
+            radio = QRadioButton(texto)
+            self.grupo_local_impressao.addButton(radio)
+            locais_radio_layout.addWidget(radio)
+            if texto == "Loc novo":
+                radio.setChecked(True)
+        imprimir_form.addRow("Local", locais_radio)
+        self.btn_imprimir = QPushButton("Imprimir")
+        self.btn_imprimir.clicked.connect(self._imprimir)
+        imprimir_form.addRow("", self.btn_imprimir)
+        coluna_direita_layout.addWidget(imprimir)
+        coluna_direita_layout.addStretch()
+        colunas.addWidget(coluna_direita, 1)
+        layout.addLayout(colunas)
+        botoes = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        botoes.rejected.connect(self.reject)
+        layout.addWidget(botoes)
+
+    def _transferir(self):
+        if not self.campo_qtde_transferencia.text().strip():
+            QMessageBox.warning(self, "Transferência", "Informe a quantidade a transferir.")
+            return
+        tipo = self.grupo_tipo.checkedButton().text()
+        destino = self.combo_destino.currentText()
+        QMessageBox.information(self, "Transferência", f"Transferência preparada: {tipo}, {self.campo_qtde_transferencia.text()} item(ns) para {destino}.")
+
+    def _imprimir(self):
+        impressora = self.combo_impressoras.currentText()
+        if impressora == "Nenhuma impressora disponível":
+            QMessageBox.warning(self, "Impressão", "Não há impressoras disponíveis.")
+            return
+        try:
+            quantidade = int(self.campo_qtde_etiqueta.text())
+        except ValueError:
+            QMessageBox.warning(self, "Impressão", "Informe uma quantidade válida de etiquetas.")
+            return
+        info = QPrinterInfo.printerInfo(impressora)
+        printer = QPrinter(info) if not info.isNull() else QPrinter()
+        painter = QPainter(printer)
+        if not painter.isActive():
+            QMessageBox.warning(self, "Impressão", "Não foi possível acessar a impressora selecionada.")
+            return
+        local = self.campo_loc_novo.text() if self.grupo_local_impressao.checkedButton().text() == "Loc novo" else self.campo_loc_retorno.text()
+        for indice in range(quantidade):
+            painter.drawText(80, 100, f"Kardex: {self.item.get('Kardex', '')}")
+            painter.drawText(80, 140, f"Código: {self.item.get('Código', '')}")
+            painter.drawText(80, 180, f"Descrição: {self.item.get('Descrição', '')}")
+            painter.drawText(80, 220, f"Local: {local}")
+            painter.drawText(80, 260, f"Qtde: {self.campo_qtde_item.text()}")
+            if indice < quantidade - 1:
+                printer.newPage()
+        painter.end()
+        QMessageBox.information(self, "Impressão", "Etiquetas enviadas para a impressora.")
 
 
 class EditorDelegate(QStyledItemDelegate):
@@ -104,6 +303,9 @@ class EstoquePage(QWidget):
         self.dados = []
         self.modo_resumido = True
         self._setup_ui()
+        self.atalho_detalhes = QShortcut(QKeySequence("Ctrl+P"), self)
+        self.atalho_detalhes.setContext(Qt.ShortcutContext.WindowShortcut)
+        self.atalho_detalhes.activated.connect(self._abrir_detalhes_item)
         self._carregar_dados()
 
     def _setup_ui(self):
@@ -679,6 +881,36 @@ class EstoquePage(QWidget):
         """)
 
         layout.addWidget(card)
+
+    def _obter_item_selecionado(self):
+        row = self.tabela.currentRow()
+        if row < 0:
+            return None
+
+        coluna_kardex = self.COLUNAS.index("Kardex")
+        cell = self.tabela.item(row, coluna_kardex)
+        if not cell:
+            return None
+
+        kardex = cell.text().strip()
+        return next(
+            (item for item in self.dados
+             if str(item.get("Kardex", "")).strip() == kardex),
+            None,
+        )
+
+    def _abrir_detalhes_item(self):
+        item = self._obter_item_selecionado()
+        if not item:
+            QMessageBox.information(
+                self,
+                "Detalhes do item",
+                "Selecione um item na tabela para abrir os detalhes.",
+            )
+            return
+
+        dialogo = DetalhesEstoqueDialog(item, self)
+        dialogo.exec()
 
     def _carregar_dados(self):
         try:
