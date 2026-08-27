@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import datetime
 from collections import Counter
 
@@ -13,13 +14,14 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QStyledItemDelegate, QStyleOptionViewItem,
-    QStyle, QDialog, QFrame, QDateEdit,
+    QStyle, QDialog, QFrame, QDateEdit, QFileDialog,
 )
 from PySide6.QtCore import Qt, QSize, QSizeF, QRect, Signal, QDate
 from PySide6.QtGui import QPainter, QMouseEvent, QTextDocument, QPageSize
 from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
 from PySide6.QtWidgets import QMessageBox
 import socket
+import pdfplumber
 
 
 class EditorDelegate(QStyledItemDelegate):
@@ -488,6 +490,10 @@ class ProgramacaoAgulhasPage(QWidget):
         self.campo_filtro.textChanged.connect(self._aplicar_filtro)
         info_linha.addSpacing(8)
         info_linha.addWidget(self.campo_filtro)
+        self.btn_capturar = QPushButton("Capturar")
+        self.btn_capturar.setFixedHeight(30)
+        self.btn_capturar.clicked.connect(self._capturar_pdf)
+        info_linha.addWidget(self.btn_capturar)
 
         info_linha.addStretch()
         self.label_contador = QLabel("0 itens")
@@ -916,6 +922,89 @@ class ProgramacaoAgulhasPage(QWidget):
     def _aplicar_filtro(self):
         self._popular_tabela()
         self._atualizar_botoes_acao()
+
+    def _extrair_dados_pdf(self, caminho):
+        with pdfplumber.open(caminho) as pdf:
+            texto = "\n".join(pagina.extract_text() or "" for pagina in pdf.pages)
+            pedido_match = re.search(
+                r"pedido\s+de\s+compra\s*-\s*(PC\S+)",
+                texto,
+                re.IGNORECASE,
+            )
+            pedido = pedido_match.group(1).strip() if pedido_match else ""
+            linhas = []
+            for pagina in pdf.pages:
+                for tabela in pagina.extract_tables() or []:
+                    for linha in tabela:
+                        if len(linha) < 11:
+                            continue
+                        valores = [str(valor or "").strip() for valor in linha]
+                        if not valores[0] or not valores[1]:
+                            continue
+                        linhas.append({
+                            "kardex": valores[0],
+                            "codigo": valores[1],
+                            "qtde": valores[6],
+                            "requisitante": valores[10],
+                        })
+        return pedido, linhas
+
+    def _capturar_pdf(self):
+        caminho, _ = QFileDialog.getOpenFileName(
+            self,
+            "Selecionar pedido de compra",
+            "",
+            "Arquivos PDF (*.pdf)",
+        )
+        if not caminho:
+            return
+        try:
+            pedido, linhas = self._extrair_dados_pdf(caminho)
+        except Exception as erro:
+            QMessageBox.critical(self, "Capturar PDF", f"Não foi possível ler o PDF:\n{erro}")
+            return
+        if not linhas:
+            QMessageBox.warning(
+                self,
+                "Capturar PDF",
+                "Nenhuma linha válida de tabela com 11 colunas foi encontrada.",
+            )
+            return
+        if not pedido:
+            QMessageBox.warning(
+                self,
+                "Capturar PDF",
+                "O código do pedido no formato PC... não foi encontrado.",
+            )
+            return
+        resposta = QMessageBox.question(
+            self,
+            "Confirmar captura",
+            f"Pedido: {pedido}\nLinhas encontradas: {len(linhas)}\n\nAdicionar à programação?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if resposta != QMessageBox.StandardButton.Yes:
+            return
+        hoje = datetime.now().strftime("%d/%m/%Y")
+        for linha in linhas:
+            self.dados.append({
+                "id": self._proximo_id(),
+                "pedido": pedido,
+                "codigo": linha["codigo"],
+                "kardex": linha["kardex"],
+                "qtde": linha["qtde"],
+                "fornecedor": "",
+                "requisitante": linha["requisitante"],
+                "status": "Pendente",
+                "selecionado": False,
+                "data_inserido": hoje,
+                "data_programado": "",
+                "data_separando": "",
+                "data_entregue": "",
+            })
+        self._salvar_json()
+        self._popular_tabela()
+        QMessageBox.information(self, "Capturar PDF", f"{len(linhas)} item(ns) capturado(s) com sucesso.")
 
     def _limpar_filtro_data(self):
         self.data_inicio.setDate(QDate.currentDate().addMonths(-6))
