@@ -61,6 +61,7 @@ class CredentialsDialog(QDialog):
         self.btn_confirmar.setObjectName("btnPrimary")
         self.btn_confirmar.setFixedHeight(34)
         self.btn_confirmar.clicked.connect(self.accept)
+        self.campo_senha.returnPressed.connect(self.btn_confirmar.click)
         botoes_layout.addWidget(self.btn_confirmar)
 
         layout.addLayout(botoes_layout)

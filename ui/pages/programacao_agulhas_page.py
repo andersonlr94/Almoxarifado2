@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import unicodedata
 from datetime import datetime
 from collections import Counter
 
@@ -112,6 +113,41 @@ def _chave_flexivel(item, *variacoes):
             valor = item[chave]
             return str(valor) if valor is not None else ""
     return ""
+
+
+def _normalizar_requisitante_pdf(valor):
+    texto = str(valor or "").strip()
+    sem_acentos = "".join(
+        caractere
+        for caractere in unicodedata.normalize("NFKD", texto)
+        if not unicodedata.combining(caractere)
+    ).upper()
+    if "PARAISO" in sem_acentos:
+        return "Almoxarifado PARAISO"
+    if "ITAJUBA" in sem_acentos:
+        return "PLANTA ITAJUBA"
+    if "OUROS" in sem_acentos:
+        return "PLANTA DE OUROS"
+    return sem_acentos
+
+
+def _requisitante_da_linha_pdf(valores):
+    requisitante = _normalizar_requisitante_pdf(valores[10])
+    if requisitante in {
+        "ALMOXARIFADO PARAISO",
+        "PLANTA ITAJUBA",
+        "PLANTA DE OUROS",
+    }:
+        return requisitante
+    for valor in valores:
+        requisitante = _normalizar_requisitante_pdf(valor)
+        if requisitante in {
+            "Almoxarifado PARAISO",
+            "PLANTA ITAJUBA",
+            "PLANTA DE OUROS",
+        }:
+            return requisitante
+    return _normalizar_requisitante_pdf(valores[10])
 
 
 def _buscar_item_por_codigo(codigo):
@@ -941,11 +977,23 @@ class ProgramacaoAgulhasPage(QWidget):
                         valores = [str(valor or "").strip() for valor in linha]
                         if not valores[0] or not valores[1]:
                             continue
+                        colunas_normalizadas = {
+                            "".join(
+                                caractere
+                                for caractere in unicodedata.normalize("NFKD", valor)
+                                if not unicodedata.combining(caractere)
+                            ).upper()
+                            for valor in (valores[0], valores[1], valores[10])
+                        }
+                        if colunas_normalizadas & {
+                            "KARDEX", "ITEM", "CODIGO", "REQUISITANTE", "SOLICITANTE"
+                        }:
+                            continue
                         linhas.append({
                             "kardex": valores[0],
                             "codigo": valores[1],
                             "qtde": valores[6],
-                            "requisitante": valores[10],
+                            "requisitante": _requisitante_da_linha_pdf(valores),
                         })
         return pedido, linhas
 
@@ -987,14 +1035,27 @@ class ProgramacaoAgulhasPage(QWidget):
             return
         hoje = datetime.now().strftime("%d/%m/%Y")
         for linha in linhas:
+            item_encontrado = _buscar_item_por_codigo(linha["codigo"])
+            fornecedor = ""
+            if item_encontrado:
+                fornecedor = _chave_flexivel(
+                    item_encontrado,
+                    "fornecedor",
+                    "Fornecedor",
+                    "FORNECEDOR",
+                    "forn",
+                )
+            requisitante = _normalizar_requisitante_pdf(
+                linha.get("requisitante", "")
+            )
             self.dados.append({
                 "id": self._proximo_id(),
                 "pedido": pedido,
                 "codigo": linha["codigo"],
                 "kardex": linha["kardex"],
                 "qtde": linha["qtde"],
-                "fornecedor": "",
-                "requisitante": linha["requisitante"],
+                "fornecedor": fornecedor.upper() if fornecedor else fornecedor,
+                "requisitante": requisitante,
                 "status": "Pendente",
                 "selecionado": False,
                 "data_inserido": hoje,
@@ -1094,7 +1155,7 @@ class ProgramacaoAgulhasPage(QWidget):
         return self.dados
 
     def _mapear_requisitante(self, texto):
-        mapa = {"1": "Almoxarifado PARAISO", "2": "PLANTA DE OUROS", "3": "PLANTA DE ITAJUBA"}
+        mapa = {"1": "Almoxarifado PARAISO", "2": "PLANTA DE OUROS", "3": "PLANTA ITAJUBA"}
         if texto in mapa:
             self.campo_requisitante.blockSignals(True)
             self.campo_requisitante.setText(mapa[texto])
