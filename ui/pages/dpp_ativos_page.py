@@ -1,6 +1,8 @@
 import time
 import os
 import subprocess
+import getpass
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QDialog, QFormLayout, QApplication, QMessageBox
@@ -14,6 +16,9 @@ class CredentialsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Credenciais - DPP Ativos")
         self.setMinimumWidth(340)
+        self.setModal(True)
+        self.setWindowModality(Qt.WindowModality.WindowModal)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self._setup_ui()
 
     def _setup_ui(self):
@@ -33,10 +38,13 @@ class CredentialsDialog(QDialog):
         form_layout = QFormLayout()
         form_layout.setSpacing(10)
 
+        usuario_padrao = os.environ.get("USERNAME") or os.environ.get("USER") or getpass.getuser()
+
         self.campo_usuario = QLineEdit()
+        self.campo_usuario.setText(usuario_padrao)
         self.campo_usuario.setPlaceholderText("Usuário")
         self.campo_usuario.setFixedHeight(34)
-        
+
         self.campo_senha = QLineEdit()
         self.campo_senha.setPlaceholderText("Senha")
         self.campo_senha.setEchoMode(QLineEdit.EchoMode.Password)
@@ -64,6 +72,8 @@ class CredentialsDialog(QDialog):
         self.campo_senha.returnPressed.connect(self.btn_confirmar.click)
         botoes_layout.addWidget(self.btn_confirmar)
 
+        self.campo_usuario.setFocus()
+        self.campo_usuario.selectAll()
         layout.addLayout(botoes_layout)
 
     def obter_dados(self):

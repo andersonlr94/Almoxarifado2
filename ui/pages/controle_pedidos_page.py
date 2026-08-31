@@ -874,8 +874,8 @@ class ControlePedidosPage(QWidget):
                 acao.triggered.connect(lambda checked, n=nome, i=idx: self._aplicar_cor(i, n))
             menu.exec(QCursor.pos())
             return
-        # Coluna Nome (2) → menu "Verificar requisição"
-        if col == 2:
+        # Colunas Nome (2) e Requisição (3) → menu "Verificar requisição"
+        if col in (2, 3):
             req_val = self.dados[idx].get("requisicao", "").strip()
             if not req_val:
                 return

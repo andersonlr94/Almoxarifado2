@@ -308,28 +308,77 @@ class DetalhesEstoqueDialog(QDialog):
         if impressora == "Nenhuma impressora disponível":
             QMessageBox.warning(self, "Impressão", "Não há impressoras disponíveis.")
             return
+
         try:
             quantidade = int(self.campo_qtde_etiqueta.text())
         except ValueError:
             QMessageBox.warning(self, "Impressão", "Informe uma quantidade válida de etiquetas.")
             return
-        info = QPrinterInfo.printerInfo(impressora)
-        printer = QPrinter(info) if not info.isNull() else QPrinter()
-        painter = QPainter(printer)
-        if not painter.isActive():
-            QMessageBox.warning(self, "Impressão", "Não foi possível acessar a impressora selecionada.")
+
+        if quantidade <= 0:
+            QMessageBox.warning(self, "Impressão", "Informe uma quantidade maior que zero.")
             return
-        local = self.campo_loc_novo.text()
-        for indice in range(quantidade):
-            painter.drawText(80, 100, f"Kardex: {self.item.get('Kardex', '')}")
-            painter.drawText(80, 140, f"Código: {self.item.get('Código', '')}")
-            painter.drawText(80, 180, f"Descrição: {self.item.get('Descrição', '')}")
-            painter.drawText(80, 220, f"Local: {local}")
-            painter.drawText(80, 260, f"Qtde: {self.campo_qtde_item.text()}")
-            if indice < quantidade - 1:
-                printer.newPage()
-        painter.end()
-        QMessageBox.information(self, "Impressão", "Etiquetas enviadas para a impressora.")
+
+        item = self.item
+        codigo = str(item.get("Código", "")).strip()
+        kardex = str(item.get("Kardex", "")).strip()
+        descricao = str(item.get("Descrição", "")).strip()
+        local = self.campo_loc_novo.text().strip() or str(item.get("Loc novo", "")).strip()
+        qtde_item = self.campo_qtde_item.text().strip() or "1"
+        requisitante = "ESTOQUE"
+
+        def mm_to_dots(mm, dpi=203):
+            return int(mm * dpi / 25.4)
+
+        zpl_jobs = []
+        for _ in range(quantidade):
+            width = mm_to_dots(100)
+            height = mm_to_dots(40)
+            zpl = [
+                "^XA",
+                "^PON",
+                f"^PW{width}",
+                f"^LL{height}",
+                "^LH0,0",
+                f"^FO{mm_to_dots(2)},{mm_to_dots(2)}^GB{width - mm_to_dots(4)},{height - mm_to_dots(4)},2^FS",
+                f"^FO{mm_to_dots(5)},{mm_to_dots(5)}^A0N,40,40^FD{codigo}^FS",
+                f"^FO{mm_to_dots(5)},{mm_to_dots(12)}^A0N,30,30^FD{kardex}^FS",
+                f"^FO{mm_to_dots(5)},{mm_to_dots(20)}^A0N,25,25^FD{descricao[:40]}^FS",
+                f"^FO{mm_to_dots(5)},{mm_to_dots(28)}^A0N,25,25^FDReq: {requisitante}^FS",
+                f"^FO{mm_to_dots(5)},{mm_to_dots(34)}^A0N,30,30^FDQtde: {qtde_item}^FS",
+                f"^FO{mm_to_dots(50)},{mm_to_dots(34)}^A0N,30,30^FDLOC: {local}^FS",
+                "^PQ1",
+                "^XZ",
+            ]
+            zpl_jobs.append("\n".join(zpl))
+
+        try:
+            import win32print
+        except Exception:
+            QMessageBox.warning(self, "Impressão", "Envio direto de ZPL requer a biblioteca pywin32 (win32print).")
+            return
+
+        payload = "".join(zpl_jobs).encode("utf-8")
+        try:
+            hPrinter = win32print.OpenPrinter(impressora)
+            try:
+                win32print.StartDocPrinter(hPrinter, 1, ("ZPL Print", None, "RAW"))
+                try:
+                    pos = 0
+                    while pos < len(payload):
+                        written = win32print.WritePrinter(hPrinter, payload[pos:])
+                        if written <= 0:
+                            raise IOError("Falha ao gravar dados na impressora")
+                        pos += written
+                finally:
+                    win32print.EndDocPrinter(hPrinter)
+            finally:
+                win32print.ClosePrinter(hPrinter)
+        except Exception as erro:
+            QMessageBox.critical(self, "Erro de Impressão", f"Falha ao enviar ZPL para a impressora: {erro}")
+            return
+
+        QMessageBox.information(self, "Impressão", "Etiquetas enviadas para a impressora usando o layout da programação de agulhas.")
 
 
 class EditorDelegate(QStyledItemDelegate):
