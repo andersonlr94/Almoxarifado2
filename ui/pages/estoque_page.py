@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QDialog, QGroupBox, QComboBox, QRadioButton, QButtonGroup,
     QFormLayout, QDialogButtonBox,
 )
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QTimer
 from PySide6.QtGui import QGuiApplication, QIntValidator, QPainter, QKeySequence, QShortcut
 from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
 
@@ -470,6 +470,7 @@ class EstoquePage(QWidget):
     def __init__(self):
         super().__init__()
         self.dados = []
+        self._texto_filtro_cache = []
         self.modo_resumido = True
         self._setup_ui()
         self.atalho_detalhes = QShortcut(QKeySequence("Ctrl+P"), self)
@@ -569,7 +570,12 @@ class EstoquePage(QWidget):
         self.campo_filtro.setPlaceholderText("⌕   Pesquisar...")
         self.campo_filtro.setFixedHeight(44)
         self.campo_filtro.setMinimumWidth(200)
-        self.campo_filtro.textChanged.connect(self._aplicar_filtro)
+        # Timer debounce para não travar digitação (filtro só após 280ms sem digitar)
+        self._filtro_timer = QTimer(self)
+        self._filtro_timer.setSingleShot(True)
+        self._filtro_timer.setInterval(280)
+        self._filtro_timer.timeout.connect(self._on_filtro_timeout)
+        self.campo_filtro.textChanged.connect(self._on_filtro_text_changed)
 
         self.campo_filtro.setStyleSheet("""
             QLineEdit {
@@ -625,7 +631,7 @@ class EstoquePage(QWidget):
         self.detalhes_box = QWidget()
         self.detalhes_box.setObjectName("detalhesBox")
         self.detalhes_box.setMinimumHeight(128)
-        self.detalhes_box.setMaximumWidth(620)
+        self.detalhes_box.setMaximumWidth(630)
 
         self.detalhes_box.setStyleSheet("""
             QWidget#detalhesBox {
@@ -661,17 +667,9 @@ class EstoquePage(QWidget):
         """)
         detalhes_layout.addWidget(lbl_visao, 0, Qt.AlignmentFlag.AlignTop)
 
-        corpo_detalhes = QHBoxLayout()
-        corpo_detalhes.setSpacing(20)
-
-        coluna_esquerda = QVBoxLayout()
-        coluna_direita = QVBoxLayout()
-        coluna_esquerda.setSpacing(0)
-        coluna_direita.setSpacing(0)
-
         self._labels_valores = {}
 
-        def criar_linha(rotulo, chave, simbolo="", cor="#5f6cf5"):
+        def criar_linha(rotulo, chave, simbolo="", cor="#5f6cf5", largura_label=105, word_wrap=False):
             widget = QWidget()
             widget.setMinimumHeight(24)
 
@@ -691,7 +689,7 @@ class EstoquePage(QWidget):
             """)
 
             lbl_nome = QLabel(rotulo.upper())
-            lbl_nome.setFixedWidth(105)
+            lbl_nome.setFixedWidth(largura_label)
             lbl_nome.setStyleSheet("""
                 QLabel {
                     color: #7183aa;
@@ -701,6 +699,7 @@ class EstoquePage(QWidget):
             """)
 
             lbl_valor = QLabel("-")
+            lbl_valor.setWordWrap(word_wrap)
             lbl_valor.setStyleSheet("""
                 QLabel {
                     color: #17203f;
@@ -733,61 +732,77 @@ class EstoquePage(QWidget):
             """)
             return linha
 
-        coluna_esquerda.addWidget(
-            criar_linha("Código", "Código", "◇", "#5865f2")
-        )
-        coluna_esquerda.addWidget(separador())
+        def separador_vertical():
+            linha = QFrame()
+            linha.setFrameShape(QFrame.Shape.VLine)
+            linha.setStyleSheet("""
+                QFrame {
+                    border: none;
+                    background: #edf0f5;
+                    max-width: 1px;
+                }
+            """)
+            return linha
 
-        coluna_esquerda.addWidget(
-            criar_linha("Descrição", "Descrição", "▣", "#5865f2")
-        )
-        coluna_esquerda.addWidget(separador())
+        # ── Linha 1: Código | Kardex ──
+        linha1 = QHBoxLayout()
+        linha1.setSpacing(20)
+        linha1.setContentsMargins(0, 0, 0, 0)
+        linha1.addWidget(criar_linha("Código", "Código", "◇", "#5865f2"), 1)
+        linha1.addWidget(separador_vertical())
+        linha1.addWidget(criar_linha("Kardex", "Kardex", "▤", "#5865f2"), 1)
+        linha1_widget = QWidget()
+        linha1_widget.setLayout(linha1)
+        detalhes_layout.addWidget(linha1_widget)
+        detalhes_layout.addWidget(separador())
 
-        coluna_esquerda.addWidget(
-            criar_linha("Loc novo", "Loc novo", "⌖", "#5865f2")
-        )
-        coluna_esquerda.addWidget(separador())
+        # ── Linha 2: Descrição (linha inteira, sem dividir) ──
+        descricao_linha = criar_linha("Descrição", "Descrição", "▣", "#5865f2", word_wrap=True)
+        descricao_linha.setMinimumHeight(28)
+        detalhes_layout.addWidget(descricao_linha)
+        detalhes_layout.addWidget(separador())
 
-        coluna_esquerda.addWidget(
-            criar_linha("Loc retorno", "Loc retorno", "⌖", "#5865f2")
-        )
+        # ── Linha 3: três colunas fixas ──
+        linha3 = QHBoxLayout()
+        linha3.setSpacing(12)
+        linha3.setContentsMargins(0, 0, 0, 0)
+        w_loc_novo = criar_linha("Loc novo", "Loc novo", "⌖", "#5865f2", largura_label=68)
+        w_loc_novo.setFixedWidth(220)
+        w_qtde_novo = criar_linha("Qtde", "Qtde novo", "▣", "#16b86c", largura_label=40)
+        w_qtde_novo.setFixedWidth(135)
+        w_consumo = criar_linha("Consumo médio", "Consumo médio", "⌁", "#5865f2", largura_label=95)
+        w_consumo.setFixedWidth(185)
+        linha3.addWidget(w_loc_novo)
+        linha3.addWidget(separador_vertical())
+        linha3.addWidget(w_qtde_novo)
+        linha3.addWidget(separador_vertical())
+        linha3.addWidget(w_consumo)
+        linha3.addStretch(1)
+        linha3_widget = QWidget()
+        linha3_widget.setLayout(linha3)
+        detalhes_layout.addWidget(linha3_widget)
+        detalhes_layout.addWidget(separador())
 
-        divisor_vertical = QFrame()
-        divisor_vertical.setFrameShape(QFrame.Shape.VLine)
-        divisor_vertical.setStyleSheet("""
-            QFrame {
-                border: none;
-                background: #edf0f5;
-                max-width: 1px;
-            }
-        """)
+        # ── Linha 4: três colunas fixas (terceira vazia) ──
+        linha4 = QHBoxLayout()
+        linha4.setSpacing(12)
+        linha4.setContentsMargins(0, 0, 0, 0)
+        w_loc_ret = criar_linha("Loc ret", "Loc retorno", "⌖", "#5865f2", largura_label=68)
+        w_loc_ret.setFixedWidth(220)
+        w_qtde_ret = criar_linha("Qtde", "Qtde retorno", "▣", "#ff7a21", largura_label=40)
+        w_qtde_ret.setFixedWidth(135)
+        w_custo = criar_linha("Custo", "Custo", "＄", "#16b86c", largura_label=68)
+        w_custo.setFixedWidth(185)
+        linha4.addWidget(w_loc_ret)
+        linha4.addWidget(separador_vertical())
+        linha4.addWidget(w_qtde_ret)
+        linha4.addWidget(separador_vertical())
+        linha4.addWidget(w_custo)
+        linha4.addStretch(1)
+        linha4_widget = QWidget()
+        linha4_widget.setLayout(linha4)
+        detalhes_layout.addWidget(linha4_widget)
 
-        coluna_direita.addWidget(
-            criar_linha("Kardex", "Kardex", "▤", "#5865f2")
-        )
-        coluna_direita.addWidget(separador())
-
-        coluna_direita.addWidget(
-            criar_linha("Qtde novo", "Qtde novo", "▣", "#16b86c")
-        )
-        coluna_direita.addWidget(separador())
-
-        coluna_direita.addWidget(
-            criar_linha("Qtde retorno", "Qtde retorno", "▣", "#ff7a21")
-        )
-        coluna_direita.addWidget(separador())
-
-        coluna_direita.addWidget(
-            criar_linha("Consumo médio", "Consumo médio", "⌁", "#5865f2")
-        )
-
-        corpo_detalhes.addLayout(coluna_esquerda, 1)
-        corpo_detalhes.addWidget(divisor_vertical)
-        corpo_detalhes.addLayout(coluna_direita, 1)
-
-        container_corpo = QWidget()
-        container_corpo.setLayout(corpo_detalhes)
-        detalhes_layout.addWidget(container_corpo, 0, Qt.AlignmentFlag.AlignTop)
         detalhes_layout.addStretch(1)
         topo.addWidget(self.detalhes_box, 1)
 
@@ -1080,22 +1095,38 @@ class EstoquePage(QWidget):
         dialogo = DetalhesEstoqueDialog(item, self)
         dialogo.exec()
 
+    def _rebuild_cache_filtro(self):
+        # cache de texto lowercased para filtro instantâneo
+        try:
+            self._texto_filtro_cache = [
+                " ".join(str(v) for v in item.values()).lower()
+                for item in self.dados
+            ]
+        except Exception:
+            self._texto_filtro_cache = []
+
     def _carregar_dados(self):
         try:
             with open(_caminho_json(), "r", encoding="utf-8") as f:
                 self.dados = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             self.dados = []
-
+        self._rebuild_cache_filtro()
         self._popular_tabela()
 
     def _popular_tabela(self):
+        # otimizado: desativa updates, usa cache e setRowCount batch
+        if len(self._texto_filtro_cache) != len(self.dados):
+            self._rebuild_cache_filtro()
+        self.tabela.setUpdatesEnabled(False)
         self.tabela.blockSignals(True)
-        self.tabela.setRowCount(0)
 
         filtro_texto = self.campo_filtro.text().strip().lower()
 
-        for item in self.dados:
+        # filtra usando cache
+        filtrados = []
+        cache = self._texto_filtro_cache
+        for idx, item in enumerate(self.dados):
             if self.modo_resumido:
                 ativo = str(item.get("Ativo/Obsol.", "")).strip().lower()
                 if "ativo" not in ativo:
@@ -1105,16 +1136,18 @@ class EstoquePage(QWidget):
                     continue
 
             if filtro_texto:
-                texto = " ".join(
-                    str(v) for v in item.values()
-                ).lower()
-
+                if idx < len(cache):
+                    texto = cache[idx]
+                else:
+                    texto = " ".join(str(v) for v in item.values()).lower()
                 if filtro_texto not in texto:
                     continue
 
-            row = self.tabela.rowCount()
-            self.tabela.insertRow(row)
+            filtrados.append(item)
 
+        self.tabela.setRowCount(len(filtrados))
+
+        for row, item in enumerate(filtrados):
             for col, chave in enumerate(self.CHAVES):
                 valor = str(item.get(chave, ""))
 
@@ -1149,12 +1182,30 @@ class EstoquePage(QWidget):
                 self.tabela.setColumnHidden(c, False)
 
         self.tabela.blockSignals(False)
+        self.tabela.setUpdatesEnabled(True)
 
         self.label_contador.setText(
             str(self.tabela.rowCount())
         )
 
         self._atualizar_detalhes()
+
+    def _on_filtro_text_changed(self, texto):
+        # debounce: só filtra após usuário parar de digitar
+        try:
+            self._filtro_timer.stop()
+        except Exception:
+            pass
+        # filtro vazio responde mais rápido
+        if not texto.strip():
+            self._filtro_timer.start(80)
+        else:
+            self._filtro_timer.start(280)
+
+    def _on_filtro_timeout(self):
+        self._popular_tabela()
+        if self.tabela.rowCount() == 1:
+            self.tabela.selectRow(0)
 
     def _atualizar(self):
         modo_anterior = self.modo_resumido
@@ -1534,15 +1585,20 @@ class EstoquePage(QWidget):
         return mapa
 
     def _aplicar_filtro(self):
-        self._popular_tabela()
-
-        if self.tabela.rowCount() == 1:
-            self.tabela.selectRow(0)
-            self._atualizar_detalhes()
+        # mantido por compatibilidade: usa debounce
+        self._on_filtro_text_changed(self.campo_filtro.text())
 
     def _limpar_filtro(self):
+        try:
+            self._filtro_timer.stop()
+        except Exception:
+            pass
         self.campo_filtro.clear()
         self.campo_filtro.setFocus()
+        # limpa imediatamente sem esperar debounce
+        self._popular_tabela()
+        if self.tabela.rowCount() == 1:
+            self.tabela.selectRow(0)
 
     def _atualizar_detalhes(self):
         kardex = ""

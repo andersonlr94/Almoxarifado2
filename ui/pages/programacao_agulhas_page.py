@@ -17,10 +17,10 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QStyledItemDelegate, QStyleOptionViewItem,
     QStyle, QDialog, QFrame, QDateEdit, QFileDialog,
 )
-from PySide6.QtCore import Qt, QSize, QSizeF, QRect, Signal, QDate
+from PySide6.QtCore import Qt, QSize, QSizeF, QRect, Signal, QDate, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QAbstractAnimation
 from PySide6.QtGui import QPainter, QMouseEvent, QTextDocument, QPageSize
 from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox, QGraphicsOpacityEffect
 import socket
 import pdfplumber
 
@@ -426,14 +426,21 @@ class ProgramacaoAgulhasPage(QWidget):
         # ── Right Panel: Novo Pedido ──
         self.painel_form = QWidget()
         painel_form = self.painel_form
-        painel_form.setFixedWidth(690)
-        painel_form_layout = QVBoxLayout(painel_form)
+        painel_form.setFixedWidth(830)
+        painel_form.setMinimumHeight(62)
+        painel_form_layout = QHBoxLayout(painel_form)
         painel_form_layout.setContentsMargins(0, 0, 0, 0)
         painel_form_layout.setSpacing(10)
+        painel_form_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
 
-        form_grid = QGridLayout()
-        form_grid.setSpacing(6)
-        form_grid.setHorizontalSpacing(10)
+        # ── Container animável dos campos (oculto inicialmente) ──
+        self.campos_container = QWidget()
+        self.campos_container.setObjectName("camposContainer")
+        campos_grid = QGridLayout(self.campos_container)
+        campos_grid.setContentsMargins(0, 0, 0, 0)
+        campos_grid.setSpacing(6)
+        campos_grid.setHorizontalSpacing(10)
+        campos_grid.setVerticalSpacing(2)
 
         lbl_pedido = QLabel("Pedido")
         lbl_pedido.setObjectName("fieldLabel")
@@ -441,9 +448,9 @@ class ProgramacaoAgulhasPage(QWidget):
         self.campo_pedido.setPlaceholderText("Nº do pedido")
         self.campo_pedido.setFixedHeight(36)
         self.campo_pedido.setFixedWidth(149)
-        self.campo_pedido.returnPressed.connect(self._inserir)
-        form_grid.addWidget(lbl_pedido, 0, 0)
-        form_grid.addWidget(self.campo_pedido, 1, 0)
+        self.campo_pedido.returnPressed.connect(self._on_inserir_clicked)
+        campos_grid.addWidget(lbl_pedido, 0, 0)
+        campos_grid.addWidget(self.campo_pedido, 1, 0)
 
         lbl_codigo = QLabel("Código")
         lbl_codigo.setObjectName("fieldLabel")
@@ -451,9 +458,9 @@ class ProgramacaoAgulhasPage(QWidget):
         self.campo_codigo.setPlaceholderText("Código do item")
         self.campo_codigo.setFixedHeight(36)
         self.campo_codigo.setFixedWidth(120)
-        self.campo_codigo.returnPressed.connect(self._inserir)
-        form_grid.addWidget(lbl_codigo, 0, 1)
-        form_grid.addWidget(self.campo_codigo, 1, 1)
+        self.campo_codigo.returnPressed.connect(self._on_inserir_clicked)
+        campos_grid.addWidget(lbl_codigo, 0, 1)
+        campos_grid.addWidget(self.campo_codigo, 1, 1)
 
         lbl_qtde = QLabel("Qtde")
         lbl_qtde.setObjectName("fieldLabel")
@@ -461,9 +468,9 @@ class ProgramacaoAgulhasPage(QWidget):
         self.campo_qtde.setPlaceholderText("Qtde")
         self.campo_qtde.setFixedHeight(36)
         self.campo_qtde.setFixedWidth(99)
-        self.campo_qtde.returnPressed.connect(self._inserir)
-        form_grid.addWidget(lbl_qtde, 0, 2)
-        form_grid.addWidget(self.campo_qtde, 1, 2)
+        self.campo_qtde.returnPressed.connect(self._on_inserir_clicked)
+        campos_grid.addWidget(lbl_qtde, 0, 2)
+        campos_grid.addWidget(self.campo_qtde, 1, 2)
 
         lbl_req = QLabel("Requisitante")
         lbl_req.setObjectName("fieldLabel")
@@ -472,19 +479,53 @@ class ProgramacaoAgulhasPage(QWidget):
         self.campo_requisitante.setFixedHeight(36)
         self.campo_requisitante.setFixedWidth(158)
         self.campo_requisitante.textChanged.connect(self._mapear_requisitante)
-        self.campo_requisitante.returnPressed.connect(self._inserir)
-        form_grid.addWidget(lbl_req, 0, 3)
-        form_grid.addWidget(self.campo_requisitante, 1, 3)
+        self.campo_requisitante.returnPressed.connect(self._on_inserir_clicked)
+        campos_grid.addWidget(lbl_req, 0, 3)
+        campos_grid.addWidget(self.campo_requisitante, 1, 3)
 
-        btn_inserir = QPushButton(qtawesome.icon('fa6s.plus', color='#ffffff'), "  Inserir")
-        btn_inserir.setObjectName("btnGradientIndigo")
-        btn_inserir.setFixedHeight(36)
-        btn_inserir.setFixedWidth(120)
-        btn_inserir.setDefault(True)
-        btn_inserir.clicked.connect(self._inserir)
-        form_grid.addWidget(btn_inserir, 1, 4, alignment=Qt.AlignmentFlag.AlignLeft)
+        # Estado inicial: oculto (largura 0 → slide para fora)
+        self._campos_expandidos = False
+        # 149+120+99+158 + 3*10 (spacing) = 556
+        self._campos_largura_total = 556
+        self.campos_container.setMinimumWidth(0)
+        self.campos_container.setMaximumWidth(0)
+        # Opacidade para efeito fade junto ao slide
+        self._campos_opacity = QGraphicsOpacityEffect(self.campos_container)
+        self.campos_container.setGraphicsEffect(self._campos_opacity)
+        self._campos_opacity.setOpacity(0.0)
 
-        painel_form_layout.addLayout(form_grid)
+        self._campos_anim_largura = QPropertyAnimation(self.campos_container, b"maximumWidth")
+        self._campos_anim_largura.setDuration(280)
+        self._campos_anim_largura.setEasingCurve(QEasingCurve.Type.InOutCubic)
+
+        self._campos_anim_opacity = QPropertyAnimation(self._campos_opacity, b"opacity")
+        self._campos_anim_opacity.setDuration(220)
+        self._campos_anim_opacity.setEasingCurve(QEasingCurve.Type.InOutCubic)
+
+        self._campos_anim_group = QParallelAnimationGroup(self)
+        self._campos_anim_group.addAnimation(self._campos_anim_largura)
+        self._campos_anim_group.addAnimation(self._campos_anim_opacity)
+        self._campos_anim_group.finished.connect(self._on_campos_anim_finished)
+
+        # ── Botões Inserir / Capturar (sempre visíveis, deslizam com os campos) ──
+        self.btn_inserir = QPushButton(qtawesome.icon('fa6s.plus', color='#ffffff'), "  Inserir")
+        self.btn_inserir.setObjectName("btnGradientIndigo")
+        self.btn_inserir.setFixedHeight(36)
+        self.btn_inserir.setFixedWidth(120)
+        self.btn_inserir.setDefault(True)
+        self.btn_inserir.clicked.connect(self._on_inserir_clicked)
+
+        self.btn_capturar = QPushButton(qtawesome.icon('mdi6.file-pdf-box', color='#ffffff'), "  Capturar")
+        self.btn_capturar.setObjectName("btnGradientTeal")
+        self.btn_capturar.setFixedHeight(36)
+        self.btn_capturar.setFixedWidth(120)
+        self.btn_capturar.setToolTip("Capturar dados de PDF")
+        self.btn_capturar.clicked.connect(self._capturar_pdf)
+
+        painel_form_layout.addWidget(self.campos_container, 0, Qt.AlignmentFlag.AlignBottom)
+        painel_form_layout.addWidget(self.btn_inserir, 0, Qt.AlignmentFlag.AlignBottom)
+        painel_form_layout.addWidget(self.btn_capturar, 0, Qt.AlignmentFlag.AlignBottom)
+        painel_form_layout.addStretch()
 
         filters_card_layout.addWidget(painel_form)
         filters_card_layout.addStretch()
@@ -526,10 +567,6 @@ class ProgramacaoAgulhasPage(QWidget):
         self.campo_filtro.textChanged.connect(self._aplicar_filtro)
         info_linha.addSpacing(8)
         info_linha.addWidget(self.campo_filtro)
-        self.btn_capturar = QPushButton("Capturar")
-        self.btn_capturar.setFixedHeight(30)
-        self.btn_capturar.clicked.connect(self._capturar_pdf)
-        info_linha.addWidget(self.btn_capturar)
 
         info_linha.addStretch()
         self.label_contador = QLabel("0 itens")
@@ -1160,6 +1197,49 @@ class ProgramacaoAgulhasPage(QWidget):
             self.campo_requisitante.blockSignals(True)
             self.campo_requisitante.setText(mapa[texto])
             self.campo_requisitante.blockSignals(False)
+
+    # ── Animação slide dos campos ──
+    def _expandir_campos(self):
+        if self._campos_anim_group.state() == QAbstractAnimation.State.Running:
+            return
+        self._campos_expandidos = True
+        self._campos_anim_largura.setStartValue(self.campos_container.maximumWidth())
+        self._campos_anim_largura.setEndValue(self._campos_largura_total)
+        self._campos_anim_opacity.setStartValue(self._campos_opacity.opacity())
+        self._campos_anim_opacity.setEndValue(1.0)
+        self._campos_anim_group.start()
+        # foco após pequeno delay para garantir layout
+        self.campo_pedido.setFocus()
+
+    def _recolher_campos(self):
+        if self._campos_anim_group.state() == QAbstractAnimation.State.Running:
+            return
+        self._campos_expandidos = False
+        self._campos_anim_largura.setStartValue(self.campos_container.maximumWidth())
+        self._campos_anim_largura.setEndValue(0)
+        self._campos_anim_opacity.setStartValue(self._campos_opacity.opacity())
+        self._campos_anim_opacity.setEndValue(0.0)
+        self._campos_anim_group.start()
+
+    def _on_inserir_clicked(self):
+        if self._campos_anim_group.state() == QAbstractAnimation.State.Running:
+            return
+        if not self._campos_expandidos:
+            self._expandir_campos()
+            return
+        pedido = self.campo_pedido.text().strip()
+        if not pedido:
+            self._recolher_campos()
+            return
+        self._inserir()
+        # mantém expandido para próximo lançamento; se quiser recolher após inserir, descomente:
+        # self._recolher_campos()
+
+    def _on_campos_anim_finished(self):
+        if self._campos_expandidos:
+            self.campos_container.setMaximumWidth(self._campos_largura_total)
+        else:
+            self.campos_container.setMaximumWidth(0)
 
     def _inserir(self):
         pedido = self.campo_pedido.text().strip().upper()
