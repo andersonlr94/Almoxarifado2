@@ -5,8 +5,15 @@ import pyautogui
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView, QMessageBox,
+    QHeaderView, QAbstractItemView, QMessageBox, QApplication,
 )
+from PySide6.QtCore import Qt
+
+import matplotlib
+matplotlib.use("QtAgg")
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
 from ui.regras_automacao import esperar_inicio, digitar_texto, enter
 
 
@@ -22,6 +29,8 @@ class RemoveLocDuplicadasPage(QWidget):
     def __init__(self):
         super().__init__()
         self.dados = []
+        self._total_transferencias = 0
+        self._transferencias_concluidas = 0
         self._setup_ui()
         self._carregar_dados()
 
@@ -76,6 +85,16 @@ class RemoveLocDuplicadasPage(QWidget):
 
         card_layout.addLayout(grid_botoes)
 
+        # ── Linha de conteúdo: tabela à esquerda, gráfico à direita ──
+        conteudo_row = QHBoxLayout()
+        conteudo_row.setSpacing(16)
+
+        # Painel esquerdo (Tabela)
+        painel_tabela = QWidget()
+        painel_tabela_layout = QVBoxLayout(painel_tabela)
+        painel_tabela_layout.setContentsMargins(0, 0, 0, 0)
+        painel_tabela_layout.setSpacing(8)
+
         self.tabela = QTableWidget(0, 4)
         self.tabela.setHorizontalHeaderLabels(
             ["Item", "Referência", "UM", "Qde em mãos"]
@@ -90,9 +109,43 @@ class RemoveLocDuplicadasPage(QWidget):
         self.tabela.verticalHeader().setDefaultSectionSize(36)
         self.tabela.verticalHeader().setMinimumSectionSize(28)
         self.tabela.verticalHeader().setVisible(False)
-        card_layout.addWidget(self.tabela)
+        painel_tabela_layout.addWidget(self.tabela)
+
+        conteudo_row.addWidget(painel_tabela, stretch=1)
+
+        # ── Card do gráfico de progresso (à direita) ──
+        grafico_card = QWidget()
+        grafico_card.setObjectName("statCard")
+        grafico_card.setFixedWidth(320)
+        grafico_card_layout = QVBoxLayout(grafico_card)
+        grafico_card_layout.setContentsMargins(16, 14, 16, 14)
+        grafico_card_layout.setSpacing(8)
+
+        grafico_header = QHBoxLayout()
+        self.grafico_titulo = QLabel("Progresso das Transferências")
+        self.grafico_titulo.setObjectName("sectionTitle")
+        grafico_header.addWidget(self.grafico_titulo)
+        grafico_header.addStretch()
+        grafico_card_layout.addLayout(grafico_header)
+
+        self.canvas_grafico = FigureCanvas(Figure(figsize=(2.6, 2.6)))
+        self.canvas_grafico.setMinimumHeight(260)
+        self.canvas_grafico.setMinimumWidth(260)
+        self.canvas_grafico.setParent(self)
+        grafico_card_layout.addWidget(self.canvas_grafico)
+
+        self.grafico_subtitulo = QLabel("")
+        self.grafico_subtitulo.setObjectName("pageSubtitle")
+        self.grafico_subtitulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        grafico_card_layout.addWidget(self.grafico_subtitulo)
+
+        grafico_card_layout.addStretch()
+        conteudo_row.addWidget(grafico_card)
+
+        card_layout.addLayout(conteudo_row)
 
         layout.addWidget(card)
+        self._atualizar_grafico()
 
     def _carregar_dados(self):
         try:
@@ -115,6 +168,62 @@ class RemoveLocDuplicadasPage(QWidget):
 
     def _atualizar_contador(self):
         self.label_contador.setText(f"{self.tabela.rowCount()} itens")
+
+    def _calcular_total_transferencias(self):
+        grouped = {}
+        for registro in self.dados:
+            item_id = registro.get("item", "").strip().upper()
+            if not item_id:
+                continue
+            if item_id not in grouped:
+                grouped[item_id] = []
+            grouped[item_id].append(registro)
+
+        total = 0
+        for item_id, records in grouped.items():
+            rec_recebe = None
+            rec_outra = None
+            for r in records:
+                ref = r.get("referencia", "").strip().upper()
+                if ref == "RECEBE":
+                    rec_recebe = r
+                else:
+                    rec_outra = r
+            if rec_recebe and rec_outra:
+                total += 1
+        return total
+
+    def _atualizar_grafico(self):
+        pct = (self._transferencias_concluidas / self._total_transferencias * 100) if self._total_transferencias else 0
+
+        self.grafico_subtitulo.setText(
+            f"{self._transferencias_concluidas} de {self._total_transferencias} transferências" if self._total_transferencias else "Nenhuma transferência para realizar"
+        )
+
+        fig = self.canvas_grafico.figure
+        fig.clear()
+        ax = fig.add_subplot(111)
+
+        if self._total_transferencias == 0:
+            ax.text(0.5, 0.5, "Sem transferências", ha="center", va="center",
+                    fontsize=12, color="#94a3b8")
+            ax.axis("off")
+        else:
+            ax.pie(
+                [self._transferencias_concluidas, self._total_transferencias - self._transferencias_concluidas],
+                colors=["#10b981", "#e5e7eb"],
+                startangle=90,
+                counterclock=False,
+                wedgeprops={"width": 0.28, "edgecolor": "white", "linewidth": 2},
+            )
+            ax.text(0.5, 0.52, f"{pct:.0f}%", ha="center", va="center",
+                    fontsize=26, fontweight="bold", color="#1e1b4b")
+            ax.text(0.5, 0.36, "concluído", ha="center", va="center",
+                    fontsize=11, color="#94a3b8")
+            ax.axis("equal")
+
+        fig.tight_layout()
+        self.canvas_grafico.draw()
 
     def _colar(self):
         from PySide6.QtGui import QGuiApplication
@@ -141,6 +250,9 @@ class RemoveLocDuplicadasPage(QWidget):
             })
         self._salvar_json()
         self._popular_tabela()
+        self._total_transferencias = self._calcular_total_transferencias()
+        self._transferencias_concluidas = 0
+        self._atualizar_grafico()
 
     def _executar(self):
         if self.tabela.rowCount() == 0:
@@ -191,6 +303,10 @@ class RemoveLocDuplicadasPage(QWidget):
             )
             return
 
+        self._total_transferencias = len(transferencias_para_fazer)
+        self._transferencias_concluidas = 0
+        self._atualizar_grafico()
+
         esperar_inicio()
 
         for t in transferencias_para_fazer:
@@ -231,6 +347,10 @@ class RemoveLocDuplicadasPage(QWidget):
             enter(3)
 
             pyautogui.press("f4")
+
+            self._transferencias_concluidas += 1
+            self._atualizar_grafico()
+            QApplication.processEvents()
 
     def _voltar_loc(self):
         if self.tabela.rowCount() == 0:
@@ -281,6 +401,10 @@ class RemoveLocDuplicadasPage(QWidget):
             )
             return
 
+        self._total_transferencias = len(transferencias_para_fazer)
+        self._transferencias_concluidas = 0
+        self._atualizar_grafico()
+
         esperar_inicio()
 
         for t in transferencias_para_fazer:
@@ -322,10 +446,17 @@ class RemoveLocDuplicadasPage(QWidget):
 
             pyautogui.press("f4")
 
+            self._transferencias_concluidas += 1
+            self._atualizar_grafico()
+            QApplication.processEvents()
+
     def _limpar(self):
         self.dados.clear()
         self._salvar_json()
         self._popular_tabela()
+        self._total_transferencias = 0
+        self._transferencias_concluidas = 0
+        self._atualizar_grafico()
 
     def _salvar_json(self):
         caminho = _caminho_json()

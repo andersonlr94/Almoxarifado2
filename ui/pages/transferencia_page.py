@@ -63,7 +63,7 @@ class TransferenciaPage(QWidget):
             edit.setPlaceholderText(placeholder)
             edit.setFixedHeight(34)
             edit.setEnabled(enabled)
-            edit.setMinimumWidth(150)
+            edit.setMinimumWidth(100)
             return edit
 
         # ── Coluna Esquerda: origem → destino → modo → botões ──
@@ -90,7 +90,6 @@ class TransferenciaPage(QWidget):
         self.campo_de_lote = _campo("De lote", "")
         for campo in (self.campo_de_local, self.campo_de_lugar, self.campo_de_lote):
             origem_layout.addWidget(campo)
-        left_layout.addWidget(origem_box)
 
         # Destino box — abaixo do de origem (sem seta)
         destino_box = QWidget()
@@ -108,7 +107,13 @@ class TransferenciaPage(QWidget):
         self.campo_para_lote = _campo("Para lote", "")
         for campo in (self.campo_para_local, self.campo_para_lugar, self.campo_para_lote):
             destino_layout.addWidget(campo)
-        left_layout.addWidget(destino_box)
+
+        # Adiciona origem e destino lado a lado (origem à esquerda, destino à direita)
+        origem_destino_row = QHBoxLayout()
+        origem_destino_row.setSpacing(12)
+        origem_destino_row.addWidget(origem_box)
+        origem_destino_row.addWidget(destino_box)
+        left_layout.addLayout(origem_destino_row)
 
         # Modo box — abaixo do destino
         modo_box = QWidget()
@@ -123,8 +128,8 @@ class TransferenciaPage(QWidget):
 
         self.grupo_radio = QButtonGroup(self)
         self.radio_formulario = QRadioButton("Usar formulário")
-        self.radio_lote_inicial = QRadioButton("Usar lote inicial (da tabela)")
-        self.radio_lote_destino = QRadioButton("Usar lote destino (da tabela)")
+        self.radio_lote_inicial = QRadioButton("Usar lote como origem")
+        self.radio_lote_destino = QRadioButton("Usar lote como destino")
         self.radio_formulario.setChecked(True)
         self.radio_formulario.setToolTip("Usa os lotes digitados nos campos acima")
         self.radio_lote_inicial.setToolTip("Usa o lote da coluna da tabela como origem")

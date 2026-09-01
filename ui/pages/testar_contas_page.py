@@ -11,6 +11,11 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QColor, QBrush, QPalette
 
+import matplotlib
+matplotlib.use("QtAgg")
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
 from ui.regras_automacao import esperar_inicio, digitar_texto, enter
 
 
@@ -46,6 +51,8 @@ class TestarContasPage(QWidget):
     def __init__(self):
         super().__init__()
         self.dados = []
+        self._total_itens = 0
+        self._itens_concluidos = 0
         self._setup_ui()
         self._carregar_dados()
 
@@ -105,8 +112,20 @@ class TestarContasPage(QWidget):
         self.btn_executar.setFixedWidth(110)
         self.btn_executar.clicked.connect(self._executar)
         grid.addWidget(self.btn_executar, 1, 4)
+        
+        # ── Linha de conteúdo: tabela à esquerda, gráfico à direita ──
+        conteudo_row = QHBoxLayout()
+        conteudo_row.setSpacing(16)
 
-        card_layout.addLayout(grid)
+        # Painel esquerdo (Tabela)
+        painel_tabela = QWidget()
+        painel_tabela_layout = QVBoxLayout(painel_tabela)
+        painel_tabela_layout.setContentsMargins(0, 0, 0, 0)
+        painel_tabela_layout.setSpacing(8)
+
+        # Move o grid para o painel esquerdo (acima da tabela)
+        grid.setColumnStretch(5, 1)
+        painel_tabela_layout.addLayout(grid)
 
         # ── Contador ────────────────────────────────────────────────
         info_linha = QHBoxLayout()
@@ -115,7 +134,7 @@ class TestarContasPage(QWidget):
         self.label_contador = QLabel("0 itens")
         self.label_contador.setObjectName("statusLabel")
         info_linha.addWidget(self.label_contador)
-        card_layout.addLayout(info_linha)
+        painel_tabela_layout.addLayout(info_linha)
 
         # ── Tabela ──────────────────────────────────────────────────
         self.tabela = QTableWidget(0, len(HEADERS))
@@ -131,9 +150,43 @@ class TestarContasPage(QWidget):
         self.tabela.verticalHeader().setMinimumSectionSize(22)
         self.tabela.verticalHeader().setVisible(False)
         self.tabela.setItemDelegate(RowHighlightDelegate(self.tabela))
-        card_layout.addWidget(self.tabela)
+        painel_tabela_layout.addWidget(self.tabela)
+
+        conteudo_row.addWidget(painel_tabela, stretch=1)
+
+        # ── Card do gráfico de progresso (à direita) ──
+        grafico_card = QWidget()
+        grafico_card.setObjectName("statCard")
+        grafico_card.setFixedWidth(320)
+        grafico_card_layout = QVBoxLayout(grafico_card)
+        grafico_card_layout.setContentsMargins(16, 14, 16, 14)
+        grafico_card_layout.setSpacing(8)
+
+        grafico_header = QHBoxLayout()
+        self.grafico_titulo = QLabel("Progresso das Contas")
+        self.grafico_titulo.setObjectName("sectionTitle")
+        grafico_header.addWidget(self.grafico_titulo)
+        grafico_header.addStretch()
+        grafico_card_layout.addLayout(grafico_header)
+
+        self.canvas_grafico = FigureCanvas(Figure(figsize=(2.6, 2.6)))
+        self.canvas_grafico.setMinimumHeight(260)
+        self.canvas_grafico.setMinimumWidth(260)
+        self.canvas_grafico.setParent(self)
+        grafico_card_layout.addWidget(self.canvas_grafico)
+
+        self.grafico_subtitulo = QLabel("")
+        self.grafico_subtitulo.setObjectName("pageSubtitle")
+        self.grafico_subtitulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        grafico_card_layout.addWidget(self.grafico_subtitulo)
+
+        grafico_card_layout.addStretch()
+        conteudo_row.addWidget(grafico_card)
+
+        card_layout.addLayout(conteudo_row)
 
         layout.addWidget(card)
+        self._atualizar_grafico()
 
     # ── Persistência ────────────────────────────────────────────────
 
@@ -143,7 +196,11 @@ class TestarContasPage(QWidget):
                 self.dados = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             self.dados = []
+        self._total_itens = len(self.dados)
+        self._itens_concluidos = 0
         self._popular_tabela()
+        if hasattr(self, 'canvas_grafico'):
+            self._atualizar_grafico()
 
     def _salvar_json(self):
         caminho = _caminho_json()
@@ -175,6 +232,38 @@ class TestarContasPage(QWidget):
 
     def _atualizar_contador(self):
         self.label_contador.setText(f"{len(self.dados)} itens")
+
+    def _atualizar_grafico(self):
+        pct = (self._itens_concluidos / self._total_itens * 100) if self._total_itens else 0
+
+        self.grafico_subtitulo.setText(
+            f"{self._itens_concluidos} de {self._total_itens} contas" if self._total_itens else "Nenhuma conta para testar"
+        )
+
+        fig = self.canvas_grafico.figure
+        fig.clear()
+        ax = fig.add_subplot(111)
+
+        if self._total_itens == 0:
+            ax.text(0.5, 0.5, "Sem contas", ha="center", va="center",
+                    fontsize=12, color="#94a3b8")
+            ax.axis("off")
+        else:
+            ax.pie(
+                [self._itens_concluidos, self._total_itens - self._itens_concluidos],
+                colors=["#10b981", "#e5e7eb"],
+                startangle=90,
+                counterclock=False,
+                wedgeprops={"width": 0.28, "edgecolor": "white", "linewidth": 2},
+            )
+            ax.text(0.5, 0.52, f"{pct:.0f}%", ha="center", va="center",
+                    fontsize=26, fontweight="bold", color="#1e1b4b")
+            ax.text(0.5, 0.36, "concluído", ha="center", va="center",
+                    fontsize=11, color="#94a3b8")
+            ax.axis("equal")
+
+        fig.tight_layout()
+        self.canvas_grafico.draw()
 
     def _destacar_linha(self, row_idx):
         """Pinta a linha ativa de azul e limpa as demais."""
@@ -218,11 +307,17 @@ class TestarContasPage(QWidget):
             })
         self._salvar_json()
         self._popular_tabela()
+        self._total_itens = len(self.dados)
+        self._itens_concluidos = 0
+        self._atualizar_grafico()
 
     def _limpar(self):
         self.dados.clear()
         self._salvar_json()
         self._popular_tabela()
+        self._total_itens = 0
+        self._itens_concluidos = 0
+        self._atualizar_grafico()
 
     def _executar(self):
         if not self.dados:
@@ -238,6 +333,10 @@ class TestarContasPage(QWidget):
         if not dph:
             QMessageBox.warning(self, "Executar", "Preencha o campo DPH.")
             return
+
+        self._total_itens = len(self.dados)
+        self._itens_concluidos = 0
+        self._atualizar_grafico()
 
         esperar_inicio()
 
@@ -292,6 +391,10 @@ class TestarContasPage(QWidget):
             import time; time.sleep(1)
             pyautogui.press("f4")
             # 20 - próximo item (loop continua)
+
+            self._itens_concluidos += 1
+            self._atualizar_grafico()
+            QApplication.processEvents()
 
         # Remove destaque ao finalizar
         self._popular_tabela()
