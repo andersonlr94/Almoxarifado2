@@ -16,6 +16,7 @@ from ui.pages.reajuste_precos_page import ReajustePrecosPage
 from ui.pages.settings_page import SettingsPage
 from ui.pages.fornecedores_page import FornecedoresPage
 from ui.pages.pedidos_pendentes_page import PedidosPendentesPage
+from ui.pages.follow_up_page import FollowUpPage
 from ui.pages.acuracidade_page import AcuracidadePage
 from ui.pages.fresh_start_page import FreshStartPage
 from ui.pages.lembretes_page import LembretesPage
@@ -32,6 +33,7 @@ NAV_ICONS = {
     "acuracidade": ("mdi6.target", "target"),
     "controle_pedidos": ("mdi6.clipboard-check-outline", "clipboard-check"),
     "pedidos_pendentes": ("mdi6.clock-outline", "clock"),
+    "follow_up": ("mdi6.calendar-clock", "follow-up"),
     "programacao_agulhas": ("mdi6.format-align-justify", "agulhas"),
     "fresh_start": ("mdi6.sprout-outline", "sprout"),
     "lembretes": ("mdi6.note-text-outline", "note"),
@@ -173,6 +175,7 @@ class MainWindow(QMainWindow):
             ("acuracidade",       "Acuracidade",           False),
             ("controle_pedidos",  "Controle de Pedidos",   False),
             ("pedidos_pendentes", "Pedidos Pendentes",     False),
+            ("follow_up",         "Follow-up",             False),
             ("programacao_agulhas", "Prog. de Agulhas",    False),
             ("fresh_start",         "Fresh Start",         False),
             ("lembretes",           "Lembretes",           False),
@@ -219,6 +222,7 @@ class MainWindow(QMainWindow):
             ("acuracidade",           AcuracidadePage),
             ("controle_pedidos",      ControlePedidosPage),
             ("pedidos_pendentes",     PedidosPendentesPage),
+            ("follow_up",             FollowUpPage),
             ("programacao_agulhas",   ProgramacaoAgulhasPage),
             ("fresh_start",           FreshStartPage),
             ("lembretes",             LembretesPage),

@@ -49,3 +49,15 @@ def definir_caminho_jsons(caminho):
     dados = _carregar()
     dados["caminho_jsons"] = os.path.normpath(caminho)
     _salvar(dados)
+
+
+def obter_impressora_padrao():
+    dados = _carregar()
+    return dados.get("impressora_padrao", "")
+
+
+def definir_impressora_padrao(nome):
+    dados = _carregar()
+    dados["impressora_padrao"] = nome
+    _salvar(dados)
+

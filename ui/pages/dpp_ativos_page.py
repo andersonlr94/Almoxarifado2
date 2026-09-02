@@ -18,7 +18,7 @@ class CredentialsDialog(QDialog):
         self.setMinimumWidth(340)
         self.setModal(True)
         self.setWindowModality(Qt.WindowModality.WindowModal)
-        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        self._dados = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -76,10 +76,19 @@ class CredentialsDialog(QDialog):
         self.campo_usuario.selectAll()
         layout.addLayout(botoes_layout)
 
+    def accept(self):
+        self._dados = {
+            "usuario": self.campo_usuario.text(),
+            "senha": self.campo_senha.text(),
+        }
+        super().accept()
+
     def obter_dados(self):
+        if self._dados is not None:
+            return self._dados
         return {
             "usuario": self.campo_usuario.text(),
-            "senha": self.campo_senha.text()
+            "senha": self.campo_senha.text(),
         }
 
 

@@ -28,10 +28,10 @@ def _caminho_json():
     base = config.obter_caminho_jsons()
     if not base:
         return ""
-    return os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "PedidosPendentes", "PedidosPendentes.json"))
+    return os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "FollowUp", "FollowUp.json"))
 
 
-class PedidosPendentesPage(QWidget):
+class FollowUpPage(QWidget):
     COLUNAS = [
         "N do pedido", "Kardex", "Código", "Fornecedor",
         "Data prog", "Semana prog", "Qtde programada", "Data entrega",
@@ -56,18 +56,12 @@ class PedidosPendentesPage(QWidget):
         card_layout.setContentsMargins(28, 28, 28, 28)
         card_layout.setSpacing(16)
 
-        titulo = QLabel("Pedidos Pendentes")
+        titulo = QLabel("Follow-up")
         titulo.setObjectName("pageTitle")
         card_layout.addWidget(titulo)
 
         linha_top = QHBoxLayout()
         linha_top.setSpacing(8)
-
-        btn_atualizar = QPushButton("Atualizar")
-        btn_atualizar.setObjectName("btnPrimary")
-        btn_atualizar.setFixedHeight(34)
-        btn_atualizar.clicked.connect(self._atualizar)
-        linha_top.addWidget(btn_atualizar)
 
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("Pesquisar...")
@@ -137,101 +131,21 @@ class PedidosPendentesPage(QWidget):
         self.tabela.blockSignals(False)
         self.label_contador.setText(f"{self.tabela.rowCount()} itens")
 
-    def _atualizar(self):
-        clipboard = QGuiApplication.clipboard()
-        texto = clipboard.text()
-        if not texto.strip():
-            QMessageBox.warning(self, "Aviso", "A área de transferência está vazia.")
-            return
-
-        linhas = [l.strip() for l in texto.replace("\r\n", "\n").split("\n") if l.strip()]
-        if not linhas:
-            return
-
-        header, dados_linha = self._separar_cabecalho(linhas)
-        if not dados_linha:
-            QMessageBox.warning(self, "Aviso", "Não há dados válidos para atualizar.")
-            return
-
-        colunas = len(dados_linha[0].split("\t"))
-
-        if colunas != len(self.COLUNAS):
-            QMessageBox.warning(
-                self,
-                "Formato inválido",
-                f"A tabela copiada deve ter {len(self.COLUNAS)} colunas."
-            )
-            return
-
-        self.dados.clear()
-        for linha in dados_linha:
-            partes = linha.split("\t")
-            if len(partes) < 2:
-                continue
-            item = {}
-            for col, chave in enumerate(self.COLUNAS):
-                item[chave] = partes[col].strip() if col < len(partes) else ""
-            self.dados.append(item)
-
+    def atualizar_dados(self, dados):
+        import copy
+        self.dados = copy.deepcopy(dados)
         self._popular_tabela()
-        self._salvar_pedidos_pendentes()
+        self._salvar_follow_up()
 
-        # Também executa a lógica do botão Atualizar da página Controle de Pedidos
-        # E envia os dados copiados para a página Follow-up
-        try:
-            main_win = self.window()
-            if main_win and hasattr(main_win, "pages"):
-                ctrl_page = main_win.pages.get("controle_pedidos")
-                if ctrl_page and hasattr(ctrl_page, "_adicionar_linha"):
-                    ctrl_page._adicionar_linha()
-                    
-                follow_up = main_win.pages.get("follow_up")
-                if follow_up and hasattr(follow_up, "atualizar_dados"):
-                    follow_up.atualizar_dados(self.dados)
-        except Exception:
-            pass
-
-        QMessageBox.information(
-            self,
-            "Sucesso",
-            "Pedidos atualizados com sucesso!"
-        )
-
-    def _separar_cabecalho(self, linhas):
-        if not linhas:
-            return None, []
-
-        primeiras_partes = linhas[0].split("\t")
-        if self._eh_linha_cabecalho(primeiras_partes):
-            return [p.strip() for p in primeiras_partes], linhas[1:]
-
-        return None, linhas
-
-    def _normalizar_coluna(self, texto):
-        texto = texto.strip().lower()
-        for original, substituicao in {
-            "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u",
-            "ã": "a", "õ": "o", "â": "a", "ê": "e", "ô": "o",
-            "ç": "c",
-        }.items():
-            texto = texto.replace(original, substituicao)
-        return "".join(ch for ch in texto if ch.isalnum())
-
-    def _eh_linha_cabecalho(self, partes):
-        if not partes:
-            return False
-        nome_normalizado = self._normalizar_coluna(partes[0])
-        return nome_normalizado in {"npedido", "ndopedido", "pedido", "kardex", "codigo", "fornecedor"}
-
-    def _salvar_pedidos_pendentes(self):
+    def _salvar_follow_up(self):
         import config
         base = config.obter_caminho_jsons()
         if not base:
             config.avisar_sem_pasta(self)
             return
-        pasta_json = os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "PedidosPendentes"))
+        pasta_json = os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "FollowUp"))
         os.makedirs(pasta_json, exist_ok=True)
-        caminho_arquivo = os.path.join(pasta_json, "PedidosPendentes.json")
+        caminho_arquivo = os.path.join(pasta_json, "FollowUp.json")
         with open(caminho_arquivo, "w", encoding="utf-8") as f:
             json.dump(self.dados, f, ensure_ascii=False, indent=2)
 

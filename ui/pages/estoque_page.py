@@ -14,6 +14,7 @@ from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
 
 from PySide6.QtWidgets import QFileDialog
 import pandas as pd
+import config
 
 
 class DetalhesEstoqueDialog(QDialog):
@@ -25,8 +26,68 @@ class DetalhesEstoqueDialog(QDialog):
         self._montar_ui()
 
     def _montar_ui(self):
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #ffffff;
+            }
+            QLabel {
+                color: #2b3648;
+                font-size: 13px;
+                font-weight: 500;
+            }
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 5px;
+                color: #475569;
+                font-size: 12px;
+            }
+            QLineEdit, QComboBox {
+                border: 1px solid #cbd5e1;
+                border-radius: 4px;
+                padding: 4px 8px;
+                background-color: #f8fafc;
+                color: #1e293b;
+                min-height: 24px;
+            }
+            QLineEdit:focus, QComboBox:focus {
+                border: 1px solid #3b82f6;
+                background-color: #ffffff;
+            }
+            QPushButton {
+                background-color: #f1f5f9;
+                border: 1px solid #cbd5e1;
+                border-radius: 4px;
+                padding: 6px 12px;
+                color: #334155;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #e2e8f0;
+            }
+            QPushButton#btn_imprimir, QPushButton#btn_transferir {
+                background-color: #2563eb;
+                color: white;
+                border: none;
+            }
+            QPushButton#btn_imprimir:hover, QPushButton#btn_transferir:hover {
+                background-color: #1d4ed8;
+            }
+            QGroupBox#box_imprimir {
+                background-color: #f0fdf4;
+                border: 1px solid #bbf7d0;
+            }
+        """)
         layout = QVBoxLayout(self)
         layout.setSpacing(14)
+        layout.setContentsMargins(24, 24, 24, 24)
 
         cabecalho_layout = QHBoxLayout()
         cabecalho_layout.setSpacing(14)
@@ -34,16 +95,61 @@ class DetalhesEstoqueDialog(QDialog):
         grupo_kardex_layout = QVBoxLayout(grupo_kardex)
         grupo_kardex_layout.setContentsMargins(0, 0, 0, 0)
         grupo_kardex_layout.addWidget(QLabel("Kardex"))
-        self.campo_kardex = QLineEdit(str(self.item.get("Kardex", "")))
+        self.campo_kardex = QComboBox()
+        self.campo_kardex.setEditable(True)
+        self.campo_kardex.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.campo_kardex.setPlaceholderText("Pesquisar Kardex...")
+        
+        dados = getattr(self.parent(), "dados", [])
+        self.campo_kardex.addItem("", None)
+        
+        indice_kardex_atual = 0
+        kardex_atual = str(self.item.get("Kardex", ""))
+        for i, d in enumerate(dados, start=1):
+            k = d.get("Kardex", "")
+            self.campo_kardex.addItem(str(k), k)
+            if str(k) == kardex_atual:
+                indice_kardex_atual = i
+                
+        comp_kardex = self.campo_kardex.completer()
+        if comp_kardex:
+            comp_kardex.setFilterMode(Qt.MatchFlag.MatchContains)
+            comp_kardex.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            
+        self.campo_kardex.setCurrentIndex(indice_kardex_atual)
+        self.campo_kardex.currentIndexChanged.connect(self._on_campo_kardex_changed)
         grupo_kardex_layout.addWidget(self.campo_kardex)
         cabecalho_layout.addWidget(grupo_kardex, 1)
-        self.campo_kardex.editingFinished.connect(self._carregar_kardex)
         grupo_codigo = QWidget()
         grupo_codigo_layout = QVBoxLayout(grupo_codigo)
         grupo_codigo_layout.setContentsMargins(0, 0, 0, 0)
         grupo_codigo_layout.addWidget(QLabel("Código"))
-        self.campo_codigo = QLineEdit(str(self.item.get("Código", "")))
-        self.campo_codigo.setReadOnly(True)
+        self.campo_codigo = QComboBox()
+        self.campo_codigo.setEditable(True)
+        self.campo_codigo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.campo_codigo.setPlaceholderText("Pesquisar código...")
+        
+        dados = getattr(self.parent(), "dados", [])
+        self.campo_codigo.addItem("", None)
+        
+        indice_atual = 0
+        codigo_atual = str(self.item.get("Código", ""))
+        for i, d in enumerate(dados, start=1):
+            kardex = d.get("Kardex", "")
+            cod = d.get("Código", "")
+            desc = d.get("Descrição", "")
+            texto = str(cod)
+            self.campo_codigo.addItem(texto, kardex)
+            if str(cod) == codigo_atual:
+                indice_atual = i
+                
+        completer = self.campo_codigo.completer()
+        if completer:
+            completer.setFilterMode(Qt.MatchFlag.MatchContains)
+            completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            
+        self.campo_codigo.setCurrentIndex(indice_atual)
+        self.campo_codigo.currentIndexChanged.connect(self._on_campo_codigo_changed)
         grupo_codigo_layout.addWidget(self.campo_codigo)
         cabecalho_layout.addWidget(grupo_codigo, 1)
         layout.addLayout(cabecalho_layout)
@@ -59,6 +165,7 @@ class DetalhesEstoqueDialog(QDialog):
         locais = QGroupBox("Locações")
         locais.setFixedWidth(350)
         locais_form = QFormLayout(locais)
+        locais_form.setVerticalSpacing(16)
         self.campo_loc_novo = QLineEdit(str(self.item.get("Loc novo", "")))
         self.campo_loc_retorno = QLineEdit(str(self.item.get("Loc retorno", "")))
         self.campo_loc_aux = QLineEdit(str(self.item.get("Loc aux", "")))
@@ -87,8 +194,7 @@ class DetalhesEstoqueDialog(QDialog):
             self.campo_entrada_loc_retorno,
             self.campo_entrada_loc_aux,
         ):
-            campo.setStyleSheet("padding: 1px 4px;")
-            campo.setFixedHeight(campo.sizeHint().height() + 4)
+            pass
         for campo in (self.campo_qtde_loc_novo, self.campo_qtde_loc_retorno, self.campo_qtde_loc_aux):
             campo.setReadOnly(True)
 
@@ -100,7 +206,7 @@ class DetalhesEstoqueDialog(QDialog):
 
             campos_layout = QHBoxLayout()
             campos_layout.setContentsMargins(0, 0, 0, 0)
-            campos_layout.setSpacing(0)
+            campos_layout.setSpacing(10)
             for rotulo, campo in campos:
                 grupo = QWidget()
                 grupo_layout = QVBoxLayout(grupo)
@@ -164,9 +270,11 @@ class DetalhesEstoqueDialog(QDialog):
         self.combo_destino = QComboBox()
         self.combo_destino.addItem("Manutenção")
         self.btn_imprimir = QPushButton("Imprimir")
+        self.btn_imprimir.setObjectName("btn_imprimir")
         self.btn_imprimir.setFixedWidth(self.btn_imprimir.sizeHint().width() - 10)
         self.btn_imprimir.clicked.connect(self._imprimir)
         self.btn_transferir = QPushButton("Transferir")
+        self.btn_transferir.setObjectName("btn_transferir")
         self.btn_transferir.clicked.connect(self._transferir)
         destino_controles = QWidget()
         destino_controles_layout = QHBoxLayout(destino_controles)
@@ -189,13 +297,21 @@ class DetalhesEstoqueDialog(QDialog):
         coluna_direita_layout.addWidget(transferencia)
 
         imprimir = QGroupBox()
+        imprimir.setObjectName("box_imprimir")
         imprimir.setFixedWidth(310)
-        imprimir.setStyleSheet("QGroupBox { background-color: #dbeafe; }")
         imprimir_form = QVBoxLayout(imprimir)
         imprimir_form.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.combo_impressoras = QComboBox()
         impressoras = QPrinterInfo.availablePrinterNames()
         self.combo_impressoras.addItems(impressoras or ["Nenhuma impressora disponível"])
+        
+        impressora_salva = config.obter_impressora_padrao()
+        if impressora_salva and impressora_salva in impressoras:
+            self.combo_impressoras.setCurrentText(impressora_salva)
+            
+        self.combo_impressoras.currentIndexChanged.connect(
+            lambda: config.definir_impressora_padrao(self.combo_impressoras.currentText())
+        )
         imprimir_form.addWidget(self.combo_impressoras, 0, Qt.AlignmentFlag.AlignLeft)
         quantidades = QWidget()
         quantidades_layout = QHBoxLayout(quantidades)
@@ -207,11 +323,9 @@ class DetalhesEstoqueDialog(QDialog):
         grupo_qtde_item_layout.setContentsMargins(0, 0, 0, 0)
         grupo_qtde_item_layout.setSpacing(0)
         grupo_qtde_item_layout.addWidget(QLabel("Qtde item"))
-        self.campo_qtde_item = QLineEdit("1")
+        self.campo_qtde_item = QLineEdit("")
         self.campo_qtde_item.setValidator(QIntValidator(1, 999999, self))
-        self.campo_qtde_item.setStyleSheet("padding: 1px;")
         self.campo_qtde_item.setFixedWidth(max(20, (self.campo_qtde_item.sizeHint().width() - 10) // 2 + 20))
-        self.campo_qtde_item.setFixedHeight(self.campo_qtde_item.sizeHint().height() + 5)
         grupo_qtde_item_layout.addWidget(self.campo_qtde_item)
         grupo_qtde_item.setFixedWidth(max(
             grupo_qtde_item_layout.sizeHint().width(),
@@ -229,9 +343,7 @@ class DetalhesEstoqueDialog(QDialog):
         campo_etiqueta_layout.addWidget(QLabel("Qtde etq"))
         self.campo_qtde_etiqueta = QLineEdit("1")
         self.campo_qtde_etiqueta.setValidator(QIntValidator(1, 999999, self))
-        self.campo_qtde_etiqueta.setStyleSheet("padding: 1px;")
         self.campo_qtde_etiqueta.setFixedWidth(max(20, (self.campo_qtde_etiqueta.sizeHint().width() - 10) // 2 + 20))
-        self.campo_qtde_etiqueta.setFixedHeight(self.campo_qtde_etiqueta.sizeHint().height() + 5)
         self.campo_qtde_etiqueta.setFixedWidth(max(
             self.campo_qtde_etiqueta.width(),
             campo_etiqueta_layout.sizeHint().width(),
@@ -266,8 +378,23 @@ class DetalhesEstoqueDialog(QDialog):
         botoes.rejected.connect(self.reject)
         layout.addWidget(botoes)
 
-    def _carregar_kardex(self):
-        kardex = self.campo_kardex.text().strip()
+    def _on_campo_kardex_changed(self, index):
+        if index > 0:
+            kardex = self.campo_kardex.itemData(index)
+            if kardex is not None:
+                self._carregar_kardex(kardex)
+
+    def _on_campo_codigo_changed(self, index):
+        if index > 0:
+            kardex = self.campo_codigo.itemData(index)
+            if kardex is not None:
+                self._carregar_kardex(kardex)
+
+    def _carregar_kardex(self, kardex=None):
+        if kardex is None:
+            kardex = self.campo_kardex.currentText().strip()
+        else:
+            kardex = str(kardex).strip()
         dados = getattr(self.parent(), "dados", [])
         item = next(
             (item for item in dados
@@ -279,7 +406,21 @@ class DetalhesEstoqueDialog(QDialog):
             return
 
         self.item = item
-        self.campo_codigo.setText(str(item.get("Código", "")))
+        
+        kardex_item = str(item.get("Kardex", ""))
+        for i in range(self.campo_codigo.count()):
+            if str(self.campo_codigo.itemData(i)) == kardex_item:
+                self.campo_codigo.blockSignals(True)
+                self.campo_codigo.setCurrentIndex(i)
+                self.campo_codigo.blockSignals(False)
+                break
+                
+        for i in range(self.campo_kardex.count()):
+            if str(self.campo_kardex.itemData(i)) == kardex_item:
+                self.campo_kardex.blockSignals(True)
+                self.campo_kardex.setCurrentIndex(i)
+                self.campo_kardex.blockSignals(False)
+                break
         self.descricao.setText(str(item.get("Descrição", "")))
         campos = (
             (self.campo_loc_novo, "Loc novo"),
@@ -324,7 +465,7 @@ class DetalhesEstoqueDialog(QDialog):
         kardex = str(item.get("Kardex", "")).strip()
         descricao = str(item.get("Descrição", "")).strip()
         local = self.campo_loc_novo.text().strip() or str(item.get("Loc novo", "")).strip()
-        qtde_item = self.campo_qtde_item.text().strip() or "1"
+        qtde_item = self.campo_qtde_item.text().strip()
         requisitante = "ESTOQUE"
 
         def mm_to_dots(mm, dpi=203):
@@ -336,20 +477,24 @@ class DetalhesEstoqueDialog(QDialog):
             height = mm_to_dots(40)
             zpl = [
                 "^XA",
+                "^CI28",
                 "^PON",
                 f"^PW{width}",
                 f"^LL{height}",
                 "^LH0,0",
                 f"^FO{mm_to_dots(2)},{mm_to_dots(2)}^GB{width - mm_to_dots(4)},{height - mm_to_dots(4)},2^FS",
-                f"^FO{mm_to_dots(5)},{mm_to_dots(5)}^A0N,40,40^FD{codigo}^FS",
-                f"^FO{mm_to_dots(5)},{mm_to_dots(12)}^A0N,30,30^FD{kardex}^FS",
+                f"^FO{mm_to_dots(5)},{mm_to_dots(5)}^A0N,60,70^FD{codigo}^FS",
+                f"^FO{mm_to_dots(5)},{mm_to_dots(12)}^A0N,40,50^FD{kardex}^FS",
                 f"^FO{mm_to_dots(5)},{mm_to_dots(20)}^A0N,25,25^FD{descricao[:40]}^FS",
-                f"^FO{mm_to_dots(5)},{mm_to_dots(28)}^A0N,25,25^FDReq: {requisitante}^FS",
-                f"^FO{mm_to_dots(5)},{mm_to_dots(34)}^A0N,30,30^FDQtde: {qtde_item}^FS",
-                f"^FO{mm_to_dots(50)},{mm_to_dots(34)}^A0N,30,30^FDLOC: {local}^FS",
+                f"^FO{mm_to_dots(5)},{mm_to_dots(30)}^A0N,50,50^FD {local}^FS",
+            ]
+            if qtde_item:
+                zpl.append(f"^FO{mm_to_dots(65)},{mm_to_dots(30)}^A0N,50,50^FDQtde: {qtde_item}^FS")
+            
+            zpl.extend([
                 "^PQ1",
                 "^XZ",
-            ]
+            ])
             zpl_jobs.append("\n".join(zpl))
 
         try:
@@ -377,8 +522,6 @@ class DetalhesEstoqueDialog(QDialog):
         except Exception as erro:
             QMessageBox.critical(self, "Erro de Impressão", f"Falha ao enviar ZPL para a impressora: {erro}")
             return
-
-        QMessageBox.information(self, "Impressão", "Etiquetas enviadas para a impressora usando o layout da programação de agulhas.")
 
 
 class EditorDelegate(QStyledItemDelegate):
