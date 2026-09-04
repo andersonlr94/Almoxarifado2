@@ -576,6 +576,11 @@ class FreshStartPage(QWidget):
         self._registrar_atualizacao()
         self._atualizar_grafico()
 
+        # Atualiza a página de Estoque Zero
+        main_win = self.window()
+        if hasattr(main_win, "pages") and "itens_zero" in main_win.pages:
+            main_win.pages["itens_zero"]._sincronizar()
+
     def _baixar_zcentral_com_winscp(self, usuario, senha, destino_local):
         caminhos = [
             r"C:\Program Files (x86)\WinSCp-FTP\WinSCP.com",

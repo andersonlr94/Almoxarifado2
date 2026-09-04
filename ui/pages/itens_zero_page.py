@@ -251,6 +251,14 @@ def _caminho_itens_almoxarifado_json():
     return os.path.normpath(os.path.join(base, "Almox", "ItensAlmoxarifado", "ItensAlmoxarifado.json"))
 
 
+def _caminho_fresh_start_json():
+    import config
+    base = config.obter_caminho_jsons()
+    if not base:
+        return ""
+    return os.path.normpath(os.path.join(base, "Almox", "FreshStart", "fresh_start.json"))
+
+
 def _caminho_historico_json():
     import config
     base = config.obter_caminho_jsons()
@@ -655,6 +663,28 @@ class ItensZeroPage(QWidget):
         for item in novos_itens:
             if item["kardex"] not in kardex_existentes:
                 self.dados.append(item)
+
+        # Verificar no fresh start se tem loc == "RECEBE"
+        try:
+            with open(_caminho_fresh_start_json(), "r", encoding="utf-8") as f:
+                dados_fresh = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            dados_fresh = []
+
+        kardex_recebe = set()
+        for df in dados_fresh:
+            k = df.get("kardex", "").strip()
+            loc = df.get("loc", "").strip().upper()
+            if loc == "RECEBE":
+                kardex_recebe.add(k)
+
+        for dado in self.dados:
+            kardex = dado.get("kardex", "").strip()
+            if kardex in kardex_recebe:
+                dado["cor"] = "verde"
+            elif dado.get("cor") == "verde" and kardex not in kardex_recebe:
+                # Opcional: remover a cor se não for mais RECEBE (comentei para deixar a critério)
+                dado["cor"] = ""
 
         self._salvar_json()
         self._popular_tabela()

@@ -247,7 +247,35 @@ class FollowUpPage(QWidget):
 
         df = pd.DataFrame(dados_exportar, columns=colunas_exportacao)
 
-        caminho, _ = QFileDialog.getSaveFileName(self, "Exportar para Excel", "", "Excel Files (*.xlsx)")
+        fornecedores_tabela = set()
+        col_fornecedor_idx = self.COLUNAS.index("Fornecedor") if "Fornecedor" in self.COLUNAS else -1
+        
+        if col_fornecedor_idx != -1:
+            for row in range(self.tabela.rowCount()):
+                item_forn = self.tabela.item(row, col_fornecedor_idx)
+                if item_forn:
+                    forn_texto = item_forn.text().strip()
+                    if forn_texto:
+                        fornecedores_tabela.add(forn_texto)
+
+        if len(fornecedores_tabela) == 1:
+            fornecedor_unico = fornecedores_tabela.pop()
+            import re
+            fornecedor_limpo = re.sub(r'[\\/*?:"<>|]', "", fornecedor_unico)
+            nome_arquivo = f"Ordens abertas {fornecedor_limpo}.xlsx"
+        else:
+            nome_arquivo = "Ordens abertas.xlsx"
+            
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders")
+            desktop_path = winreg.QueryValueEx(key, "Desktop")[0]
+        except Exception:
+            desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+            
+        caminho_padrao = os.path.join(desktop_path, nome_arquivo)
+
+        caminho, _ = QFileDialog.getSaveFileName(self, "Exportar para Excel", caminho_padrao, "Excel Files (*.xlsx)")
         if caminho:
             if not caminho.endswith(".xlsx"):
                 caminho += ".xlsx"
