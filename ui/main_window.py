@@ -22,7 +22,8 @@ from ui.pages.fresh_start_page import FreshStartPage
 from ui.pages.lembretes_page import LembretesPage
 from ui.pages.material_holders_page import MaterialHoldersPage
 from ui.pages.automacoes_page import AutomacoesPage
-from ui.pages.solicitacoes_sa_page import SolicitacoesSaPage
+from ui.pages.sasEmitidas import SolicitacoesSaPage
+from ui.pages.solicitacao_sa_page import SolicitacaoSaPage
 
 
 SIDEBAR_WIDTH = 240
@@ -34,6 +35,7 @@ NAV_ICONS = {
     "acuracidade": ("mdi6.target", "target"),
     "controle_pedidos": ("mdi6.clipboard-check-outline", "clipboard-check"),
     "pedidos_pendentes": ("mdi6.clock-outline", "clock"),
+    "solicitacao_sa": ("mdi6.file-plus-outline", "file-plus"),
     "solicitacoes_sa": ("mdi6.file-document-outline", "file-document"),
     "follow_up": ("mdi6.calendar-clock", "follow-up"),
     "programacao_agulhas": ("mdi6.format-align-justify", "agulhas"),
@@ -177,7 +179,8 @@ class MainWindow(QMainWindow):
             ("acuracidade",       "Acuracidade",           False),
             ("controle_pedidos",  "Controle de Pedidos",   False),
             ("pedidos_pendentes", "Pedidos Pendentes",     False),
-            ("solicitacoes_sa",   "Solicitações SA",       False),
+            ("solicitacao_sa",    "Solicitação de SA",     False),
+            ("solicitacoes_sa",   "SAs emitidas",       False),
             ("follow_up",         "Follow-up",             False),
             ("programacao_agulhas", "Prog. de Agulhas",    False),
             ("fresh_start",         "Fresh Start",         False),
@@ -225,6 +228,7 @@ class MainWindow(QMainWindow):
             ("acuracidade",           AcuracidadePage),
             ("controle_pedidos",      ControlePedidosPage),
             ("pedidos_pendentes",     PedidosPendentesPage),
+            ("solicitacao_sa",        SolicitacaoSaPage),
             ("solicitacoes_sa",       SolicitacoesSaPage),
             ("follow_up",             FollowUpPage),
             ("programacao_agulhas",   ProgramacaoAgulhasPage),
