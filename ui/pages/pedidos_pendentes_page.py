@@ -188,8 +188,43 @@ class PedidosPendentesPage(QWidget):
                 follow_up = main_win.pages.get("follow_up")
                 if follow_up and hasattr(follow_up, "atualizar_dados"):
                     follow_up.atualizar_dados(self.dados)
-        except Exception:
-            pass
+                    
+                itens_zero = main_win.pages.get("itens_zero")
+                if itens_zero and hasattr(itens_zero, "dados"):
+                    # Agrupar quantidades programadas por Kardex
+                    somas_kardex = {}
+                    for p in self.dados:
+                        k = p.get("Kardex", "").strip()
+                        if not k:
+                            continue
+                        qtde_str = p.get("Qtde programada", "0")
+                        if isinstance(qtde_str, str):
+                            qtde_str = qtde_str.replace(".", "").replace(",", ".")
+                        try:
+                            qtde = float(qtde_str)
+                        except ValueError:
+                            qtde = 0.0
+                        somas_kardex[k] = somas_kardex.get(k, 0.0) + qtde
+
+                    atualizou_zero = False
+                    for iz_item in itens_zero.dados:
+                        k_iz = iz_item.get("kardex", "").strip()
+                        if k_iz in somas_kardex:
+                            soma = somas_kardex[k_iz]
+                            if soma.is_integer():
+                                iz_item["qtde_prog"] = str(int(soma))
+                            else:
+                                iz_item["qtde_prog"] = str(soma).replace(".", ",")
+                            atualizou_zero = True
+                            
+                    if atualizou_zero:
+                        if hasattr(itens_zero, "_salvar_json"):
+                            itens_zero._salvar_json()
+                        if hasattr(itens_zero, "_popular_tabela"):
+                            itens_zero._popular_tabela()
+
+        except Exception as e:
+            print(f"Erro ao atualizar páginas conectadas: {e}")
 
         QMessageBox.information(
             self,
