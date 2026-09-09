@@ -1,10 +1,15 @@
 import json
 import os
+import sys
 
-ARQUIVO_CONFIG = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "settings.json"
-)
+if sys.platform == "win32":
+    _APP_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Almoxarifado2")
+else:
+    _APP_DIR = os.path.join(os.path.expanduser("~"), ".almoxarifado2")
+
+os.makedirs(_APP_DIR, exist_ok=True)
+
+ARQUIVO_CONFIG = os.path.join(_APP_DIR, "settings.json")
 
 
 def _carregar():

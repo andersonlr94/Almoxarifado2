@@ -12,8 +12,17 @@ build/
 venv/
 .venv/
 env/
+.pytest_cache/
+.mypy_cache/
+.tox/
+htmlcov/
+.coverage
 
-# IDE
+# Arquivos de Configuração Local e Logs
+settings.json
+*.log
+
+# IDE e SO
 .vscode/
 .idea/
 *.swp
