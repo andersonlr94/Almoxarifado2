@@ -703,6 +703,7 @@ class EstoquePage(QWidget):
         btn_exportar.clicked.connect(self._exportar_excel)
 
         linha_botoes.addWidget(btn_exportar)
+        linha_botoes.addStretch()
         coluna_esquerda.addLayout(linha_botoes)
 
         filtro_layout = QHBoxLayout()
@@ -712,7 +713,7 @@ class EstoquePage(QWidget):
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("⌕   Pesquisar...")
         self.campo_filtro.setFixedHeight(44)
-        self.campo_filtro.setMinimumWidth(200)
+        self.campo_filtro.setFixedWidth(400)
         # Timer debounce para não travar digitação (filtro só após 280ms sem digitar)
         self._filtro_timer = QTimer(self)
         self._filtro_timer.setSingleShot(True)
@@ -762,6 +763,7 @@ class EstoquePage(QWidget):
 
         filtro_layout.addWidget(self.campo_filtro)
         filtro_layout.addWidget(self.btn_limpar_filtro)
+        filtro_layout.addStretch()
 
         coluna_esquerda.addLayout(filtro_layout)
         coluna_esquerda.addStretch()
@@ -774,7 +776,7 @@ class EstoquePage(QWidget):
         self.detalhes_box = QWidget()
         self.detalhes_box.setObjectName("detalhesBox")
         self.detalhes_box.setMinimumHeight(128)
-        self.detalhes_box.setMaximumWidth(630)
+        self.detalhes_box.setMaximumWidth(690)
 
         self.detalhes_box.setStyleSheet("""
             QWidget#detalhesBox {
@@ -891,9 +893,9 @@ class EstoquePage(QWidget):
         linha1 = QHBoxLayout()
         linha1.setSpacing(20)
         linha1.setContentsMargins(0, 0, 0, 0)
-        linha1.addWidget(criar_linha("Código", "Código", "◇", "#5865f2"), 1)
+        linha1.addWidget(criar_linha("Código", "Código", "◇", "#5865f2", largura_label=55), 1)
         linha1.addWidget(separador_vertical())
-        linha1.addWidget(criar_linha("Kardex", "Kardex", "▤", "#5865f2"), 1)
+        linha1.addWidget(criar_linha("Kardex", "Kardex", "▤", "#5865f2", largura_label=55), 1)
         linha1_widget = QWidget()
         linha1_widget.setLayout(linha1)
         detalhes_layout.addWidget(linha1_widget)
@@ -913,7 +915,7 @@ class EstoquePage(QWidget):
         w_loc_novo.setFixedWidth(220)
         w_qtde_novo = criar_linha("Qtde", "Qtde novo", "▣", "#16b86c", largura_label=40)
         w_qtde_novo.setFixedWidth(135)
-        w_consumo = criar_linha("Consumo médio", "Consumo médio", "⌁", "#5865f2", largura_label=95)
+        w_consumo = criar_linha("Cons. médio", "Consumo médio", "⌁", "#5865f2", largura_label=95)
         w_consumo.setFixedWidth(185)
         linha3.addWidget(w_loc_novo)
         linha3.addWidget(separador_vertical())
@@ -947,7 +949,9 @@ class EstoquePage(QWidget):
         detalhes_layout.addWidget(linha4_widget)
 
         detalhes_layout.addStretch(1)
-        topo.addWidget(self.detalhes_box, 1)
+        topo.addStretch()
+        topo.addWidget(self.detalhes_box)
+        topo.addStretch()
 
         # =====================================================
         # CARD CONTADOR

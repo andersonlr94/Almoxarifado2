@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QStyledItemDelegate, QMenu, QInputDialog,
     QDialog, QDialogButtonBox, QComboBox, QPlainTextEdit, QStyle,
 )
-from PySide6.QtCore import Qt, QSize, QTimer, QPoint
+from PySide6.QtCore import Qt, QSize, QTimer, QPoint, QRect
 from PySide6.QtGui import QColor, QBrush, QPainter, QPalette, QCursor, QShortcut, QKeySequence, QPen
 
 
@@ -146,6 +146,51 @@ def _caminho_pedidos_entregues():
         return ""
     return os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", f"{nome_arquivo}.json"))
 
+
+class ToggleSwitchPedidos(QPushButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setFixedSize(94, 26)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setText("PENDENTES")
+        self.toggled.connect(self.update)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        rect = self.rect().adjusted(1, 1, -1, -1)
+        checked = self.isChecked()
+        track_color = QColor("#4f46e5") if checked else QColor("#e2e8f0")
+        border_color = QColor("#cbd5e1") if not checked else QColor("#4338ca")
+
+        painter.setPen(border_color)
+        painter.setBrush(track_color)
+        painter.drawRoundedRect(rect, 13, 13)
+
+        knob_size = 18
+        knob_margin = 4
+        knob_x = knob_margin if not checked else self.width() - knob_size - knob_margin
+        knob_rect = QRect(knob_x, 4, knob_size, self.height() - 8)
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#ffffff"))
+        painter.drawRoundedRect(knob_rect, 9, 9)
+
+        text = "ENTREGUES" if checked else "PENDENTES"
+        painter.setPen(QColor("#ffffff") if checked else QColor("#334155"))
+        font = self.font()
+        font.setBold(True)
+        font.setPointSizeF(7)
+        painter.setFont(font)
+
+        if checked:
+            text_rect = QRect(8, 0, self.width() - 26, self.height())
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, text)
+        else:
+            text_rect = QRect(18, 0, self.width() - 26, self.height())
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, text)
 
 class ConfigEmailDialog(QDialog):
     def __init__(self, parent=None):
@@ -331,13 +376,24 @@ class ControlePedidosPage(QWidget):
         self.btn_editar.clicked.connect(self._toggle_edicao)
         linha_top.addWidget(self.btn_editar)
 
+
+
         linha_top.addStretch()
+
+        self.toggle_status = ToggleSwitchPedidos()
+        self.toggle_status.toggled.connect(self._aplicar_filtro)
+        linha_top.addWidget(self.toggle_status)
 
         self.campo_busca = QLineEdit()
         self.campo_busca.setPlaceholderText("Pesquisar...")
         self.campo_busca.setFixedHeight(32)
         self.campo_busca.setFixedWidth(200)
-        self.campo_busca.textChanged.connect(self._aplicar_filtro)
+        self.campo_busca.textChanged.connect(self._on_filtro_text_changed)
+        
+        self._filtro_timer = QTimer(self)
+        self._filtro_timer.setSingleShot(True)
+        self._filtro_timer.setInterval(280)
+        self._filtro_timer.timeout.connect(self._aplicar_filtro)
         linha_top.addWidget(self.campo_busca)
 
         self.btn_limpar_filtro = QPushButton(qtawesome.icon('fa6s.xmark', color='#64748b'), "")
@@ -472,9 +528,9 @@ class ControlePedidosPage(QWidget):
             pass
         return []
 
-    def _carregar_pedidos_entregues_filtrados(self, filtro):
+    def _carregar_pedidos_entregues_filtrados(self, filtro, carregar_todos=False):
         """Carrega dos arquivos anuais os pedidos entregues que casam com o filtro."""
-        if not filtro:
+        if not filtro and not carregar_todos:
             return []
         ano_atual = int(datetime.now().strftime("%Y"))
         import config
@@ -492,9 +548,12 @@ class ControlePedidosPage(QWidget):
             for item in dados:
                 if not isinstance(item, dict):
                     continue
-                texto = " ".join(str(v) for v in item.values()).lower()
-                if filtro in texto:
+                if not filtro:
                     resultado.append(item)
+                else:
+                    texto = " ".join(str(v) for v in item.values()).lower()
+                    if filtro in texto:
+                        resultado.append(item)
         return resultado
 
     def _verificar_status_pedidos(self):
@@ -531,6 +590,14 @@ class ControlePedidosPage(QWidget):
             # Se NÃO existe nos pedidos pendentes, marcar como "Entregue"
             item["status"] = "Entregue"
 
+    def _on_filtro_text_changed(self, texto):
+        if self._filtro_timer.isActive():
+            self._filtro_timer.stop()
+        if not texto.strip():
+            self._filtro_timer.start(80)
+        else:
+            self._filtro_timer.start(280)
+
     def _aplicar_filtro(self):
         self._popular_tabela()
 
@@ -545,19 +612,31 @@ class ControlePedidosPage(QWidget):
         self.tabela.blockSignals(True)
         self.tabela.setRowCount(0)
         filtro = self.campo_busca.text().strip().lower()
+        modo_entregues = self.toggle_status.isChecked()
+        
         itens_exibidos = []
         origens = []
-        if filtro:
-            entregues = self._carregar_pedidos_entregues_filtrados(filtro)
-            itens_exibidos.extend(entregues)
-            origens.extend([-1] * len(entregues))
+        
+        # Modo Entregues == True, carrega tudo do histórico e dos pendentes locais
+        if filtro or modo_entregues:
+            entregues = self._carregar_pedidos_entregues_filtrados(filtro, modo_entregues)
+            if modo_entregues:
+                itens_exibidos.extend(entregues)
+                origens.extend([-1] * len(entregues))
+                
         for idx, item in enumerate(self.dados):
+            status_item = item.get("status", "")
+            
+            if not modo_entregues and status_item == "Entregue":
+                continue
+                
             if filtro:
                 texto = " ".join(str(v) for v in item.values()).lower()
                 if filtro not in texto:
                     continue
             itens_exibidos.append(item)
             origens.append(idx)
+            
         for item, origem in zip(itens_exibidos, origens):
             row = self.tabela.rowCount()
             self.tabela.insertRow(row)
