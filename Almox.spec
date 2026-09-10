@@ -1,16 +1,20 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_dynamic_libs, collect_data_files, collect_submodules
 
+numpy_binaries = collect_dynamic_libs('numpy')
+numpy_datas = collect_data_files('numpy')
+numpy_hiddenimports = collect_submodules('numpy')
 
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[],
-    datas=[],
-    hiddenimports=[],
+    binaries=numpy_binaries,
+    datas=numpy_datas,
+    hiddenimports=numpy_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['PyQt5', 'PyQt6', 'PySide2'],
     noarchive=False,
     optimize=0,
 )
