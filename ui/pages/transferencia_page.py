@@ -30,8 +30,14 @@ class TransferenciaPage(QWidget):
     # ── UI ──────────────────────────────────────────────────────────────
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(8)
+
+        card = QWidget()
+        card.setObjectName("pageCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 12, 12, 12)
+        card_layout.setSpacing(8)
 
         # ── Header ──
         header_layout = QHBoxLayout()
@@ -45,13 +51,8 @@ class TransferenciaPage(QWidget):
         header_texts.addWidget(subtitulo)
         header_layout.addLayout(header_texts)
         header_layout.addStretch()
-        layout.addLayout(header_layout)
-
-        card = QWidget()
-        card.setObjectName("pageCard")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(18, 16, 18, 16)
-        card_layout.setSpacing(16)
+        
+        card_layout.addLayout(header_layout)
 
         # ── Conteúdo principal: coluna esquerda (formulário) + coluna direita (tabela) ──
         main_content = QHBoxLayout()
@@ -221,7 +222,6 @@ class TransferenciaPage(QWidget):
                 outline: none;
             }
             QTableWidget#tabelaTransferencia::item {
-                padding: 6px 12px;
                 border-bottom: 1px solid #f3f4f6;
             }
             QTableWidget#tabelaTransferencia::item:selected {
@@ -230,6 +230,11 @@ class TransferenciaPage(QWidget):
             }
             QTableWidget#tabelaTransferencia::item:hover {
                 background-color: #f5f3ff;
+            }
+            QTableWidget#tabelaTransferencia QLineEdit {
+                padding: 0px;
+                margin: 0px;
+                border: none;
             }
         """)
         self.tabela.setHorizontalHeaderLabels(["Item", "Qtde", "Lote"])
@@ -242,7 +247,6 @@ class TransferenciaPage(QWidget):
         header.resizeSection(2, 160)
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabela.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.tabela.setAlternatingRowColors(True)
         self.tabela.verticalHeader().setDefaultSectionSize(32)
         self.tabela.verticalHeader().setMinimumSectionSize(26)
@@ -258,6 +262,7 @@ class TransferenciaPage(QWidget):
         right_layout.addWidget(hint)
 
         main_content.addWidget(right_widget, 1)
+        main_content.addStretch(1)
         card_layout.addLayout(main_content)
         layout.addWidget(card)
 
@@ -266,6 +271,7 @@ class TransferenciaPage(QWidget):
         self.radio_lote_inicial.toggled.connect(self._atualizar_bloqueio_lotes)
         self.radio_lote_destino.toggled.connect(self._atualizar_bloqueio_lotes)
         self.tabela.itemSelectionChanged.connect(self._atualizar_estado_botoes)
+        self.tabela.itemChanged.connect(self._ao_editar_item)
         self._atualizar_bloqueio_lotes()
         self._atualizar_estado_botoes()
 
@@ -307,6 +313,7 @@ class TransferenciaPage(QWidget):
         self._popular_tabela()
 
     def _popular_tabela(self):
+        self.tabela.blockSignals(True)
         self.tabela.setRowCount(0)
         for registro in self.dados:
             row = self.tabela.rowCount()
@@ -316,25 +323,36 @@ class TransferenciaPage(QWidget):
             lote_val = str(registro.get("lote", "")).strip().upper()
 
             it_item = QTableWidgetItem(item_val)
-            it_item.setFlags(it_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             it_item.setToolTip(item_val)
             self.tabela.setItem(row, 0, it_item)
 
             it_qtde = QTableWidgetItem(qtde_val)
-            it_qtde.setFlags(it_qtde.flags() & ~Qt.ItemFlag.ItemIsEditable)
             it_qtde.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.tabela.setItem(row, 1, it_qtde)
 
             it_lote = QTableWidgetItem(lote_val)
-            it_lote.setFlags(it_lote.flags() & ~Qt.ItemFlag.ItemIsEditable)
             it_lote.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.tabela.setItem(row, 2, it_lote)
+        self.tabela.blockSignals(False)
         self._atualizar_contador()
         self._atualizar_estado_botoes()
         if self.tabela.rowCount() == 0:
             self.tabela.setToolTip("Nenhum item — cole dados da planilha")
         else:
             self.tabela.setToolTip("")
+
+    def _ao_editar_item(self, item):
+        row = item.row()
+        col = item.column()
+        texto = item.text().strip().upper()
+        if 0 <= row < len(self.dados):
+            if col == 0:
+                self.dados[row]["item"] = texto
+            elif col == 1:
+                self.dados[row]["qtde"] = texto
+            elif col == 2:
+                self.dados[row]["lote"] = texto
+            self._salvar_json()
 
     def _atualizar_contador(self):
         n = self.tabela.rowCount()
@@ -401,18 +419,8 @@ class TransferenciaPage(QWidget):
             QMessageBox.warning(self, "Executar", "Preencha De local/lugar e Para local/lugar.")
             return
         if self.radio_formulario.isChecked() and (not de_lote or not para_lote):
-            ok = QMessageBox.question(self, "Executar", "Lote de origem/destino vazio no modo formulário. Continuar?",
-                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-            if ok != QMessageBox.StandardButton.Yes:
-                return
-        resp = QMessageBox.question(
-            self, "Confirmar automação",
-            f"Executar {self.tabela.rowCount()} transferência(s) de <b>{de_local}/{de_lugar}</b> para <b>{para_local}/{para_lugar}</b>?<br>"
-            f"<span style='color:#64748b; font-size:11px;'>A automação usará o teclado (pyautogui). Não mexa no mouse/teclado durante a execução.</span>",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
-        )
-        if resp != QMessageBox.StandardButton.Yes:
-            return
+            pass  # Prossegue diretamente mesmo se vazio
+        
         esperar_inicio()
         for row in range(self.tabela.rowCount()):
             kardex = self.tabela.item(row, 0).text().upper() if self.tabela.item(row, 0) else ""
@@ -460,10 +468,7 @@ class TransferenciaPage(QWidget):
     def _limpar(self):
         if self.tabela.rowCount() == 0:
             return
-        resp = QMessageBox.question(self, "Limpar", f"Remover todos os {self.tabela.rowCount()} itens da tabela?",
-                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if resp != QMessageBox.StandardButton.Yes:
-            return
+        
         self.dados.clear()
         self._salvar_json()
         self._popular_tabela()

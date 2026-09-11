@@ -567,7 +567,7 @@ QPushButton#statusTab {
     color: #94a3b8;
     border: 1.5px solid transparent;
     border-radius: 10px;
-    padding: 6px 14px;
+    padding: 6px 10px;
     font-size: 12px;
     font-weight: 500;
 }

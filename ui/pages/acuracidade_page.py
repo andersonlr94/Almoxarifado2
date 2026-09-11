@@ -144,6 +144,7 @@ class AcuracidadePage(QWidget):
         self._rebuild_tabela(self.COLUNAS)
         self.tabela.setColumnHidden(0, False)
         self.tabela.setColumnHidden(2, True)
+        self.tabela.itemChanged.connect(self._on_item_changed)
 
         painel_tabela_layout.addWidget(self.tabela, stretch=2)
 
@@ -216,11 +217,6 @@ class AcuracidadePage(QWidget):
         self.grafico_titulo.setObjectName("sectionTitle")
         grafico_header.addWidget(self.grafico_titulo)
         grafico_header.addStretch()
-        self.btn_atualizar_grafico = QPushButton("Atualizar")
-        self.btn_atualizar_grafico.setObjectName("btnSecondary")
-        self.btn_atualizar_grafico.setFixedHeight(26)
-        self.btn_atualizar_grafico.clicked.connect(self._atualizar_grafico)
-        grafico_header.addWidget(self.btn_atualizar_grafico)
         grafico_card_layout.addLayout(grafico_header)
 
         self.canvas_grafico = FigureCanvas(Figure(figsize=(2.6, 2.6)))
@@ -281,7 +277,9 @@ class AcuracidadePage(QWidget):
                 counterclock=False,
                 wedgeprops={"width": 0.28, "edgecolor": "white", "linewidth": 2},
             )
-            ax.text(0.5, 0.52, f"{pct:.0f}%", ha="center", va="center",
+            # Se for menor que 1% e maior que zero, mostrar 1 casa decimal
+            texto_pct = f"{pct:.1f}%" if 0 < pct < 1 else f"{pct:.0f}%"
+            ax.text(0.5, 0.52, texto_pct, ha="center", va="center",
                     fontsize=26, fontweight="bold", color="#1e1b4b")
             ax.text(0.5, 0.36, "acurado", ha="center", va="center",
                     fontsize=11, color="#94a3b8")
@@ -289,6 +287,7 @@ class AcuracidadePage(QWidget):
 
         fig.tight_layout()
         self.canvas_grafico.draw()
+        self.canvas_grafico.repaint()
 
     def _alternar_modo(self):
         self._modo_acuracidade = not self._modo_acuracidade
@@ -327,6 +326,8 @@ class AcuracidadePage(QWidget):
             self.tabela.setColumnHidden(i, False)
 
         if colunas == self.COLUNAS:
+            if hasattr(self.tabela.itemDelegate(), "_colunas_numericas"):
+                self.tabela.itemDelegate()._colunas_numericas = [4, 5]
             widths = {0: 130, 1: 120, 2: 180, 3: 110, 4: 110, 5: 110, 6: 100, 7: 250}
             for i, w in widths.items():
                 if i < len(colunas):
@@ -336,6 +337,8 @@ class AcuracidadePage(QWidget):
                         header.setSectionResizeMode(i, QHeaderView.ResizeMode.Fixed)
                         self.tabela.setColumnWidth(i, w)
         else:
+            if hasattr(self.tabela.itemDelegate(), "_colunas_numericas"):
+                self.tabela.itemDelegate()._colunas_numericas = [4]
             widths = {0: 100, 1: 120, 2: 300, 3: 110, 4: 100, 5: 120}
             for i, w in widths.items():
                 if i < len(colunas):
@@ -344,6 +347,42 @@ class AcuracidadePage(QWidget):
                     else:
                         header.setSectionResizeMode(i, QHeaderView.ResizeMode.Fixed)
                         self.tabela.setColumnWidth(i, w)
+
+    def _on_item_changed(self, item):
+        if not hasattr(self, "_dados_estoque"):
+            return
+        row = item.row()
+        col = item.column()
+        # A coluna 'Acuracidade ok' é a de índice 5 (na visualização de itens de estoque)
+        if col == 5:
+            novo_valor = item.text()
+            item_kardex = self.tabela.item(row, 0)
+            if not item_kardex:
+                return
+            
+            kardex = item_kardex.text().strip()
+            
+            alterou = False
+            for d in self._dados_estoque:
+                if str(d.get("Kardex", "")).strip() == kardex:
+                    d["Acuracidade ok"] = novo_valor
+                    alterou = True
+                    break
+            
+            if alterou:
+                self._salvar_dados_estoque()
+                self._atualizar_grafico()
+
+    def _salvar_dados_estoque(self):
+        caminho_base = self._caminho_jsons()
+        pasta = os.path.join(caminho_base, "Almox", "Acuracidade", "ItensDeEstoque")
+        os.makedirs(pasta, exist_ok=True)
+        arquivo = os.path.join(pasta, "ItensDeEstoque.json")
+        try:
+            with open(arquivo, "w", encoding="utf-8") as f:
+                json.dump(self._dados_estoque, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"Erro ao salvar dados de estoque: {e}")
 
     def _carregar_itens_estoque(self):
         caminho_base = self._caminho_jsons()
@@ -702,16 +741,34 @@ class AcuracidadePage(QWidget):
         )
 
     def _popular_tabela_estoque(self, itens):
+        self.tabela.blockSignals(True)
         self._rebuild_tabela(self.COLUNAS_ESTOQUE)
         self.tabela.setRowCount(len(itens))
         self.label_contador_estoque.setText(f"Itens: {len(itens)}")
         for row, item in enumerate(itens):
-            self.tabela.setItem(row, 0, QTableWidgetItem(str(item.get("Kardex", ""))))
-            self.tabela.setItem(row, 1, QTableWidgetItem(str(item.get("Código", ""))))
-            self.tabela.setItem(row, 2, QTableWidgetItem(str(item.get("Descrição", ""))))
-            self.tabela.setItem(row, 3, QTableWidgetItem(str(item.get("Loc novo", ""))))
-            self.tabela.setItem(row, 4, QTableWidgetItem(str(item.get("Qtde novo", ""))))
+            item0 = QTableWidgetItem(str(item.get("Kardex", "")))
+            item0.setFlags(item0.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.tabela.setItem(row, 0, item0)
+
+            item1 = QTableWidgetItem(str(item.get("Código", "")))
+            item1.setFlags(item1.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.tabela.setItem(row, 1, item1)
+
+            item2 = QTableWidgetItem(str(item.get("Descrição", "")))
+            item2.setFlags(item2.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.tabela.setItem(row, 2, item2)
+
+            item3 = QTableWidgetItem(str(item.get("Loc novo", "")))
+            item3.setFlags(item3.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.tabela.setItem(row, 3, item3)
+
+            item4 = QTableWidgetItem(str(item.get("Qtde novo", "")))
+            item4.setFlags(item4.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.tabela.setItem(row, 4, item4)
+
+            # Coluna 5 é editável
             self.tabela.setItem(row, 5, QTableWidgetItem(str(item.get("Acuracidade ok", ""))))
+        self.tabela.blockSignals(False)
 
     def _carregar_impressoras(self):
         self.combo_impressoras.clear()

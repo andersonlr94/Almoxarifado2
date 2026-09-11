@@ -285,6 +285,7 @@ class ProgramacaoAgulhasPage(QWidget):
         # ── Filters / Form Card ──
         filters_card = QWidget()
         filters_card.setObjectName("pageCard")
+        filters_card.setFixedHeight(108)
         filters_card_layout = QHBoxLayout(filters_card)
         filters_card_layout.setContentsMargins(18, 14, 18, 14)
         filters_card_layout.setSpacing(20)
@@ -297,7 +298,7 @@ class ProgramacaoAgulhasPage(QWidget):
 
         # Status Tabs Row
         botoes_status_layout = QHBoxLayout()
-        botoes_status_layout.setSpacing(4)
+        botoes_status_layout.setSpacing(6)
         self.botoes_status = {}
 
         status_configs = [
@@ -373,6 +374,18 @@ class ProgramacaoAgulhasPage(QWidget):
 
         linha_acoes.addWidget(self.widget_filtro_data)
 
+        self.btn_inserir = QPushButton(qtawesome.icon('fa6s.plus', color='#ffffff'), "  Inserir")
+        self.btn_inserir.setObjectName("btnGradientIndigo")
+        self.btn_inserir.setFixedHeight(32)
+        self.btn_inserir.setDefault(True)
+        self.btn_inserir.clicked.connect(self._on_inserir_clicked)
+
+        self.btn_capturar = QPushButton(qtawesome.icon('mdi6.file-pdf-box', color='#ffffff'), "  Capturar")
+        self.btn_capturar.setObjectName("btnGradientTeal")
+        self.btn_capturar.setFixedHeight(32)
+        self.btn_capturar.setToolTip("Capturar dados de PDF")
+        self.btn_capturar.clicked.connect(self._capturar_pdf)
+
         self.btn_mover_programado = QPushButton(qtawesome.icon('mdi6.calendar-check', color='#ffffff'), "  Programar")
         self.btn_mover_programado.setObjectName("btnGradientIndigo")
         self.btn_mover_programado.setFixedHeight(32)
@@ -410,78 +423,41 @@ class ProgramacaoAgulhasPage(QWidget):
         self.btn_imprimir.clicked.connect(self._imprimir_zebra)
         self.btn_imprimir.setVisible(False)
 
-        linha_acoes.addWidget(self.btn_mover_programado)
-        linha_acoes.addWidget(self.btn_mover_separando)
-        linha_acoes.addWidget(self.btn_entregar)
-        linha_acoes.addWidget(self.btn_dividir)
-        linha_acoes.addWidget(self.btn_excluir)
-        linha_acoes.addStretch()
-        linha_acoes.addWidget(self.combo_impressoras)
-        linha_acoes.addWidget(self.btn_imprimir)
-
-        painel_esquerdo_layout.addLayout(linha_acoes)
-        painel_esquerdo.setFixedWidth(533)
-        filters_card_layout.addWidget(painel_esquerdo)
-
-        # ── Right Panel: Novo Pedido ──
-        self.painel_form = QWidget()
-        painel_form = self.painel_form
-        painel_form.setFixedWidth(830)
-        painel_form.setMinimumHeight(62)
-        painel_form_layout = QHBoxLayout(painel_form)
-        painel_form_layout.setContentsMargins(0, 0, 0, 0)
-        painel_form_layout.setSpacing(10)
-        painel_form_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
-
         # ── Container animável dos campos (oculto inicialmente) ──
         self.campos_container = QWidget()
         self.campos_container.setObjectName("camposContainer")
-        campos_grid = QGridLayout(self.campos_container)
-        campos_grid.setContentsMargins(0, 0, 0, 0)
-        campos_grid.setSpacing(6)
-        campos_grid.setHorizontalSpacing(10)
-        campos_grid.setVerticalSpacing(2)
+        campos_layout = QHBoxLayout(self.campos_container)
+        campos_layout.setContentsMargins(0, 0, 0, 0)
+        campos_layout.setSpacing(10)
 
-        lbl_pedido = QLabel("Pedido")
-        lbl_pedido.setObjectName("fieldLabel")
         self.campo_pedido = QLineEdit()
         self.campo_pedido.setPlaceholderText("Nº do pedido")
-        self.campo_pedido.setFixedHeight(36)
+        self.campo_pedido.setFixedHeight(32)
         self.campo_pedido.setFixedWidth(149)
         self.campo_pedido.returnPressed.connect(self._on_inserir_clicked)
-        campos_grid.addWidget(lbl_pedido, 0, 0)
-        campos_grid.addWidget(self.campo_pedido, 1, 0)
+        campos_layout.addWidget(self.campo_pedido)
 
-        lbl_codigo = QLabel("Código")
-        lbl_codigo.setObjectName("fieldLabel")
         self.campo_codigo = QLineEdit()
         self.campo_codigo.setPlaceholderText("Código do item")
-        self.campo_codigo.setFixedHeight(36)
+        self.campo_codigo.setFixedHeight(32)
         self.campo_codigo.setFixedWidth(120)
         self.campo_codigo.returnPressed.connect(self._on_inserir_clicked)
-        campos_grid.addWidget(lbl_codigo, 0, 1)
-        campos_grid.addWidget(self.campo_codigo, 1, 1)
+        campos_layout.addWidget(self.campo_codigo)
 
-        lbl_qtde = QLabel("Qtde")
-        lbl_qtde.setObjectName("fieldLabel")
         self.campo_qtde = QLineEdit()
         self.campo_qtde.setPlaceholderText("Qtde")
-        self.campo_qtde.setFixedHeight(36)
+        self.campo_qtde.setFixedHeight(32)
         self.campo_qtde.setFixedWidth(99)
         self.campo_qtde.returnPressed.connect(self._on_inserir_clicked)
-        campos_grid.addWidget(lbl_qtde, 0, 2)
-        campos_grid.addWidget(self.campo_qtde, 1, 2)
+        campos_layout.addWidget(self.campo_qtde)
 
-        lbl_req = QLabel("Requisitante")
-        lbl_req.setObjectName("fieldLabel")
         self.campo_requisitante = QLineEdit()
-        self.campo_requisitante.setPlaceholderText("1, 2 ou 3")
-        self.campo_requisitante.setFixedHeight(36)
+        self.campo_requisitante.setPlaceholderText("Req (1, 2 ou 3)")
+        self.campo_requisitante.setFixedHeight(32)
         self.campo_requisitante.setFixedWidth(158)
         self.campo_requisitante.textChanged.connect(self._mapear_requisitante)
         self.campo_requisitante.returnPressed.connect(self._on_inserir_clicked)
-        campos_grid.addWidget(lbl_req, 0, 3)
-        campos_grid.addWidget(self.campo_requisitante, 1, 3)
+        campos_layout.addWidget(self.campo_requisitante)
 
         # Estado inicial: oculto (largura 0 → slide para fora)
         self._campos_expandidos = False
@@ -507,27 +483,20 @@ class ProgramacaoAgulhasPage(QWidget):
         self._campos_anim_group.addAnimation(self._campos_anim_opacity)
         self._campos_anim_group.finished.connect(self._on_campos_anim_finished)
 
-        # ── Botões Inserir / Capturar (sempre visíveis, deslizam com os campos) ──
-        self.btn_inserir = QPushButton(qtawesome.icon('fa6s.plus', color='#ffffff'), "  Inserir")
-        self.btn_inserir.setObjectName("btnGradientIndigo")
-        self.btn_inserir.setFixedHeight(36)
-        self.btn_inserir.setFixedWidth(120)
-        self.btn_inserir.setDefault(True)
-        self.btn_inserir.clicked.connect(self._on_inserir_clicked)
+        linha_acoes.addWidget(self.campos_container, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addWidget(self.btn_inserir, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addWidget(self.btn_capturar, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addWidget(self.btn_mover_programado, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addWidget(self.btn_mover_separando, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addWidget(self.btn_entregar, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addWidget(self.btn_dividir, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addWidget(self.btn_excluir, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addStretch()
+        linha_acoes.addWidget(self.combo_impressoras, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addWidget(self.btn_imprimir, 0, Qt.AlignmentFlag.AlignBottom)
 
-        self.btn_capturar = QPushButton(qtawesome.icon('mdi6.file-pdf-box', color='#ffffff'), "  Capturar")
-        self.btn_capturar.setObjectName("btnGradientTeal")
-        self.btn_capturar.setFixedHeight(36)
-        self.btn_capturar.setFixedWidth(120)
-        self.btn_capturar.setToolTip("Capturar dados de PDF")
-        self.btn_capturar.clicked.connect(self._capturar_pdf)
-
-        painel_form_layout.addWidget(self.campos_container, 0, Qt.AlignmentFlag.AlignBottom)
-        painel_form_layout.addWidget(self.btn_inserir, 0, Qt.AlignmentFlag.AlignBottom)
-        painel_form_layout.addWidget(self.btn_capturar, 0, Qt.AlignmentFlag.AlignBottom)
-        painel_form_layout.addStretch()
-
-        filters_card_layout.addWidget(painel_form)
+        painel_esquerdo_layout.addLayout(linha_acoes)
+        filters_card_layout.addWidget(painel_esquerdo)
         filters_card_layout.addStretch()
         layout.addWidget(filters_card)
 
@@ -582,11 +551,19 @@ class ProgramacaoAgulhasPage(QWidget):
         header = CheckboxHeader(self.tabela)
         header.toggleAll.connect(self._toggle_todos)
         self.tabela.setHorizontalHeader(header)
-        header.setStretchLastSection(True)
+        header.setStretchLastSection(False)
         for c in range(self.tabela.columnCount()):
             header.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(1, 90)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(2, 180)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(3, 180)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(7, 90)
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
         self.tabela.setAlternatingRowColors(True)
@@ -705,9 +682,17 @@ class ProgramacaoAgulhasPage(QWidget):
         self.tabela.blockSignals(False)
         self._atualizar_header_checkbox()
         self._atualizar_contador()
-        self._atualizar_botoes_acao()
 
-    def _atualizar_botoes_acao(self):
+    def _atualizar_botoes_acao(self, selecionados=None):
+        if selecionados is None:
+            selecionados = 0
+            for row in range(self.tabela.rowCount()):
+                chk = self.tabela.item(row, 0)
+                if chk and chk.checkState() == Qt.CheckState.Checked:
+                    selecionados += 1
+
+        self.btn_inserir.setVisible(False)
+        self.btn_capturar.setVisible(False)
         self.btn_mover_programado.setVisible(False)
         self.btn_mover_separando.setVisible(False)
         self.btn_entregar.setVisible(False)
@@ -716,12 +701,14 @@ class ProgramacaoAgulhasPage(QWidget):
         self.combo_impressoras.setVisible(False)
         self.btn_imprimir.setVisible(False)
         self.widget_filtro_data.setVisible(self.filtro_status == "Entregues")
-        self.painel_form.setVisible(self.filtro_status == "Pendentes")
         if self.filtro_status == "Pendentes":
-            self.btn_mover_programado.setVisible(True)
-            self.btn_mover_separando.setVisible(True)
-            self.btn_excluir.setVisible(True)
-            self.btn_dividir.setVisible(True)
+            tem_selecao = selecionados > 0
+            self.btn_inserir.setVisible(not tem_selecao)
+            self.btn_capturar.setVisible(not tem_selecao)
+            self.btn_mover_programado.setVisible(tem_selecao)
+            self.btn_mover_separando.setVisible(tem_selecao)
+            self.btn_excluir.setVisible(tem_selecao)
+            self.btn_dividir.setVisible(tem_selecao)
         elif self.filtro_status == "Programados":
             self.btn_mover_separando.setVisible(True)
             self.btn_dividir.setVisible(True)
@@ -739,6 +726,7 @@ class ProgramacaoAgulhasPage(QWidget):
                 selecionados += 1
         self.label_contador.setText(f"{selecionados} itens selecionados de {total}")
         self._atualizar_stats()
+        self._atualizar_botoes_acao(selecionados)
 
     def _atualizar_stats(self):
         pendentes = sum(1 for d in self.dados if d.get("status") == "Pendente")
