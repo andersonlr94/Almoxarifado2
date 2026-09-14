@@ -237,9 +237,28 @@ class MainWindow(QMainWindow):
             page = PageClass()
             self.pages[key] = page
             self.stacked.addWidget(page)
+            if key == "configuracoes":
+                page.settings_saved.connect(self._reload_all_pages)
 
         content_layout.addWidget(self.stacked)
         root_layout.addWidget(content)
+
+    def _reload_all_pages(self):
+        for page in self.pages.values():
+            # Tenta chamar os métodos de recarregamento conhecidos
+            metodos_recarregar = [
+                "_carregar_dados",
+                "_carregar_itens_estoque",
+                "_carregar_lembretes",
+                "_carregar_alocacoes"
+            ]
+            for metodo in metodos_recarregar:
+                if hasattr(page, metodo):
+                    try:
+                        getattr(page, metodo)()
+                    except Exception:
+                        pass
+                    break
 
     def _switch_tab(self, key):
         for btn in self.buttons:

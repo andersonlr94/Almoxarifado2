@@ -2,9 +2,9 @@ import os
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFileDialog,
+    QPushButton, QFileDialog, QMessageBox
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 import config
 
@@ -13,6 +13,8 @@ PASTA_ALVO = "Almox"
 
 
 class SettingsPage(QWidget):
+    settings_saved = Signal()
+
     def __init__(self):
         super().__init__()
         self._setup_ui()
@@ -91,6 +93,23 @@ class SettingsPage(QWidget):
     def _salvar(self):
         texto = self.campo_caminho.text().strip()
         if texto:
-            caminho_base = os.path.dirname(texto) if texto.endswith(PASTA_ALVO) else texto
-            config.definir_caminho_jsons(caminho_base)
-            os.makedirs(texto, exist_ok=True)
+            resposta = QMessageBox.question(
+                self,
+                "Confirmar",
+                "Deseja salvar as novas configurações?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            
+            if resposta == QMessageBox.StandardButton.Yes:
+                caminho_base = os.path.dirname(texto) if texto.endswith(PASTA_ALVO) else texto
+                config.definir_caminho_jsons(caminho_base)
+                os.makedirs(texto, exist_ok=True)
+                
+                self.settings_saved.emit()
+                
+                QMessageBox.information(
+                    self,
+                    "Sucesso",
+                    "Configurações salvas com sucesso!"
+                )

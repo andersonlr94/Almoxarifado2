@@ -1,6 +1,7 @@
 import json
 import os
 
+import qtawesome as qta
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
@@ -652,11 +653,11 @@ class EstoquePage(QWidget):
         """)
         coluna_esquerda.addWidget(titulo, 0, Qt.AlignmentFlag.AlignLeft)
 
-        btn_atualizar = QPushButton("⟳  Atualizar")
-        btn_atualizar.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_atualizar.setFixedSize(168, 44)
+        btn_inserir = QPushButton("Inserir informações")
+        btn_inserir.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_inserir.setFixedSize(180, 44)
 
-        btn_atualizar.setStyleSheet("""
+        btn_inserir.setStyleSheet("""
             QPushButton {
                 background-color: #5b61f6;
                 color: white;
@@ -675,11 +676,32 @@ class EstoquePage(QWidget):
             }
         """)
 
-        btn_atualizar.clicked.connect(self._atualizar)
+        btn_inserir.clicked.connect(self._atualizar)
+        
+        btn_recarregar = QPushButton()
+        btn_recarregar.setIcon(qta.icon("fa6s.rotate-right", color="#5b61f6"))
+        btn_recarregar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_recarregar.setFixedSize(44, 44)
+        btn_recarregar.setToolTip("Atualizar (ler dados novamente)")
+        btn_recarregar.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 2px solid #5b61f6;
+                border-radius: 10px;
+            }
+            QPushButton:hover {
+                background-color: #eef2ff;
+            }
+            QPushButton:pressed {
+                background-color: #e0e7ff;
+            }
+        """)
+        btn_recarregar.clicked.connect(self._carregar_dados)
 
         linha_botoes = QHBoxLayout()
         linha_botoes.setSpacing(10)
-        linha_botoes.addWidget(btn_atualizar)
+        linha_botoes.addWidget(btn_recarregar)
+        linha_botoes.addWidget(btn_inserir)
 
         btn_exportar = QPushButton("📊 Exportar Excel")
         btn_exportar.setCursor(Qt.CursorShape.PointingHandCursor)

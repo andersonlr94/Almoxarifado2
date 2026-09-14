@@ -6,11 +6,12 @@ import struct
 import tempfile
 import winsound
 from datetime import datetime
+import qtawesome as qta
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QPlainTextEdit, QScrollArea, QFrame,
     QInputDialog, QMessageBox, QDialog, QFormLayout, QGridLayout, QCheckBox,
-    QTabWidget,
+    QTabWidget, QButtonGroup, QStackedWidget,
 )
 from PySide6.QtCore import QEvent, Qt, QSize, Signal
 from PySide6.QtGui import QFont, QIcon, QShortcut, QKeySequence
@@ -499,25 +500,70 @@ class LembretesPage(QWidget):
             _caminho_lembretes_pessoais_json(),
         )
 
-        tabs = QTabWidget()
-        self.tabs = tabs
-        tabs.setDocumentMode(True)
-        tabs.setStyleSheet(
-            "QTabWidget::pane { background: #ffffff; border: 1px solid #eef1f6; "
-            "border-radius: 16px; top: -1px; }"
-            "QTabBar::tab { background: transparent; color: #64748b; padding: 10px 22px; "
-            "font-size: 13px; font-weight: 600; border: none; margin-right: 4px; margin-top: 6px; }"
-            "QTabBar::tab:hover { color: #4f46e5; }"
-            "QTabBar::tab:selected { color: #4f46e5; background: #eef2ff; "
-            "border-radius: 10px; }"
+        linha_abas = QHBoxLayout()
+        linha_abas.setSpacing(8)
+        linha_abas.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        btn_atualizar = QPushButton()
+        btn_atualizar.setIcon(qta.icon("fa6s.rotate-right", color="#64748b"))
+        btn_atualizar.setFixedSize(32, 32)
+        btn_atualizar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_atualizar.setToolTip("Atualizar lembretes")
+        btn_atualizar.setStyleSheet(
+            "QPushButton { background: transparent; border: none; border-radius: 16px; }"
+            "QPushButton:hover { background: #eef2ff; }"
         )
-        tabs.addTab(self.quadro_sa_pendente, "Lembrete de SA pendente")
-        tabs.addTab(self.quadro_time, "Lembrete do time")
-        tabs.addTab(self.quadro_pessoal, "Lembretes pessoal")
-        layout.addWidget(tabs, 1)
+        btn_atualizar.clicked.connect(self._carregar_lembretes)
+        linha_abas.addWidget(btn_atualizar)
+
+        self.grupo_abas = QButtonGroup(self)
+        
+        estilo_aba = """
+            QPushButton { 
+                background: transparent; color: #64748b; padding: 8px 18px; 
+                font-size: 13px; font-weight: 600; border: none; border-radius: 10px;
+            }
+            QPushButton:hover { color: #4f46e5; }
+            QPushButton:checked { color: #4f46e5; background: #eef2ff; }
+        """
+
+        self.stacked = QStackedWidget()
+        self.tabs = self.stacked
+
+        for i, (quadro, titulo) in enumerate([
+            (self.quadro_sa_pendente, "Lembrete de SA pendente"),
+            (self.quadro_time, "Lembrete do time"),
+            (self.quadro_pessoal, "Lembretes pessoal"),
+        ]):
+            btn = QPushButton(titulo)
+            btn.setCheckable(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(estilo_aba)
+            if i == 0:
+                btn.setChecked(True)
+            self.grupo_abas.addButton(btn, i)
+            linha_abas.addWidget(btn)
+            self.stacked.addWidget(quadro)
+            
+        self.grupo_abas.idClicked.connect(self.stacked.setCurrentIndex)
+        
+        layout.addLayout(linha_abas)
+
+        pane = QFrame()
+        pane.setStyleSheet("QFrame { background: #ffffff; border: 1px solid #eef1f6; border-radius: 16px; }")
+        pane_layout = QVBoxLayout(pane)
+        pane_layout.setContentsMargins(0, 0, 0, 0)
+        pane_layout.addWidget(self.stacked)
+        
+        layout.addWidget(pane, 1)
 
         self.atalho_novo = QShortcut(QKeySequence("Ctrl+N"), self)
         self.atalho_novo.activated.connect(self._novo_lembrete_na_aba_ativa)
+
+    def _carregar_lembretes(self):
+        self.quadro_sa_pendente._carregar_lembretes()
+        self.quadro_time._carregar_lembretes()
+        self.quadro_pessoal._carregar_lembretes()
 
     def _novo_lembrete_na_aba_ativa(self):
         quadro = self.tabs.currentWidget()
