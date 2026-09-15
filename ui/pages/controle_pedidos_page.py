@@ -351,6 +351,31 @@ class ControlePedidosPage(QWidget):
         self.btn_atualizar = btn_adicionar  # referência para reexibir facilmente
         linha_top.addWidget(btn_adicionar)
 
+        self.btn_recarregar_controle = QPushButton()
+        self.btn_recarregar_controle.setIcon(qtawesome.icon("fa6s.rotate-right", color="#6366f1"))
+        self.btn_recarregar_controle.setIconSize(QSize(15, 15))
+        self.btn_recarregar_controle.setFixedSize(34, 34)
+        self.btn_recarregar_controle.setToolTip("Atualizar (recarregar controlePedidos.json)")
+        self.btn_recarregar_controle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_recarregar_controle.clicked.connect(self._carregar_dados)
+        self.btn_recarregar_controle.setStyleSheet("""
+            QPushButton {
+                background: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 0px;
+                margin: 0px;
+            }
+            QPushButton:hover {
+                background: #f5f3ff;
+                border: 1px solid #c4b5fd;
+            }
+            QPushButton:pressed {
+                background: #ede9fe;
+            }
+        """)
+        linha_top.addWidget(self.btn_recarregar_controle)
+
         btn_entregar = QPushButton(qtawesome.icon('fa6s.check', color='#ffffff'), "  Entregar")
         btn_entregar.setObjectName("btnGradientGreen")
         btn_entregar.setFixedHeight(34)

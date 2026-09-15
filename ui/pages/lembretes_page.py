@@ -100,11 +100,13 @@ class QuadroLembretes(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setContentsMargins(18, 18, 18, 14)
+        layout.setSpacing(12)
 
         # Cabeçalho do quadro
         linha_cabecalho = QHBoxLayout()
+        linha_cabecalho.setContentsMargins(4, 0, 4, 0)
+        linha_cabecalho.setSpacing(10)
         titulo = QLabel(self.titulo_ativos)
         titulo.setStyleSheet("font-size: 16px; font-weight: 700; color: #1e293b;")
         linha_cabecalho.addWidget(titulo)
@@ -481,12 +483,6 @@ class LembretesPage(QWidget):
         layout.setContentsMargins(32, 32, 32, 32)
         layout.setSpacing(16)
 
-        # Header area
-        titulo = QLabel("Lembretes")
-        titulo.setObjectName("pageTitle")
-        titulo.setStyleSheet("font-size: 24px; font-weight: 700; color: #1e293b;")
-        layout.addWidget(titulo)
-
         self.quadro_sa_pendente = QuadroLembretes(
             "Lembrete de SA pendente",
             _caminho_lembretes_json("Lembrete de SA pendente.json"),
@@ -552,7 +548,7 @@ class LembretesPage(QWidget):
         pane = QFrame()
         pane.setStyleSheet("QFrame { background: #ffffff; border: 1px solid #eef1f6; border-radius: 16px; }")
         pane_layout = QVBoxLayout(pane)
-        pane_layout.setContentsMargins(0, 0, 0, 0)
+        pane_layout.setContentsMargins(12, 12, 12, 12)
         pane_layout.addWidget(self.stacked)
         
         layout.addWidget(pane, 1)

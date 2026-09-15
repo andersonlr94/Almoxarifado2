@@ -3,6 +3,8 @@ import os
 import random
 from datetime import date
 
+import qtawesome as qta
+
 import matplotlib
 matplotlib.use("QtAgg")
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -100,6 +102,31 @@ class AcuracidadePage(QWidget):
         filtro_layout = QHBoxLayout(self.filtro_widget)
         filtro_layout.setContentsMargins(0, 0, 0, 0)
         filtro_layout.setSpacing(8)
+
+        self.btn_recarregar_estoque = QPushButton()
+        self.btn_recarregar_estoque.setIcon(qta.icon("fa6s.rotate-right", color="#6366f1"))
+        self.btn_recarregar_estoque.setIconSize(QSize(13, 13))
+        self.btn_recarregar_estoque.setFixedSize(26, 26)
+        self.btn_recarregar_estoque.setToolTip("Atualizar (recarregar ItensDeEstoque.json)")
+        self.btn_recarregar_estoque.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_recarregar_estoque.clicked.connect(self._carregar_itens_estoque)
+        self.btn_recarregar_estoque.setStyleSheet("""
+            QPushButton {
+                background: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 0px;
+                margin: 0px;
+            }
+            QPushButton:hover {
+                background: #f5f3ff;
+                border: 1px solid #c4b5fd;
+            }
+            QPushButton:pressed {
+                background: #ede9fe;
+            }
+        """)
+        filtro_layout.addWidget(self.btn_recarregar_estoque)
 
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("Pesquisar...")
@@ -213,9 +240,34 @@ class AcuracidadePage(QWidget):
         grafico_card_layout.setSpacing(8)
 
         grafico_header = QHBoxLayout()
+        grafico_header.setSpacing(6)
         self.grafico_titulo = QLabel("Progresso de Acuracidade")
         self.grafico_titulo.setObjectName("sectionTitle")
         grafico_header.addWidget(self.grafico_titulo)
+        self.btn_recarregar_grafico = QPushButton()
+        self.btn_recarregar_grafico.setIcon(qta.icon("fa6s.rotate-right", color="#6366f1"))
+        self.btn_recarregar_grafico.setIconSize(QSize(11, 11))
+        self.btn_recarregar_grafico.setFixedSize(24, 24)
+        self.btn_recarregar_grafico.setToolTip("Atualizar gráfico")
+        self.btn_recarregar_grafico.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_recarregar_grafico.clicked.connect(self._atualizar_grafico)
+        self.btn_recarregar_grafico.setStyleSheet("""
+            QPushButton {
+                background: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 0px;
+                margin: 0px;
+            }
+            QPushButton:hover {
+                background: #f5f3ff;
+                border: 1px solid #c4b5fd;
+            }
+            QPushButton:pressed {
+                background: #ede9fe;
+            }
+        """)
+        grafico_header.addWidget(self.btn_recarregar_grafico)
         grafico_header.addStretch()
         grafico_card_layout.addLayout(grafico_header)
 

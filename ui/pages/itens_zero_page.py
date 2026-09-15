@@ -1,6 +1,8 @@
 import json
 import os
 
+import qtawesome as qta
+
 import matplotlib
 
 matplotlib.use("QtAgg")
@@ -320,50 +322,34 @@ class ItensZeroPage(QWidget):
         titulo.setObjectName("pageTitle")
         card_layout.addWidget(titulo)
 
-        linha_top = QHBoxLayout()
-        linha_top.setSpacing(8)
-
-        btn_colar = QPushButton("Colar")
-        btn_colar.setObjectName("btnPrimary")
-        btn_colar.setFixedHeight(34)
-        btn_colar.clicked.connect(self._colar)
-        linha_top.addWidget(btn_colar)
-
-        btn_sincronizar = QPushButton("Atualizar")
-        btn_sincronizar.setObjectName("btnPrimary")
-        btn_sincronizar.setFixedHeight(34)
-        btn_sincronizar.clicked.connect(self._sincronizar)
-        linha_top.addWidget(btn_sincronizar)
-
-        linha_top.addStretch()
-
-        for nome, hex_cor in self.CORES.items():
-            btn = QPushButton()
-            btn.setFixedSize(28, 28)
-            btn.setStyleSheet(
-                f"background-color: {hex_cor}; border: 1px solid #999; border-radius: 4px;"
-            )
-            btn.setToolTip(nome.capitalize())
-            btn.clicked.connect(lambda checked, c=nome: self._aplicar_cor(c))
-            linha_top.addWidget(btn)
-
-        btn_sobe = QPushButton("▲")
-        btn_sobe.setFixedSize(28, 28)
-        btn_sobe.setToolTip("Mover para cima")
-        btn_sobe.clicked.connect(lambda: self._mover_linha(-1))
-        linha_top.addWidget(btn_sobe)
-
-        btn_desce = QPushButton("▼")
-        btn_desce.setFixedSize(28, 28)
-        btn_desce.setToolTip("Mover para baixo")
-        btn_desce.clicked.connect(lambda: self._mover_linha(1))
-        linha_top.addWidget(btn_desce)
-
-        card_layout.addLayout(linha_top)
-
         filtro_linha = QHBoxLayout()
         filtro_linha.setSpacing(6)
         filtro_linha.setContentsMargins(0, 0, 0, 0)
+
+        self.btn_recarregar = QPushButton()
+        self.btn_recarregar.setIcon(qta.icon("fa6s.rotate-right", color="#6366f1"))
+        self.btn_recarregar.setIconSize(QSize(13, 13))
+        self.btn_recarregar.setFixedSize(26, 26)
+        self.btn_recarregar.setToolTip("Atualizar (recarregar itensZero.json)")
+        self.btn_recarregar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_recarregar.clicked.connect(self._carregar_dados)
+        self.btn_recarregar.setStyleSheet("""
+            QPushButton {
+                background: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 0px;
+                margin: 0px;
+            }
+            QPushButton:hover {
+                background: #f5f3ff;
+                border: 1px solid #c4b5fd;
+            }
+            QPushButton:pressed {
+                background: #ede9fe;
+            }
+        """)
+        filtro_linha.addWidget(self.btn_recarregar)
 
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("⌕   Pesquisar...")
@@ -411,6 +397,29 @@ class ItensZeroPage(QWidget):
             }
         """)
         filtro_linha.addWidget(self.btn_limpar_filtro)
+
+        for nome, hex_cor in self.CORES.items():
+            btn = QPushButton()
+            btn.setFixedSize(28, 28)
+            btn.setStyleSheet(
+                f"background-color: {hex_cor}; border: 1px solid #999; border-radius: 4px;"
+            )
+            btn.setToolTip(nome.capitalize())
+            btn.clicked.connect(lambda checked, c=nome: self._aplicar_cor(c))
+            filtro_linha.addWidget(btn)
+
+        btn_sobe = QPushButton("▲")
+        btn_sobe.setFixedSize(28, 28)
+        btn_sobe.setToolTip("Mover para cima")
+        btn_sobe.clicked.connect(lambda: self._mover_linha(-1))
+        filtro_linha.addWidget(btn_sobe)
+
+        btn_desce = QPushButton("▼")
+        btn_desce.setFixedSize(28, 28)
+        btn_desce.setToolTip("Mover para baixo")
+        btn_desce.clicked.connect(lambda: self._mover_linha(1))
+        filtro_linha.addWidget(btn_desce)
+
         filtro_linha.addStretch()
 
         self.label_contador = QLabel("0 itens")
