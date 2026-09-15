@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QGridLayout,
     QAbstractItemView, QStyledItemDelegate, QComboBox, QInputDialog, QMessageBox, QMenu,
-    QRadioButton, QButtonGroup, QDateEdit, QFrame, QStackedWidget,
+    QRadioButton, QButtonGroup, QDateEdit, QFrame,
 )
 from PySide6.QtCore import Qt, QSize, QTimer, QDate, QEvent
 from PySide6.QtGui import QColor, QBrush, QShortcut, QKeySequence, QCursor, QIcon, QPixmap, QDoubleValidator
@@ -60,9 +60,9 @@ def _caminho_json():
 
 
 class EditorDelegate(QStyledItemDelegate):
-    COLS_EDITAVEIS = {0, 1, 2}  # apenas Qtde N/R/P podem ser alteradas
-    COLS_NUMERICAS = {0, 1, 2}
-    COL_STATUS = 14
+    COLS_EDITAVEIS = {5}  # apenas Qtde Dph editável
+    COLS_NUMERICAS = {5, 8, 9}
+    COL_STATUS = 99
 
     def __init__(self, parent=None, edit_mode_getter=None):
         super().__init__(parent)
@@ -199,52 +199,42 @@ class EditorDelegate(QStyledItemDelegate):
             super().setModelData(editor, model, index)
 
 
-class SolicitacoesSaPage(QWidget):
+class DphPage(QWidget):
     COLUNAS = [
-        "Qtde\nN",
-        "Qtde\nR",
-        "Qtde\nP",
+        "Req",
+        "Req neces.",
+        "Destino",
         "Kardex",
         "Código",
-        "Qtde",
-        "Nº Req",
-        "Destino",
-        "Local entrega",
-        "Data\nnecessidade",
-        "Locação\nNovo",
-        "Estoque\nnovo",
-        "Locação\nretorno",
-        "Estoque\nretorno",
-        "Status",
-        "Custo total\nestimado",
-        "Observações",
+        "Qtde Dph",
         "Conta",
+        "Entidade",
+        "Custo unit",
+        "Custo total",
+        "DPH",
+        "Proj/Cta",
+        "Imprimir",
     ]
     CHAVES = [
-        "qtde_n",
-        "qtde_r",
-        "qtde_p",
+        "req",
+        "req_neces",
+        "destino",
         "kardex",
         "codigo",
-        "qtde",
-        "numero_req",
-        "destino",
-        "local_entrega",
-        "data_necessidade",
-        "locacao_novo",
-        "estoque_novo",
-        "locacao_retorno",
-        "estoque_retorno",
-        "status",
-        "custo_total_estimado",
-        "observacoes",
+        "qtde_dph",
         "conta",
+        "entidade",
+        "custo_unit",
+        "custo_total",
+        "dph",
+        "proj_cta",
+        "imprimir",
     ]
 
-    IDX_STATUS = 14
+    IDX_STATUS = 99
     IDX_KARDEX = 3
     IDX_CODIGO = 4
-    IDX_NUM_REQ = 6
+    IDX_NUM_REQ = 0
 
     def __init__(self):
         super().__init__()
@@ -259,43 +249,6 @@ class SolicitacoesSaPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
-
-        # Abas SA / DPH no estilo Lembretes
-        linha_abas = QHBoxLayout()
-        linha_abas.setSpacing(8)
-        linha_abas.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.grupo_abas = QButtonGroup(self)
-        estilo_aba = """
-            QPushButton { 
-                background: transparent; color: #64748b; padding: 8px 18px; 
-                font-size: 13px; font-weight: 600; border: none; border-radius: 10px;
-            }
-            QPushButton:hover { color: #4f46e5; }
-            QPushButton:checked { color: #4f46e5; background: #eef2ff; }
-        """
-        self.btn_aba_sa = QPushButton("SA")
-        self.btn_aba_sa.setCheckable(True)
-        self.btn_aba_sa.setChecked(True)
-        self.btn_aba_sa.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_aba_sa.setStyleSheet(estilo_aba)
-        self.grupo_abas.addButton(self.btn_aba_sa, 0)
-        linha_abas.addWidget(self.btn_aba_sa)
-        self.btn_aba_dph = QPushButton("DPH")
-        self.btn_aba_dph.setCheckable(True)
-        self.btn_aba_dph.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_aba_dph.setStyleSheet(estilo_aba)
-        self.grupo_abas.addButton(self.btn_aba_dph, 1)
-        linha_abas.addWidget(self.btn_aba_dph)
-        linha_abas.addStretch()
-        layout.addLayout(linha_abas)
-
-        self.stacked_sa_dph = QStackedWidget()
-        layout.addWidget(self.stacked_sa_dph, 1)
-
-        pagina_sa = QWidget()
-        layout_sa = QVBoxLayout(pagina_sa)
-        layout_sa.setContentsMargins(0, 0, 0, 0)
-        layout_sa.setSpacing(0)
 
         card = QWidget()
         card.setObjectName("pageCard")
@@ -330,64 +283,44 @@ class SolicitacoesSaPage(QWidget):
             filtro_layout.addWidget(cont)
             return cont
 
-        # 1) Nº de SA
+        # 1) Nº de DPH
+        self.filtro_dph = QLineEdit()
+        self.filtro_dph.setPlaceholderText("Ex: DPH123...")
+        self.filtro_dph.returnPressed.connect(self._aplicar_filtro)
+        add_field_h("Nº de DPH", self.filtro_dph)
+
+        # 2) Nº de SA
         self.filtro_sa = QLineEdit()
         self.filtro_sa.setPlaceholderText("Ex: SA123...")
         self.filtro_sa.returnPressed.connect(self._aplicar_filtro)
         add_field_h("Nº de SA", self.filtro_sa)
 
-        # 2) Status
-        self.filtro_status = QComboBox()
-        for label, valor in zip(STATUS_FILTRO_LABELS, STATUS_OPCOES):
-            self.filtro_status.addItem(label, valor)
-        self.filtro_status.setCurrentIndex(0)
-        add_field_h("Status", self.filtro_status)
-
-        # 3) Solicitante
-        self.filtro_solicitante = QComboBox()
-        self.filtro_solicitante.setEditable(True)
-        self.filtro_solicitante.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self.filtro_solicitante.addItem("Vazio", "")
-        self.filtro_solicitante.setCurrentIndex(0)
-        self.filtro_solicitante.setPlaceholderText("Selecione...")
-        if self.filtro_solicitante.lineEdit():
-            self.filtro_solicitante.lineEdit().setPlaceholderText("Selecione...")
-        add_field_h("Solicitante", self.filtro_solicitante)
-
-        # 4) Kardex
+        # 3) Kardex
         self.filtro_kardex = QLineEdit()
         self.filtro_kardex.setPlaceholderText("Kardex...")
         self.filtro_kardex.returnPressed.connect(self._aplicar_filtro)
         add_field_h("Kardex", self.filtro_kardex)
 
-        # 5) Requisição
-        self.filtro_requisicao = QLineEdit()
-        self.filtro_requisicao.setPlaceholderText("Nº Req...")
-        self.filtro_requisicao.returnPressed.connect(self._aplicar_filtro)
-        add_field_h("Requisição", self.filtro_requisicao)
-
-        # 6) Destino
-        self.filtro_destino = QLineEdit()
-        self.filtro_destino.setPlaceholderText("Destino...")
-        self.filtro_destino.returnPressed.connect(self._aplicar_filtro)
-        add_field_h("Destino", self.filtro_destino)
-
-        # 7) Conta
+        # 4) Conta
         self.filtro_conta = QLineEdit()
         self.filtro_conta.setPlaceholderText("Conta...")
         self.filtro_conta.returnPressed.connect(self._aplicar_filtro)
         add_field_h("Conta", self.filtro_conta)
 
-        # 8) Projeto de destino
+        # stubs para compatibilidade com lógica antiga (não exibidos)
+        self.filtro_status = QComboBox()
+        self.filtro_status.addItem("", "")
+        self.filtro_status.setVisible(False)
+        self.filtro_solicitante = QComboBox()
+        self.filtro_solicitante.addItem("", "")
+        self.filtro_solicitante.setVisible(False)
+        self.filtro_requisicao = QLineEdit()
+        self.filtro_requisicao.setVisible(False)
+        self.filtro_destino = QLineEdit()
+        self.filtro_destino.setVisible(False)
         self.filtro_projeto = QComboBox()
-        self.filtro_projeto.setEditable(True)
-        self.filtro_projeto.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self.filtro_projeto.addItem("Vazio", "")
-        self.filtro_projeto.setCurrentIndex(0)
-        self.filtro_projeto.setPlaceholderText("Selecione...")
-        if self.filtro_projeto.lineEdit():
-            self.filtro_projeto.lineEdit().setPlaceholderText("Selecione...")
-        add_field_h("Projeto de destino", self.filtro_projeto)
+        self.filtro_projeto.addItem("", "")
+        self.filtro_projeto.setVisible(False)
 
         # Botões na mesma linha
         self.btn_aplicar_filtro = QPushButton(qtawesome.icon('fa6s.filter', color='#ffffff'), "  Aplicar filtro")
@@ -424,200 +357,66 @@ class SolicitacoesSaPage(QWidget):
         quadro_layout.setContentsMargins(14, 12, 14, 12)
         quadro_layout.setSpacing(10)
 
-        # Linha 1: SA em quadro + 6 campos + quadro interno à direita com botões
-        linha_sa = QHBoxLayout()
-        linha_sa.setSpacing(12)
-        # quadro para o número da SA (mesmo estilo dos botões)
-        self.quadro_sa_numero = QFrame()
-        self.quadro_sa_numero.setObjectName("quadroSaNumero")
-        self.quadro_sa_numero.setFrameShape(QFrame.Shape.StyledPanel)
-        self.quadro_sa_numero.setStyleSheet("""
-            QFrame#quadroSaNumero {
-                background-color: #f8fafc;
-                border: 1px solid #e2e8f0;
-                border-radius: 10px;
-            }
-        """)
-        self.quadro_sa_numero.setFixedWidth(110)
-        self.quadro_sa_numero.setFixedHeight(62)
-        lay_sa_num = QVBoxLayout(self.quadro_sa_numero)
-        lay_sa_num.setContentsMargins(6, 6, 6, 6)
-        lay_sa_num.setSpacing(0)
-        lay_sa_num.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.label_sa_numero = QLabel("SA99102")
-        self.label_sa_numero.setObjectName("labelSA")
-        self.label_sa_numero.setStyleSheet("color:#1e293b; font-size:17px; font-weight:800; letter-spacing:0.5px; background:transparent; border:none;")
-        self.label_sa_numero.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay_sa_num.addWidget(self.label_sa_numero)
-        linha_sa.addWidget(self.quadro_sa_numero)
+        # ── QUADRO DPH: DPH Pendente Nº + 4 botões ──
+        linha_dph = QHBoxLayout()
+        linha_dph.setSpacing(10)
+        linha_dph.setContentsMargins(0, 0, 0, 0)
+        lbl_dph = QLabel("DPH Pendente Nº")
+        lbl_dph.setStyleSheet("color:#1e293b; font-size:12px; font-weight:700;")
+        linha_dph.addWidget(lbl_dph)
+        self.campo_dph_pendente = QLineEdit()
+        self.campo_dph_pendente.setPlaceholderText("Nº DPH...")
+        self.campo_dph_pendente.setFixedHeight(30)
+        self.campo_dph_pendente.setFixedWidth(160)
+        self.campo_dph_pendente.setStyleSheet("background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:4px 10px; font-size:12px;")
+        linha_dph.addWidget(self.campo_dph_pendente)
+        self.btn_marcar_conta = QPushButton("Marcar conta imprimir")
+        self.btn_marcar_conta.setObjectName("btnSecondary")
+        self.btn_marcar_conta.setFixedHeight(30)
+        self.btn_marcar_conta.setCursor(Qt.CursorShape.PointingHandCursor)
+        linha_dph.addWidget(self.btn_marcar_conta)
+        self.btn_visualizar_dph = QPushButton(qtawesome.icon('fa6s.eye', color='#ffffff'), "  visualizar DPH")
+        self.btn_visualizar_dph.setObjectName("btnPrimary")
+        self.btn_visualizar_dph.setFixedHeight(30)
+        self.btn_visualizar_dph.setCursor(Qt.CursorShape.PointingHandCursor)
+        linha_dph.addWidget(self.btn_visualizar_dph)
+        self.btn_imprimir_dph = QPushButton(qtawesome.icon('fa6s.print', color='#ffffff'), "  Imprimir DPH")
+        self.btn_imprimir_dph.setObjectName("btnPrimary")
+        self.btn_imprimir_dph.setFixedHeight(30)
+        self.btn_imprimir_dph.setCursor(Qt.CursorShape.PointingHandCursor)
+        linha_dph.addWidget(self.btn_imprimir_dph)
+        self.btn_saida_periodo = QPushButton("Saida por periodo")
+        self.btn_saida_periodo.setObjectName("btnSecondary")
+        self.btn_saida_periodo.setFixedHeight(30)
+        self.btn_saida_periodo.setCursor(Qt.CursorShape.PointingHandCursor)
+        linha_dph.addWidget(self.btn_saida_periodo)
+        linha_dph.addStretch()
+        quadro_layout.addLayout(linha_dph)
 
-        # helper para campo com label dentro do quadro — label e campo próximos
-        def criar_campo_quadro(placeholder, label_text):
-            w = QWidget()
-            w.setMaximumWidth(135)
-            w.setMinimumWidth(105)
-            v = QVBoxLayout(w)
-            v.setContentsMargins(0, 0, 0, 0)
-            v.setSpacing(1)
-            lbl = QLabel(label_text)
-            lbl.setStyleSheet("color:#64748b; font-size:9px; font-weight:600; padding:0px; margin:0px;")
-            lbl.setMaximumWidth(135)
-            lbl.setFixedHeight(12)
-            v.addWidget(lbl)
-            edit = QLineEdit()
-            edit.setPlaceholderText(placeholder)
-            edit.setFixedHeight(26)
-            edit.setMaximumWidth(135)
-            edit.setMinimumWidth(105)
-            edit.setStyleSheet("background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:2px 6px; font-size:11px; margin:0px;")
-            v.addWidget(edit)
-            return w, edit
-
-        # todos em UMA ÚNICA LINHA (6 campos lado a lado) — agora DENTRO DE QUADRO central
-        self.quadro_sa_campos = QFrame()
-        self.quadro_sa_campos.setObjectName("quadroSaCampos")
-        self.quadro_sa_campos.setFrameShape(QFrame.Shape.StyledPanel)
-        self.quadro_sa_campos.setStyleSheet("""
-            QFrame#quadroSaCampos {
-                background-color: #ffffff;
-                border: 1px solid #e2e8f0;
-                border-radius: 10px;
-            }
-        """)
-        # quadro central com 2 linhas: linha1 (6 campos) + linha2 (Entregar/Entregue/Data)
-        quadro_campos_v = QVBoxLayout(self.quadro_sa_campos)
-        quadro_campos_v.setSpacing(6)
-        quadro_campos_v.setContentsMargins(8, 8, 8, 8)
-
-        grid_sa = QHBoxLayout()
-        grid_sa.setSpacing(8)
-        grid_sa.setContentsMargins(0, 0, 0, 0)
-
-        w_solic, self.campo_sa_solicitante = criar_campo_quadro("Nome...", "Solicitante")
-        w_tel, self.campo_sa_telefone = criar_campo_quadro("(00) 0000-0000", "Telefone")
-        w_dep, self.campo_sa_departamento = criar_campo_quadro("Depto...", "Departamento")
-        w_planta, self.campo_sa_planta = criar_campo_quadro("Planta...", "Planta")
-        w_proj, self.campo_sa_projeto_debito = criar_campo_quadro("Projeto...", "Projeto débito")
-        w_conta, self.campo_sa_conta_debito = criar_campo_quadro("Conta...", "Conta débito")
-
-        for w in [w_solic, w_tel, w_dep, w_planta, w_proj, w_conta]:
-            grid_sa.addWidget(w)
-        grid_sa.addStretch()
-        quadro_campos_v.addLayout(grid_sa)
-
-        # segunda linha DENTRO do quadro solicitante: Entregar para / Entregue para / Data
-        def campo_entrega_compacto(label_text, placeholder):
-            w = QWidget()
-            w.setMaximumWidth(135)
-            w.setMinimumWidth(105)
-            v = QVBoxLayout(w)
-            v.setContentsMargins(0, 0, 0, 0)
-            v.setSpacing(1)
-            lbl = QLabel(label_text)
-            lbl.setStyleSheet("color:#64748b; font-size:9px; font-weight:600; padding:0px; margin:0px;")
-            lbl.setMaximumWidth(135)
-            lbl.setFixedHeight(12)
-            v.addWidget(lbl)
-            edit = QLineEdit()
-            edit.setPlaceholderText(placeholder)
-            edit.setFixedHeight(26)
-            edit.setMaximumWidth(135)
-            edit.setMinimumWidth(105)
-            edit.setStyleSheet("background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:2px 6px; font-size:11px; margin:0px;")
-            v.addWidget(edit)
-            return w, edit
-
-        linha_sa_segunda = QHBoxLayout()
-        linha_sa_segunda.setSpacing(8)
-        linha_sa_segunda.setContentsMargins(0, 0, 0, 0)
-        w_entregar, self.campo_sa_entregar_para = campo_entrega_compacto("Entregar para", "Nome / local...")
-        w_entregue, self.campo_sa_entregue_para = campo_entrega_compacto("Entregue para", "")
-        linha_sa_segunda.addWidget(w_entregar)
-        linha_sa_segunda.addWidget(w_entregue)
-
-        w_data = QWidget()
-        w_data.setMaximumWidth(135)
-        w_data.setMinimumWidth(110)
-        v_data = QVBoxLayout(w_data)
-        v_data.setContentsMargins(0, 0, 0, 0)
-        v_data.setSpacing(1)
-        lbl_data = QLabel("Data de entrega")
-        lbl_data.setStyleSheet("color:#64748b; font-size:9px; font-weight:600; padding:0px; margin:0px;")
-        lbl_data.setMaximumWidth(135)
-        lbl_data.setFixedHeight(12)
-        v_data.addWidget(lbl_data)
-        self.campo_sa_data_entrega = QDateEdit()
-        self.campo_sa_data_entrega.setCalendarPopup(True)
-        self.campo_sa_data_entrega.setDisplayFormat("dd/MM/yyyy")
-        self.campo_sa_data_entrega.setDate(QDate.currentDate())
-        self.campo_sa_data_entrega.setFixedHeight(26)
-        self.campo_sa_data_entrega.setMaximumWidth(135)
-        self.campo_sa_data_entrega.setMinimumWidth(110)
-        self.campo_sa_data_entrega.setStyleSheet("background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:2px 6px; font-size:11px; margin:0px;")
-        v_data.addWidget(self.campo_sa_data_entrega)
-        linha_sa_segunda.addWidget(w_data)
-        linha_sa_segunda.addStretch()
-        quadro_campos_v.addLayout(linha_sa_segunda)
-
-        linha_sa.addWidget(self.quadro_sa_campos, 1)
-
-        # quadro interno à direita (dentro do quadro principal) com 2 botões
-        self.quadro_sa_botoes = QFrame()
-        self.quadro_sa_botoes.setObjectName("quadroSaBotoes")
-        self.quadro_sa_botoes.setFrameShape(QFrame.Shape.StyledPanel)
-        self.quadro_sa_botoes.setStyleSheet("""
-            QFrame#quadroSaBotoes {
-                background-color: #f8fafc;
-                border: 1px solid #e2e8f0;
-                border-radius: 10px;
-            }
-        """)
-        self.quadro_sa_botoes.setFixedWidth(150)
-        inner_lay = QVBoxLayout(self.quadro_sa_botoes)
-        inner_lay.setContentsMargins(8, 8, 8, 8)
-        inner_lay.setSpacing(6)
-        self.btn_imprimir_sa = QPushButton(qtawesome.icon('fa6s.print', color='#ffffff'), "  Imprimir SA")
-        self.btn_imprimir_sa.setObjectName("btnPrimary")
-        self.btn_imprimir_sa.setFixedHeight(32)
-        self.btn_imprimir_sa.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_imprimir_sa.clicked.connect(self._imprimir_sa)
-        inner_lay.addWidget(self.btn_imprimir_sa)
-        self.btn_devolver_sa = QPushButton(qtawesome.icon('fa6s.rotate-left', color='#ffffff'), "  Devolver SA")
-        self.btn_devolver_sa.setObjectName("btnGradientRose")
-        self.btn_devolver_sa.setFixedHeight(32)
-        self.btn_devolver_sa.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_devolver_sa.clicked.connect(self._devolver_sa)
-        inner_lay.addWidget(self.btn_devolver_sa)
-        linha_sa.addWidget(self.quadro_sa_botoes)
-
-        quadro_layout.addLayout(linha_sa)
-
-        # Linha 2 do quadro principal: 5 radios + contador à direita
+        # Label contador (mantido para tabela)
         self.label_contador = QLabel("0 solicitações")
         self.label_contador.setObjectName("statusLabel")
         self.label_contador.setStyleSheet("color:#64748b; font-size:11px; font-weight:600;")
         self.label_contador.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
-        linha_radios = QHBoxLayout()
-        linha_radios.setSpacing(10)
-        linha_radios.setContentsMargins(0, 2, 0, 2)
-        lbl_status = QLabel("Status:")
-        lbl_status.setStyleSheet("color:#475569; font-size:11px; font-weight:700;")
-        linha_radios.addWidget(lbl_status)
-        self.grupo_sa_status = QButtonGroup(self)
-        self.radio_sa_cancelado = QRadioButton("Cancelado")
-        self.radio_sa_devolvido = QRadioButton("Devolvido")
-        self.radio_sa_pendente = QRadioButton("Pendente")
-        self.radio_sa_pendente.setChecked(True)
-        self.radio_sa_programado = QRadioButton("Programado")
-        self.radio_sa_todos = QRadioButton("Todos")
-        for rb in [self.radio_sa_cancelado, self.radio_sa_devolvido, self.radio_sa_pendente, self.radio_sa_programado, self.radio_sa_todos]:
-            rb.setStyleSheet("font-size:11px; color:#334155;")
-            self.grupo_sa_status.addButton(rb)
-            linha_radios.addWidget(rb)
-        linha_radios.addStretch()
-        linha_radios.addWidget(self.label_contador)
-        quadro_layout.addLayout(linha_radios)
+        # Filtro para tabela (embaixo do quadro)
+        filtro_tabela_container = QWidget()
+        filtro_tabela_layout = QHBoxLayout(filtro_tabela_container)
+        filtro_tabela_layout.setContentsMargins(0, 6, 0, 0)
+        filtro_tabela_layout.setSpacing(8)
+        lbl_filtro = QLabel("Filtro tabela:")
+        lbl_filtro.setStyleSheet("color:#475569; font-size:11px; font-weight:700;")
+        filtro_tabela_layout.addWidget(lbl_filtro)
+        self.campo_filtro_tabela = QLineEdit()
+        self.campo_filtro_tabela.setPlaceholderText("Filtrar...")
+        self.campo_filtro_tabela.setFixedHeight(30)
+        self.campo_filtro_tabela.setMinimumWidth(240)
+        self.campo_filtro_tabela.setStyleSheet("background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:4px 10px; font-size:12px;")
+        self.campo_filtro_tabela.textChanged.connect(self._aplicar_filtro)
+        filtro_tabela_layout.addWidget(self.campo_filtro_tabela)
+        filtro_tabela_layout.addStretch()
+        filtro_tabela_layout.addWidget(self.label_contador)
+        quadro_layout.addWidget(filtro_tabela_container)
 
         # ── Layout inferior: quadro esquerdo + (quadro_sa + tabela) à direita ──
         # O quadro esquerdo terá width igual ao conjunto quadro_sa + tabela (lado direito)
@@ -626,7 +425,7 @@ class SolicitacoesSaPage(QWidget):
         conteudo_inferior_lay.setContentsMargins(0, 0, 0, 0)
         conteudo_inferior_lay.setSpacing(12)
 
-        # Quadro à esquerda — Lista de SAs, 100px width, lista arquivos em Almox/SA
+        # Quadro à esquerda — Lista de DPHs, 100px width
         self.quadro_esquerdo = QFrame()
         self.quadro_esquerdo.setObjectName("quadroEsquerdo")
         self.quadro_esquerdo.setFrameShape(QFrame.Shape.StyledPanel)
@@ -643,12 +442,12 @@ class SolicitacoesSaPage(QWidget):
         lay_esq = QVBoxLayout(self.quadro_esquerdo)
         lay_esq.setContentsMargins(4, 6, 4, 6)
         lay_esq.setSpacing(4)
-        lbl_esq_titulo = QLabel("Lista de SAs")
+        lbl_esq_titulo = QLabel("Lista de DPHs")
         lbl_esq_titulo.setStyleSheet("color:#1e293b; font-size:9px; font-weight:700;")
         lbl_esq_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_esq_titulo.setWordWrap(True)
         lay_esq.addWidget(lbl_esq_titulo)
-        # lista de arquivos SA
+        # lista de arquivos DPH (reutiliza SA)
         from PySide6.QtWidgets import QListWidget, QListWidgetItem
         self.lista_sas = QListWidget()
         self.lista_sas.setObjectName("listaSAs")
@@ -736,31 +535,24 @@ class SolicitacoesSaPage(QWidget):
         header = self.tabela.horizontalHeader()
         header.setStretchLastSection(False)
         larguras = {
-            0: 48,
-            1: 48,
-            2: 48,
-            3: 152,  # +20px (132 -> 152)
-            4: 110,
-            5: 55,
-            6: 95,
-            7: 100,
-            8: 130,
-            9: 100,
-            10: 115,
-            11: 105,
-            12: 125,
-            13: 115,
-            14: 120,
-            15: 135,
-            16: 180,
-            17: 110,
+            0: 70,   # Req
+            1: 85,   # Req neces.
+            2: 110,  # Destino
+            3: 110,  # Kardex
+            4: 100,  # Código
+            5: 80,   # Qtde Dph
+            6: 85,   # Conta
+            7: 110,  # Entidade
+            8: 85,   # Custo unit
+            9: 95,   # Custo total
+            10: 95,  # Sphm status
+            11: 95,  # Proj/Cta
+            12: 80,  # Imprimir
         }
         for c, w in larguras.items():
             header.setSectionResizeMode(c, QHeaderView.ResizeMode.Fixed)
             header.resizeSection(c, w)
-        header.setSectionResizeMode(16, QHeaderView.ResizeMode.Interactive)
-        # Ocultar coluna Local entrega (8)
-        self.tabela.setColumnHidden(8, True)
+        header.setSectionResizeMode(12, QHeaderView.ResizeMode.Interactive)
         header.setStyleSheet(
             "QHeaderView::section {"
             "  font-size: 8.5px; font-weight: 700;"
@@ -797,19 +589,7 @@ class SolicitacoesSaPage(QWidget):
         conteudo_inferior_lay.addWidget(self.quadro_esquerdo)
         conteudo_inferior_lay.addWidget(lado_direito, 1)
         card_layout.addWidget(conteudo_inferior, 1)
-        layout_sa.addWidget(card)
-        self.stacked_sa_dph.addWidget(pagina_sa)
-        # Página DPH - mesmo layout
-        try:
-            from ui.pages.dph_page import DphPage
-            pagina_dph = DphPage()
-        except Exception as e:
-            pagina_dph = QWidget()
-            lay = QVBoxLayout(pagina_dph)
-            lay.setContentsMargins(20, 20, 20, 20)
-            lay.addWidget(QLabel(f"Erro ao carregar DPH: {e}"))
-        self.stacked_sa_dph.addWidget(pagina_dph)
-        self.grupo_abas.idClicked.connect(self.stacked_sa_dph.setCurrentIndex)
+        layout.addWidget(card)
 
     def _setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+F"), self, self._buscar_item)
@@ -873,21 +653,21 @@ class SolicitacoesSaPage(QWidget):
             pass
 
     def _caminho_sa_pasta(self):
-        """Retorna pasta Almox/SA, tentando config e fallbacks locais."""
+        """Retorna pasta Almox/DPH, tentando config e fallbacks locais."""
         candidatos = []
         try:
             import config
             base = config.obter_caminho_jsons()
             if base and os.path.isdir(base):
-                candidatos.append(os.path.normpath(os.path.join(base, "Almox", "SA")))
+                candidatos.append(os.path.normpath(os.path.join(base, "Almox", "DPH")))
         except Exception:
             pass
         # fallbacks locais
         candidatos.extend([
-            os.path.normpath(os.path.join(os.getcwd(), "Almox", "SA")),
-            os.path.normpath(r"C:\Users\ander\Documents\AntiGravity\Almoxarifado2\Almox\SA"),
-            os.path.normpath(r"C:\Users\ander\Documents\AntiGravity\AlmoxarifadoConf\Almox\SA"),
-            os.path.normpath(r"C:\Almox\SA"),
+            os.path.normpath(os.path.join(os.getcwd(), "Almox", "DPH")),
+            os.path.normpath(r"C:\Users\ander\Documents\AntiGravity\Almoxarifado2\Almox\DPH"),
+            os.path.normpath(r"C:\Users\ander\Documents\AntiGravity\AlmoxarifadoConf\Almox\DPH"),
+            os.path.normpath(r"C:\Almox\DPH"),
         ])
         for p in candidatos:
             if os.path.isdir(p):
@@ -984,280 +764,38 @@ class SolicitacoesSaPage(QWidget):
                 pass
         return novo_n_str, novo_r_str
 
-    def _caminho_dph_pendente(self):
-        import config
-        base = config.obter_caminho_jsons()
-        if not base:
-            return ""
-        pasta = os.path.normpath(os.path.join(base, "Almox", "DPH"))
-        try:
-            os.makedirs(pasta, exist_ok=True)
-        except Exception:
-            pass
-        return os.path.join(pasta, "DPHPendente.json")
-
-    def _mapear_sa_para_dph(self, sa_item):
-        # DPH recebe somente Qtde N (se houver R/P ignora)
-        qtde_dph = str(sa_item.get("qtde_n", "")).strip()
-        # Req deve receber número da SA (ex: SA120327) — pega do label_sa_numero ou do arquivo selecionado
-        sa_numero = ""
-        try:
-            if hasattr(self, "label_sa_numero"):
-                lbl = self.label_sa_numero.text().strip()
-                if lbl:
-                    sa_numero = lbl if lbl.upper().startswith("SA") else f"SA{lbl}"
-        except Exception:
-            pass
-        if not sa_numero or sa_numero == "SA99102":
-            try:
-                cur = self.lista_sas.currentItem() if hasattr(self, "lista_sas") else None
-                if cur:
-                    caminho = cur.data(Qt.ItemDataRole.UserRole)
-                    if caminho:
-                        base = os.path.splitext(os.path.basename(str(caminho)))[0]
-                        if base:
-                            sa_numero = base if base.upper().startswith("SA") else f"SA{base}"
-            except Exception:
-                pass
-        if not sa_numero:
-            sa_numero = str(sa_item.get("numero_req", "")).strip()
-            if sa_numero and not sa_numero.upper().startswith("SA"):
-                # fallback para nome do arquivo se numero_req for RP...
-                try:
-                    cur = self.lista_sas.currentItem() if hasattr(self, "lista_sas") else None
-                    if cur:
-                        caminho = cur.data(Qt.ItemDataRole.UserRole)
-                        if caminho:
-                            base = os.path.splitext(os.path.basename(str(caminho)))[0]
-                            if base:
-                                sa_numero = base if base.upper().startswith("SA") else f"SA{base}"
-                except Exception:
-                    pass
-        # custo unitário busca por kardex em ItensAlmoxarifado
-        custo_unit = ""
-        try:
-            mapa_custo = self._mapa_itens_almoxarifado()
-            kardex_key = str(sa_item.get("kardex", "")).strip()
-            est = mapa_custo.get(kardex_key) or mapa_custo.get(kardex_key.lower()) if kardex_key else None
-            if est:
-                custo_unit = str(est.get("Custo", "") or est.get("custo", "") or "").strip()
-            if not custo_unit:
-                custo_unit = str(sa_item.get("custo_total_estimado", "")).strip()
-        except Exception:
-            custo_unit = str(sa_item.get("custo_total_estimado", "")).strip()
-        return {
-            "req": sa_numero,
-            "req_neces": str(sa_item.get("numero_req", "")).strip(),
-            "destino": str(sa_item.get("destino", "")).strip(),
-            "kardex": str(sa_item.get("kardex", "")).strip(),
-            "codigo": str(sa_item.get("codigo", "")).strip(),
-            "qtde_dph": qtde_dph,
-            "conta": str(sa_item.get("conta", "")).strip(),
-            "entidade": "",
-            "custo_unit": custo_unit,
-            "custo_total": str(sa_item.get("custo_total_estimado", "")).strip(),
-            "dph": "",
-            "proj_cta": "Aberto/Liberado",
-            "imprimir": True,
-            # guarda chaves originais para possível retorno
-            "numero_req": str(sa_item.get("numero_req", "")).strip(),
-            "data_necessidade": str(sa_item.get("data_necessidade", "")).strip(),
-            "status": str(sa_item.get("status", "")).strip(),
-        }
-
-    def _sincronizar_dph_pendente(self, idx):
-        if not (0 <= idx < len(self.dados)):
-            return
-        sa_item = self.dados[idx]
-        # verifica se linha está preenchida (kardex, codigo, qtde e ao menos um N/R/P)
-        kardex = str(sa_item.get("kardex", "")).strip()
-        codigo = str(sa_item.get("codigo", "")).strip()
-        qtde = str(sa_item.get("qtde", "")).strip()
-        qtde_n = str(sa_item.get("qtde_n", "")).strip()
-        qtde_r = str(sa_item.get("qtde_r", "")).strip()
-        qtde_p = str(sa_item.get("qtde_p", "")).strip()
-        if not (kardex and codigo):
-            return
-        # DPH só vai se houver valor em Qtde N (ignora R/P, envia somente N)
-        preenchida = bool(qtde_n)
-        # se N existe mas soma total inválida, ainda não sincroniza DPH até validar
-        if preenchida and qtde:
-            try:
-                parsed_qtde = self._parse_qtde(qtde)
-                parsed_n = self._parse_qtde(qtde_n) or 0
-                parsed_r = self._parse_qtde(qtde_r) or 0
-                parsed_p = self._parse_qtde(qtde_p) or 0
-                if parsed_qtde is not None and abs((parsed_n + parsed_r + parsed_p) - parsed_qtde) > 1e-6:
-                    return
-            except Exception:
-                pass
-        if not preenchida:
-            # linha não preenchida ou esvaziada (ex: qtde_n 10 → vazio = retorno ao estoque) -> remove do DPH
-            sa_numero_rem = ""
-            try:
-                if hasattr(self, "label_sa_numero"):
-                    lbl = self.label_sa_numero.text().strip()
-                    if lbl:
-                        sa_numero_rem = lbl if lbl.upper().startswith("SA") else f"SA{lbl}"
-                if not sa_numero_rem or sa_numero_rem == "SA99102":
-                    cur = self.lista_sas.currentItem() if hasattr(self, "lista_sas") else None
-                    if cur:
-                        caminho_cur = cur.data(Qt.ItemDataRole.UserRole)
-                        if caminho_cur:
-                            base = os.path.splitext(os.path.basename(str(caminho_cur)))[0]
-                            if base:
-                                sa_numero_rem = base if base.upper().startswith("SA") else f"SA{base}"
-            except Exception:
-                pass
-            self._remover_do_dph_pendente(kardex, sa_numero_rem)
-            return
-        dph_item = self._mapear_sa_para_dph(sa_item)
-        caminho = self._caminho_dph_pendente()
-        if not caminho:
-            return
-        try:
-            if os.path.isfile(caminho):
-                with open(caminho, "r", encoding="utf-8") as f:
-                    dados = json.load(f)
-                    if not isinstance(dados, list):
-                        dados = []
-            else:
-                dados = []
-        except Exception:
-            dados = []
-        # atualiza se já existe (kardex + req)
-        chave_req = dph_item.get("req", "")
-        existente_idx = -1
-        for i, d in enumerate(dados):
-            if not isinstance(d, dict):
-                continue
-            if str(d.get("kardex", "")).strip() == kardex and str(d.get("req", "")).strip() == chave_req:
-                existente_idx = i
-                break
-        if existente_idx >= 0:
-            dados[existente_idx] = dph_item
-        else:
-            dados.append(dph_item)
-        try:
-            os.makedirs(os.path.dirname(caminho), exist_ok=True)
-            with open(caminho, "w", encoding="utf-8") as f:
-                json.dump(dados, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
-
-    def _remover_do_dph_pendente(self, kardex, numero_req=""):
-        caminho = self._caminho_dph_pendente()
-        if not caminho or not os.path.isfile(caminho):
-            return
-        try:
-            with open(caminho, "r", encoding="utf-8") as f:
-                dados = json.load(f)
-                if not isinstance(dados, list):
-                    return
-        except Exception:
-            return
-        novos = []
-        for d in dados:
-            if not isinstance(d, dict):
-                continue
-            k = str(d.get("kardex", "")).strip()
-            r = str(d.get("req", "") or d.get("numero_req", "")).strip()
-            if k == kardex and (not numero_req or r == numero_req):
-                continue
-            novos.append(d)
-        if len(novos) != len(dados):
-            try:
-                with open(caminho, "w", encoding="utf-8") as f:
-                    json.dump(novos, f, ensure_ascii=False, indent=2)
-            except Exception:
-                pass
-
     def _atualizar_lista_sas(self):
         if not hasattr(self, "lista_sas"):
             return
         self.lista_sas.blockSignals(True)
         self.lista_sas.clear()
-        pastas = []
-        # coleta de todas as pastas candidatas (evita duplicar)
-        vistos = set()
-        candidatos = []
-        try:
-            import config
-            base = config.obter_caminho_jsons()
-            if base:
-                candidatos.append(os.path.normpath(os.path.join(base, "Almox", "SA")))
-        except Exception:
-            pass
-        candidatos.extend([
-            os.path.normpath(os.path.join(os.getcwd(), "Almox", "SA")),
-            os.path.normpath(r"C:\Users\ander\Documents\AntiGravity\Almoxarifado2\Almox\SA"),
-            os.path.normpath(r"C:\Users\ander\Documents\AntiGravity\AlmoxarifadoConf\Almox\SA"),
-            os.path.normpath(r"C:\Almox\SA"),
-        ])
-        arquivos = {}
-        for pasta in candidatos:
-            if not pasta or not os.path.isdir(pasta):
-                continue
-            try:
-                for nome in os.listdir(pasta):
-                    if nome.lower().endswith(".json"):
-                        chave = nome.lower()
-                        if chave not in arquivos:
-                            arquivos[chave] = os.path.join(pasta, nome)
-            except Exception:
-                continue
-        # ordena por nome
-        for nome in sorted(arquivos.keys()):
-            caminho = arquivos[nome]
-            sa_nome = os.path.splitext(os.path.basename(caminho))[0]  # ex: 120320
-            from PySide6.QtWidgets import QListWidgetItem
-            item = QListWidgetItem(sa_nome)
-            item.setData(Qt.ItemDataRole.UserRole, caminho)
-            item.setToolTip(caminho)
-            self.lista_sas.addItem(item)
+        # lista apenas "Pendente" -> DPHPendente.json em Almox/DPH
+        import config
+        base = config.obter_caminho_jsons()
+        pasta = self._caminho_sa_pasta()
+        caminho = os.path.join(pasta, "DPHPendente.json") if pasta else ""
+        # garante pasta existe para tooltip, mas não cria arquivo
+        from PySide6.QtWidgets import QListWidgetItem
+        item = QListWidgetItem("Pendente")
+        item.setData(Qt.ItemDataRole.UserRole, caminho)
+        item.setToolTip(caminho)
+        self.lista_sas.addItem(item)
         self.lista_sas.blockSignals(False)
-        # atualiza contador do quadro esquerdo via tooltip
-        if self.lista_sas.count() == 0:
-            from PySide6.QtWidgets import QListWidgetItem
-            it = QListWidgetItem("(vazio)")
-            it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEnabled)
-            it.setForeground(QBrush(QColor("#94a3b8")))
-            self.lista_sas.addItem(it)
 
     def _recarregar_dados_sa_pasta(self):
-        """Recarrega self.dados a partir de todos os JSONs em Almox/SA (pasta SA)."""
-        # coleta arquivos (mesma lógica de _atualizar_lista_sas para evitar duplicatas)
-        candidatos = []
-        try:
-            import config
-            base = config.obter_caminho_jsons()
-            if base:
-                candidatos.append(os.path.normpath(os.path.join(base, "Almox", "SA")))
-        except Exception:
-            pass
-        candidatos.extend([
-            os.path.normpath(os.path.join(os.getcwd(), "Almox", "SA")),
-            os.path.normpath(r"C:\Users\ander\Documents\AntiGravity\Almoxarifado2\Almox\SA"),
-            os.path.normpath(r"C:\Users\ander\Documents\AntiGravity\AlmoxarifadoConf\Almox\SA"),
-            os.path.normpath(r"C:\Almox\SA"),
-        ])
-        arquivos = {}
-        for pasta in candidatos:
-            if not pasta or not os.path.isdir(pasta):
-                continue
+        """Recarrega self.dados a partir de Almox/DPH/DPHPendente.json apenas."""
+        pasta = self._caminho_sa_pasta()
+        caminho = os.path.join(pasta, "DPHPendente.json") if pasta else ""
+        if not caminho or not os.path.isfile(caminho):
+            # nenhum arquivo pendente — limpa dados
+            self.dados = []
             try:
-                for nome in os.listdir(pasta):
-                    if nome.lower().endswith(".json"):
-                        chave = nome.lower()
-                        if chave not in arquivos:
-                            arquivos[chave] = os.path.join(pasta, nome)
+                self._atualizar_lista_sas()
             except Exception:
-                continue
-        if not arquivos:
-            # nenhum arquivo encontrado — mantém dados atuais
+                pass
             return
         agregados = []
-        for caminho in sorted(arquivos.values()):
+        for caminho in [caminho]:
             try:
                 with open(caminho, "r", encoding="utf-8") as f:
                     dados_raw = json.load(f)
@@ -1685,27 +1223,32 @@ class SolicitacoesSaPage(QWidget):
         self._popular_tabela()
 
     def _limpar_filtros(self):
-        # bloqueia sinais para não disparar _popular_tabela a cada clear
-        for w in [self.filtro_sa, self.filtro_kardex, self.filtro_requisicao, self.filtro_destino, self.filtro_conta]:
+        for w in [self.filtro_dph, self.filtro_sa, self.filtro_kardex, self.filtro_conta]:
+            w.blockSignals(True)
+            w.clear()
+            w.blockSignals(False)
+        for w in [self.filtro_requisicao, self.filtro_destino]:
             w.blockSignals(True)
             w.clear()
             w.blockSignals(False)
         self.filtro_status.blockSignals(True)
         self.filtro_status.setCurrentIndex(0)
         self.filtro_status.blockSignals(False)
-        # solicitante e projeto são editáveis: limpar texto
         for combo in [self.filtro_solicitante, self.filtro_projeto]:
             combo.blockSignals(True)
             combo.setCurrentIndex(0)
             if combo.lineEdit():
                 combo.lineEdit().clear()
             combo.blockSignals(False)
+        if hasattr(self, "campo_filtro_tabela"):
+            self.campo_filtro_tabela.blockSignals(True)
+            self.campo_filtro_tabela.clear()
+            self.campo_filtro_tabela.blockSignals(False)
         self._popular_tabela()
 
     def _filtros_ativos(self):
-        """Retorna dict com valores atuais dos 8 filtros."""
+        """Retorna dict com valores atuais dos 4 filtros visíveis + stubs."""
         def combo_valor(combo):
-            # para combos editáveis, prioriza texto digitado
             if combo.isEditable() and combo.lineEdit():
                 txt_edit = combo.lineEdit().text().strip()
                 if txt_edit:
@@ -1723,6 +1266,7 @@ class SolicitacoesSaPage(QWidget):
                 return ""
             return txt
         return {
+            "dph": self.filtro_dph.text().strip() if hasattr(self, "filtro_dph") else "",
             "sa": self.filtro_sa.text().strip(),
             "status": combo_valor(self.filtro_status),
             "solicitante": combo_valor(self.filtro_solicitante),
@@ -1731,26 +1275,25 @@ class SolicitacoesSaPage(QWidget):
             "destino": self.filtro_destino.text().strip(),
             "conta": self.filtro_conta.text().strip(),
             "projeto": combo_valor(self.filtro_projeto),
+            "filtro_tabela": self.campo_filtro_tabela.text().strip() if hasattr(self, "campo_filtro_tabela") else "",
         }
 
     def _item_pass_filtro(self, item, f):
-        # SA -> filtra em numero_req (Nº Req) — contém
+        if f.get("dph"):
+            texto_geral = " ".join(str(v) for v in item.values()).lower()
+            if f["dph"].lower() not in str(item.get("numero_req", "")).lower() and f["dph"].lower() not in texto_geral:
+                return False
         if f["sa"]:
             if f["sa"].lower() not in str(item.get("numero_req", "")).lower():
-                # também tenta conta/kardex como fallback para SA
                 if f["sa"].lower() not in str(item.get("conta", "")).lower():
                     return False
-        # Status -> exato (vazio = ignora)
         if f["status"]:
-            # filtro_status "" = Vazio = ignora filtro
             if f["status"] != "":
                 if str(item.get("status", "")).strip() != f["status"]:
                     return False
-        # Solicitante -> como não há coluna dedicada, filtra em observacoes/destino/conta/texto geral
         if f["solicitante"]:
             texto_geral = " ".join(str(v) for v in item.values()).lower()
             if f["solicitante"].lower() not in texto_geral:
-                # também checa chave solicitante se existir
                 if f["solicitante"].lower() not in str(item.get("solicitante", "")).lower():
                     return False
         if f["kardex"]:
@@ -1766,7 +1309,6 @@ class SolicitacoesSaPage(QWidget):
             if f["conta"].lower() not in str(item.get("conta", "")).lower():
                 return False
         if f["projeto"]:
-            # projeto_destino ainda vazio no schema — filtra em destino/local_entrega/observacoes
             if "projeto_destino" in item and str(item.get("projeto_destino", "")).strip():
                 if f["projeto"].lower() not in str(item.get("projeto_destino", "")).lower():
                     return False
@@ -1774,6 +1316,10 @@ class SolicitacoesSaPage(QWidget):
                 texto_geral = " ".join(str(v) for v in item.values()).lower()
                 if f["projeto"].lower() not in texto_geral:
                     return False
+        if f.get("filtro_tabela"):
+            texto_geral = " ".join(str(v) for v in item.values()).lower()
+            if f["filtro_tabela"].lower() not in texto_geral:
+                return False
         return True
 
     def _popular_tabela(self):
@@ -1796,28 +1342,51 @@ class SolicitacoesSaPage(QWidget):
             row = self.tabela.rowCount()
             self.tabela.insertRow(row)
             for col, chave in enumerate(self.CHAVES):
-                valor = str(item.get(chave, ""))
-                cell = QTableWidgetItem(valor)
-                # Apenas Qtde N/R/P (cols 0,1,2) são editáveis
-                if col in (0, 1, 2):
-                    cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
+                if chave == "imprimir":
+                    cell = QTableWidgetItem()
+                    cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+                    val = item.get(chave, True)
+                    is_true = True
+                    if isinstance(val, bool):
+                        is_true = val
+                    elif isinstance(val, str):
+                        vs = val.lower().strip()
+                        if vs in ("false", "0", "unchecked", "off"):
+                            is_true = False
+                        elif vs in ("",):
+                            is_true = True
+                        elif vs in ("true", "1", "checked", "on"):
+                            is_true = True
+                    elif val is None:
+                        is_true = True
+                    elif isinstance(val, int):
+                        is_true = bool(val)
+                    cell.setCheckState(Qt.CheckState.Checked if is_true else Qt.CheckState.Unchecked)
+                    cell.setText("")
                 else:
-                    cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    valor = str(item.get(chave, ""))
+                    cell = QTableWidgetItem(valor)
+                    if col == 5:
+                        cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
+                    else:
+                        cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
-                if chave == "status":
+                if chave == "imprimir":
+                    cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                elif chave in ("sphm_status", "status"):
                     cor_bg = CORES_STATUS.get(valor, "")
                     if cor_bg:
                         cell.setData(Qt.BackgroundRole, QBrush(QColor(cor_bg)))
                         cor_txt = TEXTO_STATUS.get(valor, "#1e1b4b")
                         cell.setData(Qt.ForegroundRole, QBrush(QColor(cor_txt)))
                     cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                elif chave in ("qtde_n", "qtde_r", "qtde_p", "qtde", "estoque_novo", "estoque_retorno", "custo_total_estimado"):
+                elif chave in ("qtde_dph", "qtde_n", "qtde_r", "qtde_p", "qtde", "estoque_novo", "estoque_retorno", "custo_total", "custo_total_estimado", "custo_unit"):
                     cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                    if chave == "custo_total_estimado" and valor:
+                    if chave in ("custo_total", "custo_total_estimado", "custo_unit") and valor:
                         cell.setToolTip(f"R$ {valor}")
-                elif chave == "data_necessidade":
+                elif chave in ("req", "req_neces", "data_necessidade"):
                     cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                elif chave in ("kardex", "codigo", "numero_req", "conta"):
+                elif chave in ("kardex", "codigo", "numero_req", "conta", "req", "req_neces"):
                     if valor:
                         cell.setToolTip(valor)
                     cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1842,16 +1411,25 @@ class SolicitacoesSaPage(QWidget):
         row = self.tabela.rowCount()
         self.tabela.insertRow(row)
         for col in range(len(self.COLUNAS)):
-            cell = QTableWidgetItem("")
-            if col == self.IDX_STATUS:
+            chave = self.CHAVES[col] if col < len(self.CHAVES) else ""
+            if chave == "imprimir":
+                cell = QTableWidgetItem()
+                cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+                cell.setCheckState(Qt.CheckState.Checked)
                 cell.setText("")
                 cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            # Apenas Qtde N/R/P são editáveis (inclusive na linha vazia)
-            if col in (0, 1, 2):
-                cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
-                cell.setToolTip("Digite a Qtde N/R/P...")
             else:
-                cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                cell = QTableWidgetItem("")
+                if col == self.IDX_STATUS:
+                    cell.setText("")
+                    cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                if col == 5:
+                    cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
+                    cell.setToolTip("Digite Qtde Dph...")
+                else:
+                    # já cobre imprimir acima, demais não editáveis
+                    if chave != "imprimir":
+                        cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.tabela.setItem(row, col, cell)
         c0 = self.tabela.item(row, 0)
         if c0:
@@ -1876,8 +1454,8 @@ class SolicitacoesSaPage(QWidget):
     def _adicionar_linha(self):
         last = self.tabela.rowCount() - 1
         self.tabela.scrollToBottom()
-        # Apenas Qtde N/R/P são editáveis — foca na primeira (N)
-        self.tabela.setCurrentCell(last, 0)
+        # Foca em Qtde Dph (col 5) para DPH
+        self.tabela.setCurrentCell(last, 5)
         self.tabela.setFocus()
         item = self.tabela.item(last, 0)
         if item and (item.flags() & Qt.ItemFlag.ItemIsEditable):
@@ -2025,8 +1603,17 @@ class SolicitacoesSaPage(QWidget):
     def _item_modificado(self, item):
         row = item.row()
         col = item.column()
-        # Apenas Qtde N/R/P podem ser alteradas
-        if col not in (0, 1, 2):
+        chave_tmp = self.CHAVES[col] if 0 <= col < len(self.CHAVES) else ""
+        if chave_tmp == "imprimir":
+            # checkbox toggle
+            idx_tmp = self._indice_por_linha(row)
+            is_checked = item.checkState() == Qt.CheckState.Checked
+            if idx_tmp is not None and 0 <= idx_tmp < len(self.dados):
+                self.dados[idx_tmp][chave_tmp] = is_checked
+                self._salvar_json()
+            return
+        # Apenas Qtde Dph pode ser alterada (col 5)
+        if col not in (5, 12):
             # reverte qualquer tentativa de edição em coluna não editável
             self.tabela.blockSignals(True)
             idx_tmp = self._indice_por_linha(row)
@@ -2188,11 +1775,6 @@ class SolicitacoesSaPage(QWidget):
                             self.tabela.blockSignals(False)
                 except Exception:
                     pass
-        # sincroniza cópia para DPH pendente quando linha preenchida
-        try:
-            self._sincronizar_dph_pendente(idx)
-        except Exception:
-            pass
         if chave == "status":
             self._popular_tabela()
         else:
@@ -2284,28 +1866,6 @@ class SolicitacoesSaPage(QWidget):
                 self.dados[idx]["qtde_r"] = ""
                 self.dados[idx]["qtde_p"] = ""
                 self._salvar_json()
-                # remove cópia pendente de DPH já que linha foi invalidada (usa SA number, não RP)
-                try:
-                    kardex_rm = str(self.dados[idx].get("kardex", "")).strip()
-                    sa_numero_rm = ""
-                    try:
-                        if hasattr(self, "label_sa_numero"):
-                            lbl = self.label_sa_numero.text().strip()
-                            if lbl:
-                                sa_numero_rm = lbl if lbl.upper().startswith("SA") else f"SA{lbl}"
-                        if not sa_numero_rm or sa_numero_rm == "SA99102":
-                            cur = self.lista_sas.currentItem() if hasattr(self, "lista_sas") else None
-                            if cur:
-                                caminho_cur = cur.data(Qt.ItemDataRole.UserRole)
-                                if caminho_cur:
-                                    base = os.path.splitext(os.path.basename(str(caminho_cur)))[0]
-                                    if base:
-                                        sa_numero_rm = base if base.upper().startswith("SA") else f"SA{base}"
-                    except Exception:
-                        pass
-                    self._remover_do_dph_pendente(kardex_rm, sa_numero_rm)
-                except Exception:
-                    pass
                 self.tabela.blockSignals(True)
                 for col in (0, 1, 2):
                     it = self.tabela.item(row, col)
