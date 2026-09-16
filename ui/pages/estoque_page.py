@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QDialog, QGroupBox, QComboBox, QRadioButton, QButtonGroup,
     QFormLayout, QDialogButtonBox,
 )
-from PySide6.QtCore import Qt, QSize, QTimer
+from PySide6.QtCore import Qt, QSize, QTimer, QThread, Signal
 from PySide6.QtGui import QGuiApplication, QIntValidator, QPainter, QKeySequence, QShortcut
 from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
 
@@ -552,6 +552,19 @@ def _caminho_json():
         )
     )
 
+class CarregarEstoqueThread(QThread):
+    dados_carregados = Signal(list)
+    erro = Signal(str)
+
+    def run(self):
+        try:
+            with open(_caminho_json(), "r", encoding="utf-8") as f:
+                dados = json.load(f)
+            self.dados_carregados.emit(dados)
+        except (FileNotFoundError, json.JSONDecodeError):
+            self.dados_carregados.emit([])
+        except Exception as e:
+            self.erro.emit(str(e))
 
 class EstoquePage(QWidget):
     COLUNAS_RESUMIDAS = [1, 2, 3, 4, 5, 6, 7, 40, 41, 8, 20, 22]
@@ -1275,11 +1288,14 @@ class EstoquePage(QWidget):
             self._texto_filtro_cache = []
 
     def _carregar_dados(self):
-        try:
-            with open(_caminho_json(), "r", encoding="utf-8") as f:
-                self.dados = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            self.dados = []
+        if not hasattr(self, '_thread_carregar'):
+            self._thread_carregar = CarregarEstoqueThread(self)
+            self._thread_carregar.dados_carregados.connect(self._on_dados_carregados)
+        self.tabela.setRowCount(0)
+        self._thread_carregar.start()
+
+    def _on_dados_carregados(self, dados):
+        self.dados = dados
         self._rebuild_cache_filtro()
         self._popular_tabela()
 

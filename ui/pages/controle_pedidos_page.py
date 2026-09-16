@@ -308,7 +308,7 @@ class ControlePedidosPage(QWidget):
         self._linhas_editaveis = set()  # índices de linhas em modo edição
         self._edit_mode = False  # Flag for global edit mode
         self._setup_ui()
-        self._carregar_dados()
+        QTimer.singleShot(50, self._carregar_dados)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -634,6 +634,7 @@ class ControlePedidosPage(QWidget):
         curr_row = self.tabela.currentRow()
         curr_col = self.tabela.currentColumn()
 
+        self.tabela.setUpdatesEnabled(False)
         self.tabela.blockSignals(True)
         self.tabela.setRowCount(0)
         filtro = self.campo_busca.text().strip().lower()
@@ -724,6 +725,7 @@ class ControlePedidosPage(QWidget):
                 celula_origem.setData(Qt.ItemDataRole.UserRole, origem)
         self._inserir_linha_vazia()
         self.tabela.blockSignals(False)
+        self.tabela.setUpdatesEnabled(True)
         self._atualizar_contador()
 
         # Restaurar célula selecionada e foco
@@ -935,18 +937,83 @@ class ControlePedidosPage(QWidget):
             self._salvar_json()
         self._popular_tabela()
 
+    def _remover_de_pedidos_entregues(self, nome, data_val):
+        from datetime import datetime
+        ano_atual = int(datetime.now().strftime("%Y"))
+        import config
+        base = config.obter_caminho_jsons()
+        if not base:
+            return False
+        removido = False
+        for ano in range(ano_atual, 2023, -1):
+            caminho = os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", f"ControlePedidosEntregues{ano}.json"))
+            try:
+                with open(caminho, "r", encoding="utf-8") as f:
+                    historico = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                continue
+            
+            nova_lista = []
+            encontrou_aqui = False
+            for item in historico:
+                if str(item.get("nome", "")).strip() == str(nome).strip() and str(item.get("data", "")).strip() == str(data_val).strip():
+                    removido = True
+                    encontrou_aqui = True
+                else:
+                    nova_lista.append(item)
+                    
+            if encontrou_aqui:
+                try:
+                    with open(caminho, "w", encoding="utf-8") as f:
+                        json.dump(nova_lista, f, ensure_ascii=False, indent=2)
+                except OSError:
+                    pass
+                break
+        return removido
+
     def _marcar_pendente(self):
         selected_rows = self.tabela.selectionModel().selectedRows()
         if not selected_rows:
             return
         indices = sorted(set(index.row() for index in selected_rows), reverse=True)
+        alterou = False
         for row in indices:
             idx = self._indice_por_linha(row)
-            if idx is None:
-                continue
-            self.dados[idx]["status"] = "Em andamento"
-        self._salvar_json()
-        self._popular_tabela()
+            if idx is not None:
+                self.dados[idx]["status"] = "Em andamento"
+                alterou = True
+            else:
+                novo_item = {}
+                for col, chave in enumerate(self.CHAVES):
+                    celula = self.tabela.item(row, col)
+                    novo_item[chave] = celula.text().strip() if celula else ""
+                
+                novo_item["status"] = "Em andamento"
+                
+                celula_dpp = self.tabela.item(row, 4)
+                if celula_dpp:
+                    bg_brush = celula_dpp.data(Qt.BackgroundRole)
+                    if bg_brush and isinstance(bg_brush, QBrush):
+                        bg_color = bg_brush.color().name().upper()
+                        for nome_cor, hex_val in self.CORES.items():
+                            if bg_color == hex_val.upper():
+                                novo_item["cor"] = nome_cor
+                                break
+                                
+                if "cor" not in novo_item:
+                    novo_item["cor"] = ""
+
+                nome_val = novo_item.get("nome", "")
+                data_val = novo_item.get("data", "")
+                
+                if nome_val:
+                    self._remover_de_pedidos_entregues(nome_val, data_val)
+                    self.dados.append(novo_item)
+                    alterou = True
+
+        if alterou:
+            self._salvar_json()
+            self._popular_tabela()
 
     def _toggle_edicao(self):
         """Alterna o modo de edição global para a tabela.
@@ -967,10 +1034,9 @@ class ControlePedidosPage(QWidget):
         col = item.column()
         row = item.row()
         idx = self._indice_por_linha(row)
-        if idx is None:
-            return
+        
         # Coluna DPP (4) → menu de cor
-        if col == 4:
+        if col == 4 and idx is not None:
             menu = QMenu(self)
             for nome, hex_cor in self.CORES.items():
                 pix = self._color_pixmap(hex_cor)
@@ -978,20 +1044,23 @@ class ControlePedidosPage(QWidget):
                 acao.triggered.connect(lambda checked, n=nome, i=idx: self._aplicar_cor(i, n))
             menu.exec(QCursor.pos())
             return
+            
         # Colunas Nome (2) e Requisição (3) → menu "Verificar requisição"
         if col in (2, 3):
-            req_val = self.dados[idx].get("requisicao", "").strip()
+            req_item = self.tabela.item(row, 3)
+            req_val = req_item.text().strip() if req_item else ""
             if not req_val:
                 return
             menu = QMenu(self)
             verificar = menu.addAction("Verificar requisição")
-            verificar.triggered.connect(lambda checked=False, i=idx: self._abrir_requisicao(i))
+            verificar.triggered.connect(lambda checked=False, r=req_val: self._abrir_requisicao(req_val=r))
             menu.exec(QCursor.pos())
             return
 
-    def _abrir_requisicao(self, idx):
+    def _abrir_requisicao(self, idx=None, req_val=None):
         """Abre o link do IntelleCat para a requisição da linha informada."""
-        req_val = self.dados[idx].get("requisicao", "").strip()
+        if not req_val and idx is not None:
+            req_val = self.dados[idx].get("requisicao", "").strip()
         if not req_val:
             return
         url = (
@@ -1016,7 +1085,8 @@ class ControlePedidosPage(QWidget):
         self._popular_tabela()
 
     def _auto_preencher_nome(self, row, sufixo=""):
-        nome_anterior = self.dados[row - 1].get("nome", "").strip()
+        celula_anterior = self.tabela.item(row - 1, 2)
+        nome_anterior = celula_anterior.text().strip() if celula_anterior else ""
         if not nome_anterior.startswith("PC"):
             return
         codigo = nome_anterior.split(" ")[0].strip()
@@ -1025,8 +1095,19 @@ class ControlePedidosPage(QWidget):
         if not match:
             return
         numero = int(match.group(1)) + 1
-        novo_nome = f"PC{numero}{sufixo}"
-        self.dados[row]["nome"] = novo_nome
+        
+        resto = nome_anterior[len(codigo):]
+        if not resto:
+            resto = sufixo
+            
+        novo_nome = f"PC{numero}{resto}"
+        
+        idx = self._indice_por_linha(row)
+        if idx is not None and 0 <= idx < len(self.dados):
+            self.dados[idx]["nome"] = novo_nome
+        elif self.dados:
+            self.dados[-1]["nome"] = novo_nome
+            
         self.tabela.blockSignals(True)
         celula_nome = self.tabela.item(row, 2)
         if celula_nome:

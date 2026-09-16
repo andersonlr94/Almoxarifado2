@@ -365,6 +365,12 @@ class ProgramacaoAgulhasPage(QWidget):
         self.btn_grafico.clicked.connect(self._abrir_grafico)
         layout_filtro_data.addWidget(self.btn_grafico)
 
+        self.btn_voltar_separando = QPushButton(qtawesome.icon('mdi6.backup-restore', color='#ffffff'), "  Voltar para separando")
+        self.btn_voltar_separando.setFixedHeight(30)
+        self.btn_voltar_separando.setObjectName("btnGradientRose")
+        self.btn_voltar_separando.clicked.connect(self._voltar_para_separando)
+        layout_filtro_data.addWidget(self.btn_voltar_separando)
+
         self.widget_filtro_data.setLayout(layout_filtro_data)
         self.widget_filtro_data.setVisible(False)
 
@@ -716,6 +722,8 @@ class ProgramacaoAgulhasPage(QWidget):
             self.btn_entregar.setVisible(True)
             self.combo_impressoras.setVisible(True)
             self.btn_imprimir.setVisible(True)
+        elif self.filtro_status == "Entregues":
+            self.btn_voltar_separando.setVisible(selecionados > 0)
 
     def _atualizar_contador(self):
         total = self.tabela.rowCount()
@@ -801,6 +809,45 @@ class ProgramacaoAgulhasPage(QWidget):
 
     def _entregar(self):
         self._mover_status("Entregue")
+
+    def _voltar_para_separando(self):
+        ano = datetime.now().strftime("%Y")
+        caminho_entregues = _caminho_entregues(ano)
+        if not caminho_entregues:
+            return
+        
+        try:
+            with open(caminho_entregues, "r", encoding="utf-8") as f:
+                existentes = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return
+
+        hoje = datetime.now().strftime("%d/%m/%Y")
+        restantes = []
+        recuperados = []
+
+        ids_selecionados = []
+        for row in range(self.tabela.rowCount()):
+            chk = self.tabela.item(row, 0)
+            if chk and chk.checkState() == Qt.CheckState.Checked:
+                ids_selecionados.append(chk.data(Qt.ItemDataRole.UserRole))
+
+        for d in existentes:
+            if d.get("id") in ids_selecionados:
+                d["status"] = "Separando"
+                d["data_separando"] = hoje
+                d["selecionado"] = False
+                recuperados.append(d)
+            else:
+                restantes.append(d)
+
+        if recuperados:
+            with open(caminho_entregues, "w", encoding="utf-8") as f:
+                json.dump(restantes, f, ensure_ascii=False, indent=2)
+            
+            self.dados.extend(recuperados)
+            self._salvar_json()
+            self._filtrar_por_status(self.filtro_status)
 
     def _excluir(self):
         dialog = QDialog(self)
