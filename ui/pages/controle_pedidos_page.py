@@ -411,8 +411,9 @@ class ControlePedidosPage(QWidget):
 
         self.campo_busca = QLineEdit()
         self.campo_busca.setPlaceholderText("Pesquisar...")
-        self.campo_busca.setFixedHeight(32)
+        self.campo_busca.setFixedHeight(34)
         self.campo_busca.setFixedWidth(200)
+        self.campo_busca.setStyleSheet("padding: 2px 8px;")
         self.campo_busca.textChanged.connect(self._on_filtro_text_changed)
         
         self._filtro_timer = QTimer(self)

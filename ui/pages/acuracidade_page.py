@@ -130,8 +130,9 @@ class AcuracidadePage(QWidget):
 
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("Pesquisar...")
-        self.campo_filtro.setFixedHeight(30)
+        self.campo_filtro.setFixedHeight(34)
         self.campo_filtro.setFixedWidth(250)
+        self.campo_filtro.setStyleSheet("padding: 2px 8px;")
         self.campo_filtro.textChanged.connect(self._aplicar_filtro)
         filtro_layout.addWidget(self.campo_filtro)
 

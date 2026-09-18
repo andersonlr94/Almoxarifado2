@@ -131,8 +131,9 @@ class FornecedoresPage(QWidget):
 
         self.campo_busca = QLineEdit()
         self.campo_busca.setPlaceholderText("Pesquisar por nome, email, telefone ou DUNS...")
-        self.campo_busca.setFixedHeight(32)
+        self.campo_busca.setFixedHeight(34)
         self.campo_busca.setFixedWidth(260)
+        self.campo_busca.setStyleSheet("padding: 2px 8px;")
         self.campo_busca.textChanged.connect(self._aplicar_filtro)
         linha_top.addWidget(self.campo_busca)
 

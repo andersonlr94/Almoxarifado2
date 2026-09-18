@@ -309,6 +309,7 @@ class MaterialHoldersPage(QWidget):
         self.campo_busca.setPlaceholderText("Filtrar localização...")
         self.campo_busca.setFixedHeight(34)
         self.campo_busca.setFixedWidth(220)
+        self.campo_busca.setStyleSheet("padding: 2px 8px;")
         self.campo_busca.returnPressed.connect(self._aplicar_filtro)
         linha_modo.addWidget(self.campo_busca)
 

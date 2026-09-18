@@ -26,6 +26,7 @@ DADOS_AE = {
     "SRMCONSE": ("SRMCONSE Remessa para conserto", "3295", "99200", ""),
     "STEMBALA": ("STEMBALA Remessa de embalagens (Caixas plasticas)", "3295", "99200", ""),
     "SRMTTRET": ("SRMTTRET Remessa de produto Aptiv para teste com retorno", "2400ADA", "99200", ""),
+    "SRTTESTE": ("SRTTESTE Devolução de material para teste com retorno", "2400ADA", "99100", "")
 }
 
 

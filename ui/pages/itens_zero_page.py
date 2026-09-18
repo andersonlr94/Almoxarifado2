@@ -353,7 +353,7 @@ class ItensZeroPage(QWidget):
 
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("⌕   Pesquisar...")
-        self.campo_filtro.setFixedHeight(32)
+        self.campo_filtro.setFixedHeight(34)
         self.campo_filtro.setMinimumWidth(200)
         self.campo_filtro.setMaximumWidth(320)
         self.campo_filtro.textChanged.connect(self._aplicar_filtro)

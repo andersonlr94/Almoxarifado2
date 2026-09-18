@@ -749,6 +749,7 @@ class EstoquePage(QWidget):
         self.campo_filtro.setPlaceholderText("⌕   Pesquisar...")
         self.campo_filtro.setFixedHeight(44)
         self.campo_filtro.setFixedWidth(400)
+        self.campo_filtro.setStyleSheet("padding: 2px 8px;")
         # Timer debounce para não travar digitação (filtro só após 280ms sem digitar)
         self._filtro_timer = QTimer(self)
         self._filtro_timer.setSingleShot(True)

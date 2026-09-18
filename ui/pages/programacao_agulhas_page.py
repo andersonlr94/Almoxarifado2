@@ -537,8 +537,9 @@ class ProgramacaoAgulhasPage(QWidget):
 
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("Pesquisar...")
-        self.campo_filtro.setFixedHeight(30)
+        self.campo_filtro.setFixedHeight(34)
         self.campo_filtro.setFixedWidth(180)
+        self.campo_filtro.setStyleSheet("padding: 2px 8px;")
         self.campo_filtro.textChanged.connect(self._aplicar_filtro)
         info_linha.addSpacing(8)
         info_linha.addWidget(self.campo_filtro)
