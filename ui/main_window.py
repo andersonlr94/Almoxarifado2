@@ -24,7 +24,6 @@ from ui.pages.material_holders_page import MaterialHoldersPage
 from ui.pages.automacoes_page import AutomacoesPage
 from ui.pages.sasEmitidas import SolicitacoesSaPage
 from ui.pages.solicitacao_sa_page import SolicitacaoSaPage
-from ui.pages.dph_page import DphPage
 
 
 SIDEBAR_WIDTH = 240
@@ -182,7 +181,6 @@ class MainWindow(QMainWindow):
             ("pedidos_pendentes", "Pedidos Pendentes",     False),
             ("solicitacao_sa",    "Solicitação de SA",     False),
             ("solicitacoes_sa",   "SAs emitidas",       False),
-            ("dph",               "DPH",                   False),
             ("follow_up",         "Follow-up",             False),
             ("programacao_agulhas", "Prog. de Agulhas",    False),
             ("fresh_start",         "Fresh Start",         False),
@@ -232,7 +230,6 @@ class MainWindow(QMainWindow):
             ("pedidos_pendentes",     PedidosPendentesPage),
             ("solicitacao_sa",        SolicitacaoSaPage),
             ("solicitacoes_sa",       SolicitacoesSaPage),
-            ("dph",                   DphPage),
             ("follow_up",             FollowUpPage),
             ("programacao_agulhas",   ProgramacaoAgulhasPage),
             ("fresh_start",           FreshStartPage),

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QGridLayout,
     QAbstractItemView, QStyledItemDelegate, QComboBox, QInputDialog, QMessageBox, QMenu,
-    QRadioButton, QButtonGroup, QDateEdit, QFrame,
+    QRadioButton, QButtonGroup, QDateEdit, QFrame, QDialog,
 )
 from PySide6.QtCore import Qt, QSize, QTimer, QDate, QEvent
 from PySide6.QtGui import QColor, QBrush, QShortcut, QKeySequence, QCursor, QIcon, QPixmap, QDoubleValidator
@@ -60,8 +60,8 @@ def _caminho_json():
 
 
 class EditorDelegate(QStyledItemDelegate):
-    COLS_EDITAVEIS = {5}  # apenas Qtde Dph editável
-    COLS_NUMERICAS = {5, 8, 9}
+    COLS_EDITAVEIS = set()  # nenhuma coluna editável (col 5 desabilitada)
+    COLS_NUMERICAS = {8, 9}
     COL_STATUS = 99
 
     def __init__(self, parent=None, edit_mode_getter=None):
@@ -247,14 +247,17 @@ class DphPage(QWidget):
     # ── UI ────────────────────────────────────────────────────────────────────
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        # quando embarcado em SolicitacoesSaPage (stacked), deve ter mesmo tamanho do quadro SA:
+        # SA pagina_sa usa margins 0/spacing 0, então DPH usa igual para outer card ficar idêntico
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
         card = QWidget()
         card.setObjectName("pageCard")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(18, 16, 18, 16)
         card_layout.setSpacing(12)
+        self.card = card
 
         # ── FILTROS: 8 campos + 2 botões em UMA ÚNICA LINHA, width -60% ──
         filtro_container = QWidget()
@@ -374,6 +377,7 @@ class DphPage(QWidget):
         self.btn_marcar_conta.setObjectName("btnSecondary")
         self.btn_marcar_conta.setFixedHeight(30)
         self.btn_marcar_conta.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_marcar_conta.clicked.connect(self._abrir_janela_marcar_conta)
         linha_dph.addWidget(self.btn_marcar_conta)
         self.btn_visualizar_dph = QPushButton(qtawesome.icon('fa6s.eye', color='#ffffff'), "  visualizar DPH")
         self.btn_visualizar_dph.setObjectName("btnPrimary")
@@ -442,11 +446,24 @@ class DphPage(QWidget):
         lay_esq = QVBoxLayout(self.quadro_esquerdo)
         lay_esq.setContentsMargins(4, 6, 4, 6)
         lay_esq.setSpacing(4)
+        # header: título + botão atualizar ao lado (topo)
+        header_lista = QWidget()
+        header_lista_lay = QHBoxLayout(header_lista)
+        header_lista_lay.setContentsMargins(0, 0, 0, 0)
+        header_lista_lay.setSpacing(4)
         lbl_esq_titulo = QLabel("Lista de DPHs")
         lbl_esq_titulo.setStyleSheet("color:#1e293b; font-size:9px; font-weight:700;")
-        lbl_esq_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_esq_titulo.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         lbl_esq_titulo.setWordWrap(True)
-        lay_esq.addWidget(lbl_esq_titulo)
+        header_lista_lay.addWidget(lbl_esq_titulo, 1)
+        self.btn_atualizar_lista_sa = QPushButton(qtawesome.icon('fa6s.rotate', color='#64748b'), "")
+        self.btn_atualizar_lista_sa.setObjectName("btnGhost")
+        self.btn_atualizar_lista_sa.setFixedSize(20, 20)
+        self.btn_atualizar_lista_sa.setToolTip("Atualizar lista de DPHs")
+        self.btn_atualizar_lista_sa.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_atualizar_lista_sa.clicked.connect(self._atualizar_lista_sas)
+        header_lista_lay.addWidget(self.btn_atualizar_lista_sa)
+        lay_esq.addWidget(header_lista)
         # lista de arquivos DPH (reutiliza SA)
         from PySide6.QtWidgets import QListWidget, QListWidgetItem
         self.lista_sas = QListWidget()
@@ -479,20 +496,6 @@ class DphPage(QWidget):
         self.lista_sas.itemClicked.connect(self._on_sa_selecionada)
         self.lista_sas.itemDoubleClicked.connect(self._on_sa_selecionada)
         lay_esq.addWidget(self.lista_sas, 1)
-        # botão atualizar lista discreto
-        self.btn_atualizar_lista_sa = QPushButton(qtawesome.icon('fa6s.rotate', color='#64748b'), "")
-        self.btn_atualizar_lista_sa.setObjectName("btnGhost")
-        self.btn_atualizar_lista_sa.setFixedSize(24, 24)
-        self.btn_atualizar_lista_sa.setToolTip("Atualizar lista de SAs")
-        self.btn_atualizar_lista_sa.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_atualizar_lista_sa.clicked.connect(self._atualizar_lista_sas)
-        # coloca botão abaixo da lista, alinhado à direita
-        wrap_btn = QWidget()
-        hb = QHBoxLayout(wrap_btn)
-        hb.setContentsMargins(0, 0, 0, 0)
-        hb.addStretch()
-        hb.addWidget(self.btn_atualizar_lista_sa)
-        lay_esq.addWidget(wrap_btn)
 
         lado_direito = QWidget()
         lado_direito_lay = QVBoxLayout(lado_direito)
@@ -535,14 +538,14 @@ class DphPage(QWidget):
         header = self.tabela.horizontalHeader()
         header.setStretchLastSection(False)
         larguras = {
-            0: 70,   # Req
-            1: 85,   # Req neces.
-            2: 110,  # Destino
-            3: 110,  # Kardex
-            4: 100,  # Código
+            0: 90,   # Req (-10px: 100 -> 90)
+            1: 80,   # Req neces. (-5px: 85 -> 80)
+            2: 100,  # Destino (-10px: 110 -> 100)
+            3: 154,  # Kardex (+40% : 110 -> 154)
+            4: 135,  # Código (+35px: 100 -> 135)
             5: 80,   # Qtde Dph
-            6: 85,   # Conta
-            7: 110,  # Entidade
+            6: 135,  # Conta (-50px: 185 -> 135)
+            7: 60,   # Entidade (-50px)
             8: 85,   # Custo unit
             9: 95,   # Custo total
             10: 95,  # Sphm status
@@ -602,51 +605,14 @@ class DphPage(QWidget):
 
     # ── Dados ─────────────────────────────────────────────────────────────────
     def _carregar_dados(self):
-        caminho = _caminho_json()
+        # DPH deve mostrar DPH pendente (Almox/DPH/DPHPendente.json), não SA
+        # Usa recarregar da pasta DPH para já exibir os 12 itens pendentes ao abrir
         try:
-            if caminho and os.path.isfile(caminho):
-                with open(caminho, "r", encoding="utf-8") as f:
-                    self.dados = json.load(f)
-                    if not isinstance(self.dados, list):
-                        self.dados = []
-            else:
-                self.dados = []
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            self._recarregar_dados_sa_pasta()
+        except Exception:
             self.dados = []
-        for item in list(self.dados):
-            if not isinstance(item, dict):
-                continue
-            if "numero_sa" in item and "numero_req" not in item:
-                item["numero_req"] = item.pop("numero_sa")
-            if "data" in item and "data_necessidade" not in item:
-                if not item.get("data_necessidade"):
-                    item["data_necessidade"] = item.pop("data")
-                else:
-                    item.pop("data", None)
-            if "solicitante" in item:
-                # preserva solicitante em observações se necessário, mas mantém chave para filtro
-                # garante que não perde: cria chave solicitante se não existir
-                if "solicitante" not in item:
-                    pass
-            if "setor" in item:
-                item.pop("setor", None)
-            if "descricao" in item and "observacoes" not in item:
-                item["observacoes"] = item.pop("descricao")
-            if "um" in item:
-                item.pop("um", None)
-            for ch in self.CHAVES:
-                item.setdefault(ch, "")
-            # normaliza status antigo vazio para ""
-            if item.get("status") is None:
-                item["status"] = ""
-            # mantém solicitante/projeto_destino se vier do filtro antigo
-            item.setdefault("solicitante", "")
-            item.setdefault("projeto_destino", "")
-            if not item.get("status"):
-                # mantém "" como Vazio
-                pass
         self._popular_tabela()
-        # após carregar tabela, atualiza lista lateral de SAs
+        # após carregar tabela, atualiza lista lateral de DPHs
         try:
             self._atualizar_lista_sas()
         except Exception:
@@ -769,17 +735,44 @@ class DphPage(QWidget):
             return
         self.lista_sas.blockSignals(True)
         self.lista_sas.clear()
-        # lista apenas "Pendente" -> DPHPendente.json em Almox/DPH
-        import config
-        base = config.obter_caminho_jsons()
         pasta = self._caminho_sa_pasta()
-        caminho = os.path.join(pasta, "DPHPendente.json") if pasta else ""
-        # garante pasta existe para tooltip, mas não cria arquivo
+        if not pasta or not os.path.isdir(pasta):
+            self.lista_sas.blockSignals(False)
+            return
+        filtro = self.filtro_dph.text().strip().lower() if hasattr(self, "filtro_dph") else ""
         from PySide6.QtWidgets import QListWidgetItem
-        item = QListWidgetItem("Pendente")
-        item.setData(Qt.ItemDataRole.UserRole, caminho)
-        item.setToolTip(caminho)
-        self.lista_sas.addItem(item)
+        from PySide6.QtGui import QBrush, QColor
+        arquivos = []
+        outros = []
+        # Pendente sempre no topo, independente de filtro ou existência do arquivo
+        pendente_caminho = os.path.join(pasta, "DPHPendente.json")
+        arquivos.append(("Pendente", pendente_caminho))
+        try:
+            for nome in os.listdir(pasta):
+                if nome.lower() == "dphpendente.json":
+                    continue  # já adicionado no topo
+                if not nome.lower().endswith(".json"):
+                    continue
+                base = os.path.splitext(nome)[0]
+                display = base
+                if filtro and filtro not in display.lower() and filtro not in nome.lower():
+                    continue
+                caminho = os.path.join(pasta, nome)
+                outros.append((display, caminho))
+        except Exception:
+            pass
+        outros.sort(key=lambda x: x[0].lower())
+        arquivos.extend(outros)
+        for display, caminho in arquivos:
+            item = QListWidgetItem(display)
+            item.setData(Qt.ItemDataRole.UserRole, caminho)
+            item.setToolTip(caminho)
+            self.lista_sas.addItem(item)
+        if self.lista_sas.count() == 0:
+            it = QListWidgetItem("(vazio)")
+            it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEnabled)
+            it.setForeground(QBrush(QColor("#94a3b8")))
+            self.lista_sas.addItem(it)
         self.lista_sas.blockSignals(False)
 
     def _recarregar_dados_sa_pasta(self):
@@ -1200,7 +1193,6 @@ class DphPage(QWidget):
                     d.setdefault("solicitante", "")
                     d.setdefault("projeto_destino", "")
         self._popular_tabela()
-        self._mostrar_toast(f"SA {sa_nome} carregada ({len(self.dados)} itens).", erro=False)
 
     def _salvar_json(self):
         caminho = _caminho_json()
@@ -1216,6 +1208,11 @@ class DphPage(QWidget):
             pass
 
     def _aplicar_filtro(self):
+        # atualiza lista lateral conforme filtro de DPH
+        try:
+            self._atualizar_lista_sas()
+        except Exception:
+            pass
         try:
             self._recarregar_dados_sa_pasta()
         except Exception:
@@ -1244,6 +1241,10 @@ class DphPage(QWidget):
             self.campo_filtro_tabela.blockSignals(True)
             self.campo_filtro_tabela.clear()
             self.campo_filtro_tabela.blockSignals(False)
+        try:
+            self._atualizar_lista_sas()
+        except Exception:
+            pass
         self._popular_tabela()
 
     def _filtros_ativos(self):
@@ -1366,10 +1367,7 @@ class DphPage(QWidget):
                 else:
                     valor = str(item.get(chave, ""))
                     cell = QTableWidgetItem(valor)
-                    if col == 5:
-                        cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
-                    else:
-                        cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
                 if chave == "imprimir":
                     cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1423,13 +1421,9 @@ class DphPage(QWidget):
                 if col == self.IDX_STATUS:
                     cell.setText("")
                     cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                if col == 5:
-                    cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
-                    cell.setToolTip("Digite Qtde Dph...")
-                else:
-                    # já cobre imprimir acima, demais não editáveis
-                    if chave != "imprimir":
-                        cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                # já cobre imprimir acima, demais não editáveis (col 5 não editável)
+                if chave != "imprimir":
+                    cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.tabela.setItem(row, col, cell)
         c0 = self.tabela.item(row, 0)
         if c0:
@@ -1454,12 +1448,9 @@ class DphPage(QWidget):
     def _adicionar_linha(self):
         last = self.tabela.rowCount() - 1
         self.tabela.scrollToBottom()
-        # Foca em Qtde Dph (col 5) para DPH
-        self.tabela.setCurrentCell(last, 5)
+        # col 5 não editável - apenas foca na linha, sem abrir edição
+        self.tabela.setCurrentCell(last, 0)
         self.tabela.setFocus()
-        item = self.tabela.item(last, 0)
-        if item and (item.flags() & Qt.ItemFlag.ItemIsEditable):
-            self.tabela.editItem(item)
 
     def _on_cell_double_clicked(self, row, col):
         pass
@@ -1612,8 +1603,8 @@ class DphPage(QWidget):
                 self.dados[idx_tmp][chave_tmp] = is_checked
                 self._salvar_json()
             return
-        # Apenas Qtde Dph pode ser alterada (col 5)
-        if col not in (5, 12):
+        # Nenhuma coluna de texto é editável (col 5 desabilitada) - apenas checkbox Imprimir (col 12) permitido
+        if chave_tmp != "imprimir":
             # reverte qualquer tentativa de edição em coluna não editável
             self.tabela.blockSignals(True)
             idx_tmp = self._indice_por_linha(row)
@@ -1968,6 +1959,270 @@ class DphPage(QWidget):
                 cell = self.tabela.item(row, col)
                 if cell:
                     QApplication.clipboard().setText(cell.text())
+
+    # ── Marcar conta imprimir ───────────────────────────────────────────────
+    def _parse_valor_monetario(self, valor):
+        """Converte string monetária (ex: 'R$ 1.234,56', '628,90') para float."""
+        if valor is None:
+            return 0.0
+        s = str(valor).strip()
+        if not s:
+            return 0.0
+        # remove R$, espaços
+        s = re.sub(r"[R$\s]", "", s)
+        # se contém ',' usa padrão BR: '.' milhar, ',' decimal
+        if "," in s:
+            s = s.replace(".", "").replace(",", ".")
+        try:
+            return float(s)
+        except ValueError:
+            return 0.0
+
+    def _abrir_janela_marcar_conta(self):
+        # garante dados atualizados do DPHPendente
+        try:
+            self._recarregar_dados_sa_pasta()
+        except Exception:
+            pass
+        if not self.dados:
+            self._mostrar_toast("Nenhum item em DPH pendente.", erro=True)
+            return
+        # agrega por conta
+        from collections import defaultdict
+        agreg = defaultdict(lambda: {"valor": 0.0, "qtd_itens": 0})
+        for it in self.dados:
+            if not isinstance(it, dict):
+                continue
+            conta = str(it.get("conta", "")).strip()
+            if not conta:
+                conta = "(sem conta)"
+            custo_raw = it.get("custo_total", "") or it.get("custo_total_estimado", "") or "0"
+            val = self._parse_valor_monetario(custo_raw)
+            agreg[conta]["valor"] += val
+            agreg[conta]["qtd_itens"] += 1
+
+        if not agreg:
+            self._mostrar_toast("Nenhuma conta encontrada.", erro=True)
+            return
+
+        # ordena por conta
+        contas_ordenadas = sorted(agreg.items(), key=lambda x: x[0].lower())
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Marcar conta para imprimir")
+        dlg.setModal(True)
+        dlg.resize(560, 420)
+        dlg.setStyleSheet("QDialog { background:#ffffff; }")
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(16, 16, 16, 16)
+        lay.setSpacing(12)
+
+        info = QLabel("Selecione as contas que deseja imprimir. O DPH informado será gravado na coluna DPH dos itens.")
+        info.setWordWrap(True)
+        info.setStyleSheet("color:#475569; font-size:11px;")
+        lay.addWidget(info)
+
+        # mostra DPH digitado
+        dph_atual = self.campo_dph_pendente.text().strip() if hasattr(self, "campo_dph_pendente") else ""
+        lbl_dph = QLabel(f"DPH Pendente Nº: <b>{dph_atual or '(não informado)'}</b>")
+        lbl_dph.setStyleSheet("color:#1e293b; font-size:11px;")
+        lay.addWidget(lbl_dph)
+
+        tabela = QTableWidget(0, 3)
+        tabela.setHorizontalHeaderLabels(["Conta", "Valor total", "Imprimir"])
+        tabela.verticalHeader().setVisible(False)
+        tabela.setAlternatingRowColors(True)
+        tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        tabela.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tabela.horizontalHeader().setStretchLastSection(False)
+        tabela.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        tabela.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        tabela.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        tabela.setColumnWidth(1, 140)
+        tabela.setColumnWidth(2, 80)
+        tabela.horizontalHeader().setStyleSheet(
+            "QHeaderView::section { font-size: 9px; font-weight:700; background:#f8fafc; color:#64748b; padding:6px; border:none; border-bottom:1px solid #e2e8f0; }"
+        )
+        tabela.setStyleSheet(
+            "QTableWidget { background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; gridline-color:#f1f5f9; font-size:11px; }"
+            "QTableWidget::item { padding:6px; }"
+        )
+
+        for conta, info_ag in contas_ordenadas:
+            row = tabela.rowCount()
+            tabela.insertRow(row)
+            # Conta
+            c0 = QTableWidgetItem(conta)
+            c0.setFlags(c0.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            c0.setToolTip(conta)
+            tabela.setItem(row, 0, c0)
+            # Valor total formatado BR
+            valor = info_ag["valor"]
+            # formata 1234.5 -> "1.234,50"
+            try:
+                valor_str = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                valor_str = f"R$ {valor_str}"
+            except Exception:
+                valor_str = f"{valor:.2f}".replace(".", ",")
+            c1 = QTableWidgetItem(valor_str)
+            c1.setFlags(c1.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            c1.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            c1.setData(Qt.ItemDataRole.UserRole, valor)
+            tabela.setItem(row, 1, c1)
+            # Imprimir checkbox
+            c2 = QTableWidgetItem("")
+            c2.setFlags(c2.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+            c2.setCheckState(Qt.CheckState.Unchecked)
+            c2.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            tabela.setItem(row, 2, c2)
+
+        lay.addWidget(tabela, 1)
+
+        # botões
+        btn_lay = QHBoxLayout()
+        btn_lay.addStretch()
+        btn_cancel = QPushButton("Cancelar")
+        btn_cancel.setObjectName("btnSecondary")
+        btn_cancel.setFixedHeight(32)
+        btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cancel.clicked.connect(dlg.reject)
+        btn_lay.addWidget(btn_cancel)
+        btn_imprimir = QPushButton(qtawesome.icon('fa6s.print', color='#ffffff'), "  Imprimir")
+        btn_imprimir.setObjectName("btnPrimary")
+        btn_imprimir.setFixedHeight(32)
+        btn_imprimir.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_lay.addWidget(btn_imprimir)
+        lay.addLayout(btn_lay)
+
+        def ao_imprimir():
+            # valida DPH digitado
+            nome_dph = self.campo_dph_pendente.text().strip() if hasattr(self, "campo_dph_pendente") else ""
+            if not nome_dph:
+                self._mostrar_toast("Informe o DPH Pendente Nº antes de imprimir.", erro=True)
+                QMessageBox.warning(dlg, "DPH não informado", "Preencha o campo 'DPH Pendente Nº' antes de imprimir.")
+                return
+            # coleta contas marcadas
+            contas_marcadas = set()
+            for r in range(tabela.rowCount()):
+                it = tabela.item(r, 2)
+                if it and it.checkState() == Qt.CheckState.Checked:
+                    conta = tabela.item(r, 0).text().strip()
+                    # normaliza "(sem conta)" -> "" para comparação
+                    if conta == "(sem conta)":
+                        conta = ""
+                    contas_marcadas.add(conta)
+            if not contas_marcadas:
+                self._mostrar_toast("Selecione ao menos uma conta.", erro=True)
+                QMessageBox.warning(dlg, "Nenhuma conta", "Marque ao menos uma conta na coluna Imprimir.")
+                return
+            # sanitiza nome do arquivo
+            nome_arq = re.sub(r'[\\/:*?"<>|]', "_", nome_dph).strip()
+            if not nome_arq:
+                self._mostrar_toast("Nome de DPH inválido.", erro=True)
+                return
+            if not nome_arq.lower().endswith(".json"):
+                nome_arq_json = f"{nome_arq}.json"
+            else:
+                nome_arq_json = nome_arq
+                nome_arq = os.path.splitext(nome_arq)[0]
+            pasta = self._caminho_sa_pasta()
+            if not pasta:
+                self._mostrar_toast("Pasta DPH não encontrada.", erro=True)
+                return
+            try:
+                os.makedirs(pasta, exist_ok=True)
+            except Exception:
+                pass
+            caminho_novo = os.path.join(pasta, nome_arq_json)
+            if os.path.exists(caminho_novo):
+                resp = QMessageBox.question(dlg, "Arquivo já existe", f"O arquivo '{nome_arq_json}' já existe.\nDeseja sobrescrever?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                if resp != QMessageBox.StandardButton.Yes:
+                    return
+            # filtra itens marcados
+            itens_marcados = []
+            itens_restantes = []
+            for it in self.dados:
+                conta_it = str(it.get("conta", "")).strip()
+                # para comparar, trata vazio como ""
+                pertence = False
+                for cm in contas_marcadas:
+                    if cm == "" and conta_it == "":
+                        pertence = True
+                        break
+                    if cm != "" and conta_it == cm:
+                        pertence = True
+                        break
+                    # caso marcador seja "(sem conta)" já convertido para ""
+                if pertence:
+                    novo = dict(it)
+                    novo["dph"] = nome_dph
+                    # garante campo imprimir True
+                    novo["imprimir"] = True
+                    itens_marcados.append(novo)
+                else:
+                    itens_restantes.append(it)
+            if not itens_marcados:
+                self._mostrar_toast("Nenhum item encontrado para as contas selecionadas.", erro=True)
+                return
+            # cria novo json
+            try:
+                with open(caminho_novo, "w", encoding="utf-8") as f:
+                    json.dump(itens_marcados, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                self._mostrar_toast(f"Erro ao criar {nome_arq_json}: {e}", erro=True)
+                QMessageBox.critical(dlg, "Erro", f"Falha ao salvar {nome_arq_json}:\n{e}")
+                return
+            # atualiza pendente removendo os impressos (move)
+            caminho_pendente = os.path.join(pasta, "DPHPendente.json")
+            try:
+                with open(caminho_pendente, "w", encoding="utf-8") as f:
+                    json.dump(itens_restantes, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                # não bloqueia sucesso da criação, apenas avisa
+                self._mostrar_toast(f"Criado {nome_arq_json}, mas falha ao atualizar pendente: {e}", erro=True)
+            # atualiza Saída em contas despesa: preenche NumDPH para linhas despesa já pendentes
+            try:
+                import config
+                base_saida = config.obter_caminho_jsons()
+                if base_saida:
+                    pasta_saida = os.path.normpath(os.path.join(base_saida, "Almox", "SaidaContasDespesa"))
+                    caminho_saida = os.path.join(pasta_saida, "SaidaPendente.json")
+                    if os.path.isfile(caminho_saida):
+                        with open(caminho_saida, "r", encoding="utf-8") as f:
+                            dados_saida = json.load(f)
+                        atualizados = 0
+                        for d in dados_saida:
+                            if not isinstance(d, dict):
+                                continue
+                            k = str(d.get("kardex", "")).strip().lower()
+                            r = str(d.get("num_req_sa", "") or d.get("req", "")).strip().lower()
+                            if not k or not r:
+                                continue
+                            for m in itens_marcados:
+                                mk = str(m.get("kardex", "")).strip().lower()
+                                mr = str(m.get("req", "")).strip().lower()
+                                if k == mk and r == mr:
+                                    if not str(d.get("num_dph", "")).strip():
+                                        d["num_dph"] = nome_dph
+                                        atualizados += 1
+                                    break
+                        if atualizados:
+                            with open(caminho_saida, "w", encoding="utf-8") as f:
+                                json.dump(dados_saida, f, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
+            # atualiza memória e UI
+            self.dados = itens_restantes
+            self._popular_tabela()
+            try:
+                self._atualizar_lista_sas()
+            except Exception:
+                pass
+            self._mostrar_toast(f"{len(itens_marcados)} itens gravados em {nome_arq_json} (DPH {nome_dph}).", erro=False)
+            dlg.accept()
+
+        btn_imprimir.clicked.connect(ao_imprimir)
+        dlg.exec()
 
     def _mostrar_toast(self, texto, erro=False):
         msg = QLabel(texto, self)
