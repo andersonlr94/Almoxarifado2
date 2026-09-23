@@ -225,6 +225,10 @@ class ProgramacaoAgulhasPage(QWidget):
         self._setup_ui()
         self._carregar_dados()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._carregar_dados()
+
     def _lista_impressoras(self):
         try:
             disponiveis = QPrinterInfo.availablePrinters()
@@ -397,6 +401,13 @@ class ProgramacaoAgulhasPage(QWidget):
         self.btn_mover_programado.setFixedHeight(32)
         self.btn_mover_programado.clicked.connect(self._mover_programado)
 
+        self.btn_voltar_pendente = QPushButton(qtawesome.icon('fa6s.arrow-left', color='#ffffff'), "")
+        self.btn_voltar_pendente.setObjectName("btnGradientRose")
+        self.btn_voltar_pendente.setFixedHeight(32)
+        self.btn_voltar_pendente.setFixedWidth(40)
+        self.btn_voltar_pendente.setToolTip("Voltar para Pendente")
+        self.btn_voltar_pendente.clicked.connect(self._voltar_pendente)
+
         self.btn_mover_separando = QPushButton(qtawesome.icon('mdi6.package-variant', color='#ffffff'), "  Separar")
         self.btn_mover_separando.setObjectName("btnGradientTeal")
         self.btn_mover_separando.setFixedHeight(32)
@@ -493,6 +504,7 @@ class ProgramacaoAgulhasPage(QWidget):
         linha_acoes.addWidget(self.btn_inserir, 0, Qt.AlignmentFlag.AlignBottom)
         linha_acoes.addWidget(self.btn_capturar, 0, Qt.AlignmentFlag.AlignBottom)
         linha_acoes.addWidget(self.btn_mover_programado, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addWidget(self.btn_voltar_pendente, 0, Qt.AlignmentFlag.AlignBottom)
         linha_acoes.addWidget(self.btn_mover_separando, 0, Qt.AlignmentFlag.AlignBottom)
         linha_acoes.addWidget(self.btn_entregar, 0, Qt.AlignmentFlag.AlignBottom)
         linha_acoes.addWidget(self.btn_dividir, 0, Qt.AlignmentFlag.AlignBottom)
@@ -701,6 +713,7 @@ class ProgramacaoAgulhasPage(QWidget):
         self.btn_inserir.setVisible(False)
         self.btn_capturar.setVisible(False)
         self.btn_mover_programado.setVisible(False)
+        self.btn_voltar_pendente.setVisible(False)
         self.btn_mover_separando.setVisible(False)
         self.btn_entregar.setVisible(False)
         self.btn_excluir.setVisible(False)
@@ -717,6 +730,8 @@ class ProgramacaoAgulhasPage(QWidget):
             self.btn_excluir.setVisible(tem_selecao)
             self.btn_dividir.setVisible(tem_selecao)
         elif self.filtro_status == "Programados":
+            tem_selecao = selecionados > 0
+            self.btn_voltar_pendente.setVisible(True)
             self.btn_mover_separando.setVisible(True)
             self.btn_dividir.setVisible(True)
         elif self.filtro_status == "Separando":
@@ -804,6 +819,9 @@ class ProgramacaoAgulhasPage(QWidget):
 
     def _mover_programado(self):
         self._mover_status("Programado")
+
+    def _voltar_pendente(self):
+        self._mover_status("Pendente")
 
     def _mover_separando(self):
         self._mover_status("Separando")

@@ -172,6 +172,10 @@ class FreshStartPage(QWidget):
         self._setup_ui()
         self._carregar_dados()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._carregar_dados()
+
     def _atualizar_zcusto(self):
         caminho = _caminho_zcusto()
         if not caminho:

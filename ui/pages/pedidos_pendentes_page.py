@@ -45,6 +45,10 @@ class PedidosPendentesPage(QWidget):
         self._setup_ui()
         self._carregar_dados()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._carregar_dados()
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(32, 32, 32, 32)

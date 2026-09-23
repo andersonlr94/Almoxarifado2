@@ -52,6 +52,12 @@ class AcuracidadePage(QWidget):
         self._prosseguir_count = 0
         self._setup_ui()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._modo_acuracidade:
+            self._carregar_itens_estoque()
+        self._atualizar_grafico()
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(32, 32, 32, 32)

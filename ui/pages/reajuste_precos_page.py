@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 
 from PySide6.QtWidgets import (
@@ -97,6 +97,10 @@ class ReajustePrecosPage(QWidget):
         self.dados = []
         self.colunas = []
         self._setup_ui()
+        self._carregar_dados()
+
+    def showEvent(self, event):
+        super().showEvent(event)
         self._carregar_dados()
 
     def _setup_ui(self):

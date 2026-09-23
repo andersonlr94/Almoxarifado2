@@ -276,6 +276,10 @@ class MaterialHoldersPage(QWidget):
         self._setup_ui()
         self._carregar_alocacoes()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._carregar_alocacoes()
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)

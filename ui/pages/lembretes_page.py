@@ -478,6 +478,10 @@ class LembretesPage(QWidget):
         super().__init__()
         self._setup_ui()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._carregar_lembretes()
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(32, 32, 32, 32)

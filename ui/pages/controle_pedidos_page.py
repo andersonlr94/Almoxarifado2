@@ -312,6 +312,7 @@ class ControlePedidosPage(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        self._carregar_dados()
         QTimer.singleShot(0, lambda: self.tabela.verticalScrollBar().setValue(self.tabela.verticalScrollBar().maximum()))
 
     def _setup_ui(self):

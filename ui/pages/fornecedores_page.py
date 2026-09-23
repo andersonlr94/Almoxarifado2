@@ -75,6 +75,10 @@ class FornecedoresPage(QWidget):
         self._setup_search_shortcuts()
         self._carregar_dados()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._carregar_dados()
+
     # ── UI ────────────────────────────────────────────────────────────────
     def _setup_ui(self):
         layout = QVBoxLayout(self)
