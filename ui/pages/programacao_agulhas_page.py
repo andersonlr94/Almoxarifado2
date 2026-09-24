@@ -325,64 +325,16 @@ class ProgramacaoAgulhasPage(QWidget):
         botoes_status_layout.addStretch()
         painel_esquerdo_layout.addLayout(botoes_status_layout)
 
-        self.widget_filtro_data = QWidget()
-        layout_filtro_data = QHBoxLayout()
-        layout_filtro_data.setContentsMargins(0, 0, 0, 0)
-        layout_filtro_data.setSpacing(4)
-
-        lbl_data_ini = QLabel("De")
-        lbl_data_ini.setFixedHeight(30)
-        layout_filtro_data.addWidget(lbl_data_ini)
-
-        self.data_inicio = QDateEdit()
-        self.data_inicio.setCalendarPopup(True)
-        self.data_inicio.setDisplayFormat("dd/MM/yyyy")
-        self.data_inicio.setDate(QDate.currentDate().addMonths(-6))
-        self.data_inicio.setFixedHeight(30)
-        self.data_inicio.setFixedWidth(115)
-        self.data_inicio.editingFinished.connect(self._aplicar_filtro)
-        layout_filtro_data.addWidget(self.data_inicio)
-
-        lbl_data_fim = QLabel("até")
-        lbl_data_fim.setFixedHeight(30)
-        layout_filtro_data.addWidget(lbl_data_fim)
-
-        self.data_fim = QDateEdit()
-        self.data_fim.setCalendarPopup(True)
-        self.data_fim.setDisplayFormat("dd/MM/yyyy")
-        self.data_fim.setDate(QDate.currentDate())
-        self.data_fim.setFixedHeight(30)
-        self.data_fim.setFixedWidth(115)
-        self.data_fim.editingFinished.connect(self._aplicar_filtro)
-        layout_filtro_data.addWidget(self.data_fim)
-
-        self.btn_limpar_filtro_data = QPushButton("✕")
-        self.btn_limpar_filtro_data.setObjectName("btnClear")
-        self.btn_limpar_filtro_data.setFixedSize(30, 30)
-        self.btn_limpar_filtro_data.setToolTip("Limpar filtro de período")
-        self.btn_limpar_filtro_data.clicked.connect(self._limpar_filtro_data)
-        layout_filtro_data.addWidget(self.btn_limpar_filtro_data)
-
-        self.btn_grafico = QPushButton(qtawesome.icon('mdi6.chart-bar', color='#ffffff'), "  Gráfico")
-        self.btn_grafico.setFixedHeight(30)
-        self.btn_grafico.setObjectName("btnGradientChartreuse")
-        self.btn_grafico.clicked.connect(self._abrir_grafico)
-        layout_filtro_data.addWidget(self.btn_grafico)
-
-        self.btn_voltar_separando = QPushButton(qtawesome.icon('mdi6.backup-restore', color='#ffffff'), "  Voltar para separando")
-        self.btn_voltar_separando.setFixedHeight(30)
-        self.btn_voltar_separando.setObjectName("btnGradientRose")
-        self.btn_voltar_separando.clicked.connect(self._voltar_para_separando)
-        layout_filtro_data.addWidget(self.btn_voltar_separando)
-
-        self.widget_filtro_data.setLayout(layout_filtro_data)
-        self.widget_filtro_data.setVisible(False)
-
         # Action Buttons Row
         linha_acoes = QHBoxLayout()
         linha_acoes.setSpacing(8)
 
-        linha_acoes.addWidget(self.widget_filtro_data)
+        self.btn_voltar_separando = QPushButton(qtawesome.icon('fa6s.caret-left', color='#ffffff'), "")
+        self.btn_voltar_separando.setFixedHeight(30)
+        self.btn_voltar_separando.setFixedWidth(30)
+        self.btn_voltar_separando.setObjectName("btnGradientChartreuse")
+        self.btn_voltar_separando.setToolTip("Voltar para Separando")
+        self.btn_voltar_separando.clicked.connect(self._voltar_para_separando)
 
         self.btn_inserir = QPushButton(qtawesome.icon('fa6s.plus', color='#ffffff'), "  Inserir")
         self.btn_inserir.setObjectName("btnGradientIndigo")
@@ -401,12 +353,19 @@ class ProgramacaoAgulhasPage(QWidget):
         self.btn_mover_programado.setFixedHeight(32)
         self.btn_mover_programado.clicked.connect(self._mover_programado)
 
-        self.btn_voltar_pendente = QPushButton(qtawesome.icon('fa6s.arrow-left', color='#ffffff'), "")
-        self.btn_voltar_pendente.setObjectName("btnGradientRose")
-        self.btn_voltar_pendente.setFixedHeight(32)
-        self.btn_voltar_pendente.setFixedWidth(40)
+        self.btn_voltar_pendente = QPushButton(qtawesome.icon('fa6s.caret-left', color='#ffffff'), "")
+        self.btn_voltar_pendente.setObjectName("btnGradientChartreuse")
+        self.btn_voltar_pendente.setFixedHeight(30)
+        self.btn_voltar_pendente.setFixedWidth(30)
         self.btn_voltar_pendente.setToolTip("Voltar para Pendente")
         self.btn_voltar_pendente.clicked.connect(self._voltar_pendente)
+
+        self.btn_voltar_programado = QPushButton(qtawesome.icon('fa6s.caret-left', color='#ffffff'), "")
+        self.btn_voltar_programado.setObjectName("btnGradientChartreuse")
+        self.btn_voltar_programado.setFixedHeight(30)
+        self.btn_voltar_programado.setFixedWidth(30)
+        self.btn_voltar_programado.setToolTip("Voltar para Programado")
+        self.btn_voltar_programado.clicked.connect(self._voltar_programado)
 
         self.btn_mover_separando = QPushButton(qtawesome.icon('mdi6.package-variant', color='#ffffff'), "  Separar")
         self.btn_mover_separando.setObjectName("btnGradientTeal")
@@ -504,9 +463,20 @@ class ProgramacaoAgulhasPage(QWidget):
         linha_acoes.addWidget(self.btn_inserir, 0, Qt.AlignmentFlag.AlignBottom)
         linha_acoes.addWidget(self.btn_capturar, 0, Qt.AlignmentFlag.AlignBottom)
         linha_acoes.addWidget(self.btn_mover_programado, 0, Qt.AlignmentFlag.AlignBottom)
-        linha_acoes.addWidget(self.btn_voltar_pendente, 0, Qt.AlignmentFlag.AlignBottom)
+        layout_btn_voltar = QVBoxLayout()
+        layout_btn_voltar.setContentsMargins(0, 0, 0, 1)
+        layout_btn_voltar.addWidget(self.btn_voltar_pendente, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addLayout(layout_btn_voltar)
         linha_acoes.addWidget(self.btn_mover_separando, 0, Qt.AlignmentFlag.AlignBottom)
+        layout_btn_voltar_prog = QVBoxLayout()
+        layout_btn_voltar_prog.setContentsMargins(0, 0, 0, 1)
+        layout_btn_voltar_prog.addWidget(self.btn_voltar_programado, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addLayout(layout_btn_voltar_prog)
         linha_acoes.addWidget(self.btn_entregar, 0, Qt.AlignmentFlag.AlignBottom)
+        layout_btn_voltar_sep = QVBoxLayout()
+        layout_btn_voltar_sep.setContentsMargins(0, 0, 0, 1)
+        layout_btn_voltar_sep.addWidget(self.btn_voltar_separando, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addLayout(layout_btn_voltar_sep)
         linha_acoes.addWidget(self.btn_dividir, 0, Qt.AlignmentFlag.AlignBottom)
         linha_acoes.addWidget(self.btn_excluir, 0, Qt.AlignmentFlag.AlignBottom)
         linha_acoes.addStretch()
@@ -654,17 +624,6 @@ class ProgramacaoAgulhasPage(QWidget):
                 texto = " ".join(str(v) for v in item.values()).lower()
                 if filtro_texto not in texto:
                     continue
-            chave_data = self.campo_data_por_filtro.get(self.filtro_status, "status")
-            valor_data = item.get(chave_data, "")
-            if valor_data:
-                try:
-                    data_item = datetime.strptime(valor_data, "%d/%m/%Y").date()
-                    data_ini = self.data_inicio.date().toPython()
-                    data_fim = self.data_fim.date().toPython()
-                    if not (data_ini <= data_item <= data_fim):
-                        continue
-                except ValueError:
-                    pass
             dados_filtrados.append(item)
 
         for item in dados_filtrados:
@@ -714,13 +673,14 @@ class ProgramacaoAgulhasPage(QWidget):
         self.btn_capturar.setVisible(False)
         self.btn_mover_programado.setVisible(False)
         self.btn_voltar_pendente.setVisible(False)
+        self.btn_voltar_programado.setVisible(False)
         self.btn_mover_separando.setVisible(False)
         self.btn_entregar.setVisible(False)
         self.btn_excluir.setVisible(False)
         self.btn_dividir.setVisible(False)
         self.combo_impressoras.setVisible(False)
         self.btn_imprimir.setVisible(False)
-        self.widget_filtro_data.setVisible(self.filtro_status == "Entregues")
+        self.btn_voltar_separando.setVisible(False)
         if self.filtro_status == "Pendentes":
             tem_selecao = selecionados > 0
             self.btn_inserir.setVisible(not tem_selecao)
@@ -735,11 +695,12 @@ class ProgramacaoAgulhasPage(QWidget):
             self.btn_mover_separando.setVisible(True)
             self.btn_dividir.setVisible(True)
         elif self.filtro_status == "Separando":
+            self.btn_voltar_programado.setVisible(True)
             self.btn_entregar.setVisible(True)
             self.combo_impressoras.setVisible(True)
             self.btn_imprimir.setVisible(True)
         elif self.filtro_status == "Entregues":
-            self.btn_voltar_separando.setVisible(selecionados > 0)
+            self.btn_voltar_separando.setVisible(True)
 
     def _atualizar_contador(self):
         total = self.tabela.rowCount()
@@ -822,6 +783,9 @@ class ProgramacaoAgulhasPage(QWidget):
 
     def _voltar_pendente(self):
         self._mover_status("Pendente")
+
+    def _voltar_programado(self):
+        self._mover_status("Programado")
 
     def _mover_separando(self):
         self._mover_status("Separando")
@@ -1157,83 +1121,6 @@ class ProgramacaoAgulhasPage(QWidget):
         self._salvar_json()
         self._popular_tabela()
         QMessageBox.information(self, "Capturar PDF", f"{len(linhas)} item(ns) capturado(s) com sucesso.")
-
-    def _limpar_filtro_data(self):
-        self.data_inicio.setDate(QDate.currentDate().addMonths(-6))
-        self.data_fim.setDate(QDate.currentDate())
-        self._aplicar_filtro()
-
-    def _abrir_grafico(self):
-        chave_data = self.campo_data_por_filtro.get(self.filtro_status, "status")
-        dados_validos = []
-        for item in self._fonte_dados():
-            status_item = item.get("status", "")
-            if self.filtro_status == "Pendentes" and status_item != "Pendente":
-                continue
-            if self.filtro_status == "Programados" and "Programado" not in status_item:
-                continue
-            if self.filtro_status == "Separando" and "Separando" not in status_item:
-                continue
-            if self.filtro_status == "Entregues" and "Entregue" not in status_item:
-                continue
-            filtro_texto = self.campo_filtro.text().strip().lower()
-            if filtro_texto:
-                texto = " ".join(str(v) for v in item.values()).lower()
-                if filtro_texto not in texto:
-                    continue
-            valor_data = item.get(chave_data, "")
-            if valor_data:
-                try:
-                    data_item = datetime.strptime(valor_data, "%d/%m/%Y").date()
-                    data_ini = self.data_inicio.date().toPython()
-                    data_fim = self.data_fim.date().toPython()
-                    if not (data_ini <= data_item <= data_fim):
-                        continue
-                except ValueError:
-                    continue
-            dados_validos.append(item)
-
-        meses = Counter()
-        for item in dados_validos:
-            valor_data = item.get(chave_data, "")
-            if valor_data:
-                try:
-                    dt = datetime.strptime(valor_data, "%d/%m/%Y")
-                    chave = dt.strftime("%Y-%m")
-                    meses[chave] += 1
-                except ValueError:
-                    pass
-
-        if not meses:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Icon.Information)
-            msg.setWindowTitle("Gráfico")
-            msg.setText("Nenhum dado encontrado no período.")
-            msg.exec()
-            return
-
-        sorted_meses = sorted(meses.keys())
-        valores = [meses[m] for m in sorted_meses]
-        rotulos = [datetime.strptime(m, "%Y-%m").strftime("%b/%Y") for m in sorted_meses]
-
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Itens por Mês")
-        dialog.resize(700, 450)
-
-        layout = QVBoxLayout(dialog)
-        canvas = FigureCanvas(Figure(figsize=(7, 4)))
-        layout.addWidget(canvas)
-
-        ax = canvas.figure.subplots()
-        ax.bar(range(len(rotulos)), valores, color="#4A90D9")
-        ax.set_xticks(range(len(rotulos)))
-        ax.set_xticklabels(rotulos, rotation=45, ha="right")
-        ax.set_ylabel("Quantidade de Itens")
-        ax.set_title(f"Itens por Mês - {self.filtro_status}")
-        ax.margins(y=0.1)
-        canvas.figure.tight_layout()
-
-        dialog.exec()
 
     def _fonte_dados(self):
         if self.filtro_status == "Entregues":

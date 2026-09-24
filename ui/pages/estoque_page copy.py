@@ -816,7 +816,7 @@ class EstoquePage(QWidget):
         self.detalhes_box = QWidget()
         self.detalhes_box.setObjectName("detalhesBox")
         self.detalhes_box.setMinimumHeight(128)
-        self.detalhes_box.setMinimumWidth(670)
+        self.detalhes_box.setMinimumWidth(650)
 
         self.detalhes_box.setStyleSheet("""
             QWidget#detalhesBox {
@@ -860,10 +860,10 @@ class EstoquePage(QWidget):
 
             lay = QHBoxLayout(widget)
             lay.setContentsMargins(0, 0, 0, 0)
-            lay.setSpacing(4)
+            lay.setSpacing(8)
 
             icone = QLabel(simbolo)
-            icone.setFixedWidth(18)
+            icone.setFixedWidth(22)
             icone.setAlignment(Qt.AlignmentFlag.AlignCenter)
             icone.setStyleSheet(f"""
                 QLabel {{
@@ -878,7 +878,7 @@ class EstoquePage(QWidget):
             lbl_nome.setStyleSheet("""
                 QLabel {
                     color: #7183aa;
-                    font-size: 10px;
+                    font-size: 12px;
                     font-weight: 600;
                 }
             """)
@@ -888,7 +888,7 @@ class EstoquePage(QWidget):
             lbl_valor.setStyleSheet("""
                 QLabel {
                     color: #17203f;
-                    font-size: 12px;
+                    font-size: 14px;
                     font-weight: 600;
                 }
             """)
@@ -947,92 +947,46 @@ class EstoquePage(QWidget):
         detalhes_layout.addWidget(descricao_linha)
         detalhes_layout.addWidget(separador())
 
-        def criar_bloco_vertical(rotulo, chave, simbolo="", cor="#5f6cf5"):
-            widget = QWidget()
-            lay = QVBoxLayout(widget)
-            lay.setContentsMargins(0, 0, 0, 0)
-            lay.setSpacing(4)
-            
-            top_lay = QHBoxLayout()
-            top_lay.setContentsMargins(0,0,0,0)
-            top_lay.setSpacing(4)
-            icone = QLabel(simbolo)
-            icone.setFixedWidth(18)
-            icone.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            icone.setStyleSheet(f"color: {cor}; font-size: 17px; font-weight: 700;")
-            lbl_nome = QLabel(rotulo.upper())
-            lbl_nome.setStyleSheet("color: #7183aa; font-size: 10px; font-weight: 600;")
-            top_lay.addWidget(icone)
-            top_lay.addWidget(lbl_nome)
-            top_lay.addStretch(1)
-            
-            lbl_valor = QLabel("-")
-            lbl_valor.setStyleSheet("color: #17203f; font-size: 12px; font-weight: 600;")
-            lbl_valor.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            self._labels_valores[chave] = lbl_valor
-            
-            val_lay = QHBoxLayout()
-            val_lay.setContentsMargins(30, 0, 0, 0)
-            val_lay.addWidget(lbl_valor)
-            val_lay.addStretch(1)
-            
-            lay.addLayout(top_lay)
-            lay.addLayout(val_lay)
-            return widget
+        # ── Linha 3: três colunas fixas ──
+        linha3 = QHBoxLayout()
+        linha3.setSpacing(12)
+        linha3.setContentsMargins(0, 0, 0, 0)
+        w_loc_novo = criar_linha("Loc novo", "Loc novo", "⌖", "#5865f2", largura_label=68)
+        w_loc_novo.setMinimumWidth(220)
+        w_qtde_novo = criar_linha("Qtde", "Qtde novo", "▣", "#16b86c", largura_label=40)
+        w_qtde_novo.setMinimumWidth(135)
+        w_consumo = criar_linha("Cons. médio", "Consumo médio", "⌁", "#5865f2", largura_label=95)
+        w_consumo.setMinimumWidth(185)
+        linha3.addWidget(w_loc_novo)
+        linha3.addWidget(separador_vertical())
+        linha3.addWidget(w_qtde_novo)
+        linha3.addWidget(separador_vertical())
+        linha3.addWidget(w_consumo)
+        linha3.addStretch(1)
+        linha3_widget = QWidget()
+        linha3_widget.setLayout(linha3)
+        detalhes_layout.addWidget(linha3_widget)
+        detalhes_layout.addWidget(separador())
 
-        # ── Nova Linha de Colunas: Loc, Qtde, Consumo, Custo ──
-        linha_cols = QHBoxLayout()
-        linha_cols.setSpacing(12)
-        linha_cols.setContentsMargins(0, 0, 0, 0)
-
-        # Col 1
-        col1 = QWidget()
-        lay_col1 = QVBoxLayout(col1)
-        lay_col1.setContentsMargins(0,0,0,0)
-        lay_col1.setSpacing(8)
-        w_loc_novo = criar_linha("Novo", "Loc novo", "⌖", "#5865f2", largura_label=32)
-        w_qtde_novo = criar_linha("Qtde", "Qtde novo", "▣", "#16b86c", largura_label=32)
-        lay_col1.addWidget(w_loc_novo)
-        lay_col1.addWidget(w_qtde_novo)
-        col1.setMinimumWidth(170)
-
-        # Col 2
-        col2 = QWidget()
-        lay_col2 = QVBoxLayout(col2)
-        lay_col2.setContentsMargins(0,0,0,0)
-        lay_col2.setSpacing(8)
-        w_loc_ret = criar_linha("Ret", "Loc retorno", "⌖", "#5865f2", largura_label=20)
-        w_qtde_ret = criar_linha("Qtde", "Qtde retorno", "▣", "#ff7a21", largura_label=20)
-        lay_col2.addWidget(w_loc_ret)
-        lay_col2.addWidget(w_qtde_ret)
-        col2.setMinimumWidth(170)
-
-        # Col 3
-        w_consumo = criar_bloco_vertical("Cons. med", "Consumo médio", "⌁", "#5865f2")
-        w_consumo.setMinimumWidth(80)
-
-        # Col 4
-        w_custo = criar_bloco_vertical("Custo", "Custo", "＄", "#16b86c")
-        w_custo.setMinimumWidth(80)
-
-        # Col 5
-        w_programado = criar_bloco_vertical("Progr", "Pend. entrega compras", "◪", "#f59e0b")
-        w_programado.setMinimumWidth(80)
-
-        linha_cols.addWidget(col1)
-        linha_cols.addWidget(separador_vertical())
-        linha_cols.addWidget(col2)
-        linha_cols.addWidget(separador_vertical())
-        linha_cols.addWidget(w_consumo)
-        linha_cols.addWidget(separador_vertical())
-        linha_cols.addWidget(w_custo)
-        linha_cols.addWidget(separador_vertical())
-        linha_cols.addWidget(w_programado)
-        linha_cols.addStretch(1)
-
-        linha_cols_widget = QWidget()
-        linha_cols_widget.setLayout(linha_cols)
-        detalhes_layout.addWidget(linha_cols_widget)
+        # ── Linha 4: três colunas fixas (terceira vazia) ──
+        linha4 = QHBoxLayout()
+        linha4.setSpacing(12)
+        linha4.setContentsMargins(0, 0, 0, 0)
+        w_loc_ret = criar_linha("Loc ret", "Loc retorno", "⌖", "#5865f2", largura_label=68)
+        w_loc_ret.setMinimumWidth(220)
+        w_qtde_ret = criar_linha("Qtde", "Qtde retorno", "▣", "#ff7a21", largura_label=40)
+        w_qtde_ret.setMinimumWidth(135)
+        w_custo = criar_linha("Custo", "Custo", "＄", "#16b86c", largura_label=68)
+        w_custo.setMinimumWidth(185)
+        linha4.addWidget(w_loc_ret)
+        linha4.addWidget(separador_vertical())
+        linha4.addWidget(w_qtde_ret)
+        linha4.addWidget(separador_vertical())
+        linha4.addWidget(w_custo)
+        linha4.addStretch(1)
+        linha4_widget = QWidget()
+        linha4_widget.setLayout(linha4)
+        detalhes_layout.addWidget(linha4_widget)
 
         detalhes_layout.addStretch(1)
         topo.addStretch()
