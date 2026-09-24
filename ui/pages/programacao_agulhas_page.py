@@ -17,12 +17,13 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QStyledItemDelegate, QStyleOptionViewItem,
     QStyle, QDialog, QFrame, QDateEdit, QFileDialog,
 )
-from PySide6.QtCore import Qt, QSize, QSizeF, QRect, Signal, QDate, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QAbstractAnimation
+from PySide6.QtCore import Qt, QSize, QSizeF, QRect, Signal, QDate, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QAbstractAnimation, QTimer
 from PySide6.QtGui import QPainter, QMouseEvent, QTextDocument, QPageSize
 from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
 from PySide6.QtWidgets import QMessageBox, QGraphicsOpacityEffect
 import socket
 import pdfplumber
+import config
 
 
 class EditorDelegate(QStyledItemDelegate):
@@ -228,6 +229,11 @@ class ProgramacaoAgulhasPage(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         self._carregar_dados()
+        # mantém a impressora de preferência sincronizada com Estoque (Ctrl+P) — mesmo config
+        try:
+            self._preencher_impressoras()
+        except Exception:
+            pass
 
     def _lista_impressoras(self):
         try:
@@ -392,12 +398,38 @@ class ProgramacaoAgulhasPage(QWidget):
         self.combo_impressoras.setFixedWidth(160)
         self.combo_impressoras.setToolTip("Selecione a impressora Zebra para impressão")
         self.combo_impressoras.setVisible(False)
+        # salva preferência na mesma chave do Estoque (Ctrl+P) — config.impressora_padrao
+        self.combo_impressoras.currentIndexChanged.connect(self._salvar_impressora_preferencia)
 
         self.btn_imprimir = QPushButton(qtawesome.icon('fa6s.print', color='#1e1b4b'), "  Imprimir")
         self.btn_imprimir.setObjectName("btnGradientAmber")
         self.btn_imprimir.setFixedHeight(32)
         self.btn_imprimir.clicked.connect(self._imprimir_zebra)
         self.btn_imprimir.setVisible(False)
+
+        # ── Notificação direcionada (só em Separando, só para usuário selecionado) ──
+        self.combo_notificar_usuario = QComboBox()
+        self.combo_notificar_usuario.setFixedHeight(32)
+        self.combo_notificar_usuario.setFixedWidth(180)
+        self.combo_notificar_usuario.setPlaceholderText("Para quem?")
+        self.combo_notificar_usuario.setToolTip("Selecione o usuário que deve receber a notificação")
+        self.combo_notificar_usuario.setVisible(False)
+
+        self.btn_notificar = QPushButton(qtawesome.icon('fa6s.paper-plane', color='#ffffff'), "  Enviar")
+        self.btn_notificar.setObjectName("btnGradientPurple")
+        self.btn_notificar.setFixedHeight(32)
+        self.btn_notificar.setToolTip("Envia os itens selecionados na tabela para o usuário selecionado — ele imprime automaticamente na impressora dele")
+        self.btn_notificar.clicked.connect(self._notificar_usuario_separando)
+        self.btn_notificar.setVisible(False)
+        # alias para compatibilidade (antigo nome)
+        self.btn_enviar = self.btn_notificar
+        # quando troca usuário de destino, recalcula cooldown
+        self.combo_notificar_usuario.currentIndexChanged.connect(lambda _: self._atualizar_cooldown_notificar())
+        # timer para cooldown visual
+        self._notificar_cooldown_timer = QTimer(self)
+        self._notificar_cooldown_timer.setSingleShot(False)
+        self._notificar_cooldown_timer.timeout.connect(self._atualizar_cooldown_notificar)
+        self._notificar_cooldown_restante = 0
 
         # ── Container animável dos campos (oculto inicialmente) ──
         self.campos_container = QWidget()
@@ -480,12 +512,14 @@ class ProgramacaoAgulhasPage(QWidget):
         linha_acoes.addWidget(self.btn_dividir, 0, Qt.AlignmentFlag.AlignBottom)
         linha_acoes.addWidget(self.btn_excluir, 0, Qt.AlignmentFlag.AlignBottom)
         linha_acoes.addStretch()
+        # tudo na mesma linha do botão Entregar, alinhado à direita
+        linha_acoes.addWidget(self.combo_notificar_usuario, 0, Qt.AlignmentFlag.AlignBottom)
+        linha_acoes.addWidget(self.btn_notificar, 0, Qt.AlignmentFlag.AlignBottom)
         linha_acoes.addWidget(self.combo_impressoras, 0, Qt.AlignmentFlag.AlignBottom)
         linha_acoes.addWidget(self.btn_imprimir, 0, Qt.AlignmentFlag.AlignBottom)
 
         painel_esquerdo_layout.addLayout(linha_acoes)
-        filters_card_layout.addWidget(painel_esquerdo)
-        filters_card_layout.addStretch()
+        filters_card_layout.addWidget(painel_esquerdo, 1)
         layout.addWidget(filters_card)
 
         # ── Table Card ──
@@ -681,6 +715,8 @@ class ProgramacaoAgulhasPage(QWidget):
         self.combo_impressoras.setVisible(False)
         self.btn_imprimir.setVisible(False)
         self.btn_voltar_separando.setVisible(False)
+        self.combo_notificar_usuario.setVisible(False)
+        self.btn_notificar.setVisible(False)
         if self.filtro_status == "Pendentes":
             tem_selecao = selecionados > 0
             self.btn_inserir.setVisible(not tem_selecao)
@@ -699,6 +735,18 @@ class ProgramacaoAgulhasPage(QWidget):
             self.btn_entregar.setVisible(True)
             self.combo_impressoras.setVisible(True)
             self.btn_imprimir.setVisible(True)
+            # Notificação direcionada: só em Separando, só para usuário selecionado
+            try:
+                self._atualizar_combo_usuarios()
+            except Exception:
+                pass
+            self.combo_notificar_usuario.setVisible(True)
+            self.btn_notificar.setVisible(True)
+            # aplica cooldown visual se houver
+            try:
+                self._atualizar_cooldown_notificar()
+            except Exception:
+                pass
         elif self.filtro_status == "Entregues":
             self.btn_voltar_separando.setVisible(True)
 
@@ -1010,6 +1058,138 @@ class ProgramacaoAgulhasPage(QWidget):
             d["selecionado"] = False
         self._popular_tabela()
 
+    # ── Notificação direcionada ──
+    def _atualizar_combo_usuarios(self):
+        try:
+            from core import auth as auth_core
+            from core import session as session_core
+            self.combo_notificar_usuario.blockSignals(True)
+            self.combo_notificar_usuario.clear()
+            self.combo_notificar_usuario.addItem("Selecione usuário...", None)
+            usuarios = auth_core.list_users(sanitize=True)
+            atual = session_core.get_username().lower() if session_core.get_username() else ""
+            for u in sorted(usuarios, key=lambda x: (x.get("display_name") or x.get("username","")).lower()):
+                if (u.get("username") or "").strip().lower() == atual:
+                    continue
+                if not u.get("active", True):
+                    continue
+                display = u.get("display_name") or u.get("username")
+                label = f"{display} ({u.get('username')})"
+                self.combo_notificar_usuario.addItem(label, u.get("username"))
+            self.combo_notificar_usuario.blockSignals(False)
+        except Exception:
+            try:
+                self.combo_notificar_usuario.blockSignals(False)
+            except Exception:
+                pass
+        self._atualizar_cooldown_notificar()
+
+    def _atualizar_cooldown_notificar(self):
+        try:
+            from core import session as session_core
+            from core import eventos as ev
+            # atualiza contador regressivo se em cooldown
+            if getattr(self, "_notificar_cooldown_restante", 0) > 0:
+                # decrementa se chamado pelo timer
+                if self._notificar_cooldown_timer.isActive():
+                    self._notificar_cooldown_restante = max(0, self._notificar_cooldown_restante - 1)
+                    if self._notificar_cooldown_restante == 0:
+                        self._notificar_cooldown_timer.stop()
+            para = self.combo_notificar_usuario.currentData() if hasattr(self, "combo_notificar_usuario") else None
+            if not para:
+                self.btn_notificar.setEnabled(False)
+                self.btn_notificar.setText("  Enviar")
+                return
+            de = session_core.get_username()
+            resto = ev.cooldown_restante(de, para) if de and para else 0
+            # se timer regressivo ainda ativo, usa ele
+            if getattr(self, "_notificar_cooldown_restante", 0) > 0:
+                resto = max(resto, self._notificar_cooldown_restante)
+            if resto > 0:
+                self.btn_notificar.setEnabled(False)
+                self.btn_notificar.setText(f"  Aguarde {resto}s")
+                if not self._notificar_cooldown_timer.isActive():
+                    self._notificar_cooldown_timer.start(1000)
+                    self._notificar_cooldown_restante = resto
+            else:
+                self.btn_notificar.setEnabled(True)
+                self.btn_notificar.setText("  Enviar")
+                self._notificar_cooldown_timer.stop()
+                self._notificar_cooldown_restante = 0
+        except Exception:
+            try:
+                self.btn_notificar.setEnabled(True)
+                self.btn_notificar.setText("  Enviar")
+            except Exception:
+                pass
+
+    def _coletar_itens_selecionados_para_envio(self):
+        """Coleta itens com checkbox marcado na tabela (status Separando)."""
+        itens = []
+        for row in range(self.tabela.rowCount()):
+            chk = self.tabela.item(row, 0)
+            if chk and chk.checkState() == Qt.CheckState.Checked:
+                dado = self._dado_por_linha(row)
+                if dado:
+                    # envia apenas campos necessários para impressão
+                    itens.append({
+                        "id": dado.get("id", ""),
+                        "pedido": dado.get("pedido", ""),
+                        "kardex": dado.get("kardex", ""),
+                        "codigo": dado.get("codigo", ""),
+                        "qtde": dado.get("qtde", ""),
+                        "fornecedor": dado.get("fornecedor", ""),
+                        "requisitante": dado.get("requisitante", ""),
+                    })
+                else:
+                    # fallback direto da linha da tabela
+                    itens.append({
+                        "pedido": self.tabela.item(row, 1).text() if self.tabela.item(row, 1) else "",
+                        "kardex": self.tabela.item(row, 2).text() if self.tabela.item(row, 2) else "",
+                        "codigo": self.tabela.item(row, 3).text() if self.tabela.item(row, 3) else "",
+                        "qtde": self.tabela.item(row, 4).text() if self.tabela.item(row, 4) else "",
+                        "fornecedor": self.tabela.item(row, 5).text() if self.tabela.item(row, 5) else "",
+                        "requisitante": self.tabela.item(row, 6).text() if self.tabela.item(row, 6) else "",
+                    })
+        return itens
+
+    def _notificar_usuario_separando(self):
+        # Agora "Enviar": envia itens selecionados para o usuário e ele imprime automaticamente
+        para = self.combo_notificar_usuario.currentData() if hasattr(self, "combo_notificar_usuario") else None
+        if not para:
+            QMessageBox.warning(self, "Enviar", "Selecione o usuário de destino no combo ao lado do botão Enviar.")
+            return
+        if self.filtro_status != "Separando":
+            QMessageBox.warning(self, "Enviar", "Este botão só funciona na aba Separando.")
+            return
+        itens = self._coletar_itens_selecionados_para_envio()
+        if not itens:
+            QMessageBox.warning(self, "Enviar", "Selecione ao menos um item na tabela (checkbox) para enviar.")
+            return
+        try:
+            from core import eventos as ev
+            evento = ev.enviar_para_usuario(para, botao_id="btn_enviar_separando", page="programacao_agulhas", extra={"itens": itens})
+            QMessageBox.information(self, "Enviado", f"{len(itens)} item(ns) enviado(s) para {evento.get('para_display')}.\nEle(s) será(ão) impresso(s) automaticamente na impressora dele (Separando), independente da página onde ele estiver.")
+            self._notificar_cooldown_restante = ev.COOLDOWN_SEG
+            self.btn_notificar.setEnabled(False)
+            self.btn_notificar.setText(f"  Aguarde {ev.COOLDOWN_SEG}s")
+            self._notificar_cooldown_timer.start(1000)
+        except ValueError as e:
+            QMessageBox.warning(self, "Enviar", str(e))
+            try:
+                import re
+                m = re.search(r"Aguarde (\d+)s", str(e))
+                if m:
+                    resto = int(m.group(1))
+                    self._notificar_cooldown_restante = resto
+                    self.btn_notificar.setEnabled(False)
+                    self.btn_notificar.setText(f"  Aguarde {resto}s")
+                    self._notificar_cooldown_timer.start(1000)
+            except Exception:
+                pass
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Falha ao enviar: {e}")
+
     def _aplicar_filtro(self):
         self._popular_tabela()
         self._atualizar_botoes_acao()
@@ -1298,14 +1478,44 @@ class ProgramacaoAgulhasPage(QWidget):
         else:
             self.tabela.horizontalHeader().setState(False, False)
 
+    def _salvar_impressora_preferencia(self):
+        # não salva quando ainda está povoando ou sem impressora válida
+        if not hasattr(self, "combo_impressoras"):
+            return
+        if not self.combo_impressoras.isEnabled():
+            return
+        texto = self.combo_impressoras.currentText().strip()
+        if not texto or texto == "Nenhuma impressora encontrada":
+            return
+        try:
+            config.definir_impressora_padrao(texto)
+        except Exception:
+            pass
+
     def _preencher_impressoras(self):
+        # preserva seleção se usuário já escolheu, senão aplica preferência salva (mesma do Estoque Ctrl+P)
+        try:
+            self.combo_impressoras.blockSignals(True)
+        except Exception:
+            pass
         self.combo_impressoras.clear()
         impressoras = self._lista_impressoras()
         if impressoras:
             self.combo_impressoras.addItems(impressoras)
+            self.combo_impressoras.setEnabled(True)
+            try:
+                salva = config.obter_impressora_padrao()
+                if salva and salva in impressoras:
+                    self.combo_impressoras.setCurrentText(salva)
+            except Exception:
+                pass
         else:
             self.combo_impressoras.addItem("Nenhuma impressora encontrada")
             self.combo_impressoras.setEnabled(False)
+        try:
+            self.combo_impressoras.blockSignals(False)
+        except Exception:
+            pass
 
     def _imprimir_zebra(self):
         impressora = self.combo_impressoras.currentText().strip()

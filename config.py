@@ -66,3 +66,44 @@ def definir_impressora_padrao(nome):
     dados["impressora_padrao"] = nome
     _salvar(dados)
 
+
+# ── Auto-login (Entrar diretamente) ─────────────────────────────────────
+def obter_auto_login():
+    """Retorna (usuario, token_hash) se auto-login ativo, senão (None, None)."""
+    dados = _carregar()
+    if dados.get("auto_login") and dados.get("auto_user") and dados.get("auto_token"):
+        return dados.get("auto_user"), dados.get("auto_token")
+    return None, None
+
+
+def definir_auto_login(usuario: str, token_hash: str):
+    """Ativa auto-login para o usuário com token = password_hash atual."""
+    dados = _carregar()
+    dados["auto_login"] = True
+    dados["auto_user"] = usuario
+    dados["auto_token"] = token_hash
+    # também mantém ultimo_usuario coerente
+    dados["ultimo_usuario"] = usuario
+    _salvar(dados)
+
+
+def limpar_auto_login():
+    dados = _carregar()
+    changed = False
+    for k in ("auto_login", "auto_user", "auto_token"):
+        if k in dados:
+            dados.pop(k, None)
+            changed = True
+    if changed:
+        _salvar(dados)
+
+
+def is_auto_login_enabled() -> bool:
+    dados = _carregar()
+    return bool(dados.get("auto_login") and dados.get("auto_user") and dados.get("auto_token"))
+
+
+def obter_ultimo_usuario() -> str:
+    dados = _carregar()
+    return dados.get("ultimo_usuario", "")
+
