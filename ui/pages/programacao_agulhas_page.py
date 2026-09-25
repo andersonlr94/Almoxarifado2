@@ -5,10 +5,6 @@ import unicodedata
 from datetime import datetime
 from collections import Counter
 
-import matplotlib
-matplotlib.use("QtAgg")
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 import qtawesome
 
 from PySide6.QtWidgets import (
@@ -212,8 +208,11 @@ def _buscar_item_por_kardex(kardex):
 
 
 class ProgramacaoAgulhasPage(QWidget):
+    _printers_loaded_signal = Signal(list)
+
     def __init__(self):
         super().__init__()
+        self._printers_loaded_signal.connect(self._atualizar_combo_impressoras_async)
         self.dados = []
         self.dados_entregues = []
         self.filtro_status = "Pendentes"
@@ -1493,17 +1492,40 @@ class ProgramacaoAgulhasPage(QWidget):
             pass
 
     def _preencher_impressoras(self):
-        # preserva seleção se usuário já escolheu, senão aplica preferência salva (mesma do Estoque Ctrl+P)
+        if getattr(self, "_buscando_impressoras", False):
+            return
+            
+        try:
+            self.combo_impressoras.blockSignals(True)
+        except Exception:
+            pass
+            
+        if self.combo_impressoras.count() == 0:
+            self.combo_impressoras.addItem("Carregando impressoras...")
+            self.combo_impressoras.setEnabled(False)
+            
+        self._buscando_impressoras = True
+        
+        import threading
+        def worker():
+            impressoras = self._lista_impressoras()
+            self._printers_loaded_signal.emit(impressoras)
+            
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _atualizar_combo_impressoras_async(self, impressoras):
+        self._buscando_impressoras = False
         try:
             self.combo_impressoras.blockSignals(True)
         except Exception:
             pass
         self.combo_impressoras.clear()
-        impressoras = self._lista_impressoras()
+        
         if impressoras:
             self.combo_impressoras.addItems(impressoras)
             self.combo_impressoras.setEnabled(True)
             try:
+                import config
                 salva = config.obter_impressora_padrao()
                 if salva and salva in impressoras:
                     self.combo_impressoras.setCurrentText(salva)
@@ -1512,6 +1534,7 @@ class ProgramacaoAgulhasPage(QWidget):
         else:
             self.combo_impressoras.addItem("Nenhuma impressora encontrada")
             self.combo_impressoras.setEnabled(False)
+            
         try:
             self.combo_impressoras.blockSignals(False)
         except Exception:

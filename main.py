@@ -1,12 +1,6 @@
-import sys
-import multiprocessing
-import numpy  # <-- FORÇA O CARREGAMENTO ÚNICO AQUI
+﻿import sys
 
 if __name__ == "__main__":
-    # Necessário para o PyInstaller lidar corretamente com bibliotecas que 
-    # iniciam subprocessos (como o Numpy/Matplotlib)
-    multiprocessing.freeze_support()
-
     from PySide6.QtWidgets import QApplication, QDialog
     from PySide6.QtCore import Qt
     from qfluentwidgets import setTheme, Theme
@@ -70,3 +64,4 @@ if __name__ == "__main__":
         else:
             # fechamento normal -> encerra aplicação (mantém auto para próxima abertura)
             sys.exit(app_exit)
+

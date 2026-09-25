@@ -13,10 +13,12 @@ from PySide6.QtWidgets import (
 
 def _caminho_json():
     import config
-    base = config.obter_caminho_jsons()
-    if not base:
+    base_holders = config.obter_caminho_material_holders()
+    
+    if not base_holders:
         return ""
-    pasta = os.path.normpath(os.path.join(base, "Almox", "MaterialHolders"))
+        
+    pasta = os.path.normpath(os.path.join(base_holders, "AlmoxMat"))
     os.makedirs(pasta, exist_ok=True)
     return os.path.join(pasta, "MaterialHolders.json")
 
@@ -501,6 +503,11 @@ class MaterialHoldersPage(QWidget):
         ]
 
     def _agrupar_slots(self, origem, alvo):
+        if not _caminho_json():
+            import config
+            config.avisar_sem_pasta(self)
+            return False
+            
         if origem == alvo:
             return False
         if origem[0] != alvo[0]:
@@ -585,6 +592,12 @@ class MaterialHoldersPage(QWidget):
         return dlg.textValue(), True
 
     def _on_slot_clicado(self, btn, localizacao, slot):
+        if not _caminho_json():
+            import config
+            config.avisar_sem_pasta(self)
+            btn.setChecked(False)
+            return
+            
         chave = (localizacao, slot)
         if self._modo_alocacao:
             self._alocar_sa(chave)

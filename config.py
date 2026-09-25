@@ -67,6 +67,20 @@ def definir_impressora_padrao(nome):
     _salvar(dados)
 
 
+def obter_caminho_material_holders():
+    dados = _carregar()
+    caminho = dados.get("caminho_material_holders", "")
+    if caminho and os.path.isdir(caminho):
+        return os.path.normpath(caminho)
+    return ""
+
+
+def definir_caminho_material_holders(caminho):
+    dados = _carregar()
+    dados["caminho_material_holders"] = os.path.normpath(caminho)
+    _salvar(dados)
+
+
 # ── Auto-login (Entrar diretamente) ─────────────────────────────────────
 def obter_auto_login():
     """Retorna (usuario, token_hash) se auto-login ativo, senão (None, None)."""
