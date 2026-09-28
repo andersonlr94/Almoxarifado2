@@ -194,23 +194,23 @@ class PedidosPendentesPage(QWidget):
                 if follow_up and hasattr(follow_up, "atualizar_dados"):
                     follow_up.atualizar_dados(self.dados)
                     
+                # Agrupar quantidades programadas por Kardex
+                somas_kardex = {}
+                for p in self.dados:
+                    k = p.get("Kardex", "").strip()
+                    if not k:
+                        continue
+                    qtde_str = p.get("Qtde programada", "0")
+                    if isinstance(qtde_str, str):
+                        qtde_str = qtde_str.replace(".", "").replace(",", ".")
+                    try:
+                        qtde = float(qtde_str)
+                    except ValueError:
+                        qtde = 0.0
+                    somas_kardex[k] = somas_kardex.get(k, 0.0) + qtde
+
                 itens_zero = main_win.pages.get("itens_zero")
                 if itens_zero and hasattr(itens_zero, "dados"):
-                    # Agrupar quantidades programadas por Kardex
-                    somas_kardex = {}
-                    for p in self.dados:
-                        k = p.get("Kardex", "").strip()
-                        if not k:
-                            continue
-                        qtde_str = p.get("Qtde programada", "0")
-                        if isinstance(qtde_str, str):
-                            qtde_str = qtde_str.replace(".", "").replace(",", ".")
-                        try:
-                            qtde = float(qtde_str)
-                        except ValueError:
-                            qtde = 0.0
-                        somas_kardex[k] = somas_kardex.get(k, 0.0) + qtde
-
                     atualizou_zero = False
                     for iz_item in itens_zero.dados:
                         k_iz = iz_item.get("kardex", "").strip()
@@ -227,6 +227,34 @@ class PedidosPendentesPage(QWidget):
                             itens_zero._salvar_json()
                         if hasattr(itens_zero, "_popular_tabela"):
                             itens_zero._popular_tabela()
+
+                estoque_page = main_win.pages.get("estoque")
+                if estoque_page and hasattr(estoque_page, "dados"):
+                    atualizou_estoque = False
+                    for est_item in estoque_page.dados:
+                        k_est = str(est_item.get("Kardex", "")).strip()
+                        if not k_est:
+                            continue
+                        
+                        novo_valor = ""
+                        if k_est in somas_kardex:
+                            soma = somas_kardex[k_est]
+                            if soma > 0:
+                                if soma.is_integer():
+                                    novo_valor = str(int(soma))
+                                else:
+                                    novo_valor = str(soma).replace(".", ",")
+                        
+                        valor_atual = str(est_item.get("Pend. entrega compras", "")).strip()
+                        if valor_atual != novo_valor:
+                            est_item["Pend. entrega compras"] = novo_valor
+                            atualizou_estoque = True
+
+                    if atualizou_estoque:
+                        if hasattr(estoque_page, "_salvar_json"):
+                            estoque_page._salvar_json()
+                        if hasattr(estoque_page, "_popular_tabela"):
+                            estoque_page._popular_tabela()
 
         except Exception as e:
             print(f"Erro ao atualizar páginas conectadas: {e}")

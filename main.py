@@ -60,6 +60,7 @@ if __name__ == "__main__":
             # a menos que o usuário feche e reabra o app -> aí auto entra de novo
             session_core.clear_current_user()
             # continua o while para novo login manual
+            
             continue
         else:
             # fechamento normal -> encerra aplicação (mantém auto para próxima abertura)
