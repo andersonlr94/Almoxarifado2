@@ -630,6 +630,10 @@ class SolicitacaoSaPage(QWidget):
         except Exception:
             pass
 
+    def _on_projeto_debito_changed(self, text):
+        if text.strip().lower() == "despesas":
+            self.campo_conta_debito.setText("email")
+
     # ── UI ────────────────────────────────────────────────────────────────
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -723,8 +727,27 @@ class SolicitacaoSaPage(QWidget):
         self.campo_num_req.setPlaceholderText("")
         self.campo_num_req.setStyleSheet("background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:2px 6px; font-size:11px; margin:0px; color:#1e293b;")
         self.campo_num_req.setToolTip("Nº de requisição — informe o número da requisição (diferente do nº da SA, que é gerado automaticamente).")
-        w_proj, self.campo_projeto_debito = criar_campo_quadro("Projeto...", "Projeto p/ débito")
+        w_proj = QWidget()
+        w_proj.setMaximumWidth(135)
+        w_proj.setMinimumWidth(105)
+        v_proj = QVBoxLayout(w_proj)
+        v_proj.setContentsMargins(0, 0, 0, 0)
+        v_proj.setSpacing(1)
+        lbl_proj = QLabel("Projeto p/ débito")
+        lbl_proj.setStyleSheet("color:#64748b; font-size:9px; font-weight:600; padding:0px; margin:0px;")
+        lbl_proj.setMaximumWidth(135)
+        lbl_proj.setFixedHeight(12)
+        v_proj.addWidget(lbl_proj)
+        self.campo_projeto_debito = QComboBox()
+        self.campo_projeto_debito.addItem("")
+        self.campo_projeto_debito.addItem("Despesas")
+        self.campo_projeto_debito.setFixedHeight(26)
+        self.campo_projeto_debito.setMaximumWidth(135)
+        self.campo_projeto_debito.setMinimumWidth(105)
+        self.campo_projeto_debito.setStyleSheet("background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:2px 6px; font-size:11px; margin:0px; color:#1e293b;")
+        v_proj.addWidget(self.campo_projeto_debito)
         w_conta, self.campo_conta_debito = criar_campo_quadro("Conta...", "Conta p/ débito")
+        self.campo_projeto_debito.currentTextChanged.connect(self._on_projeto_debito_changed)
         for w in [w_nome, w_req, w_proj, w_conta]:
             linha1.addWidget(w)
         linha1.addStretch()
@@ -1005,10 +1028,11 @@ class SolicitacaoSaPage(QWidget):
         )
         if resp != QMessageBox.StandardButton.Yes:
             return
-        for campo in [self.campo_nome_emissor, self.campo_projeto_debito,
+        for campo in [self.campo_nome_emissor,
                       self.campo_conta_debito, self.campo_destino, self.campo_local_entrega,
                       self.campo_entregar_para]:
             campo.clear()
+        self.campo_projeto_debito.setCurrentIndex(0)
         self.campo_num_req.clear()
         self.campo_data_necessidade.setDate(QDate.currentDate())
         self.itens.clear()
@@ -1023,10 +1047,11 @@ class SolicitacaoSaPage(QWidget):
         )
         if resp != QMessageBox.StandardButton.Yes:
             return
-        for campo in [self.campo_nome_emissor, self.campo_projeto_debito,
+        for campo in [self.campo_nome_emissor,
                       self.campo_conta_debito, self.campo_destino, self.campo_local_entrega,
                       self.campo_entregar_para]:
             campo.clear()
+        self.campo_projeto_debito.setCurrentIndex(0)
         self.campo_num_req.clear()
         self.campo_data_necessidade.setDate(QDate.currentDate())
         self.itens.clear()
@@ -1076,7 +1101,7 @@ class SolicitacaoSaPage(QWidget):
             "nome_emissor": nome,
             "numero_req": numero_req_usuario,
             "numero_sa": proximo_num,
-            "projeto_debito": self.campo_projeto_debito.text().strip(),
+            "projeto_debito": self.campo_projeto_debito.currentText().strip(),
             "conta_debito": self.campo_conta_debito.text().strip(),
             "destino": self.campo_destino.text().strip(),
             "local_entrega": self.campo_local_entrega.text().strip(),
@@ -1106,10 +1131,11 @@ class SolicitacaoSaPage(QWidget):
                     json.dump(sa_dados, f, ensure_ascii=False, indent=2)
                 self._mostrar_toast(f"SA {proximo_num} cadastrada com {len(self.itens)} item(ns).", erro=False)
                 # Limpa todos os campos (Nº de requisição volta a ficar vazio, é diferente da SA)
-                for campo in [self.campo_nome_emissor, self.campo_num_req, self.campo_projeto_debito,
+                for campo in [self.campo_nome_emissor, self.campo_num_req,
                               self.campo_conta_debito, self.campo_destino, self.campo_local_entrega,
                               self.campo_entregar_para]:
                     campo.clear()
+                self.campo_projeto_debito.setCurrentIndex(0)
                 self.campo_data_necessidade.setDate(QDate.currentDate())
                 self.itens.clear()
                 self._popular_tabela()
@@ -1120,10 +1146,11 @@ class SolicitacaoSaPage(QWidget):
         # fallback sem pasta configurada — apenas simula
         qtd = len(self.itens)
         self._mostrar_toast(f"SA {proximo_num} cadastrada (simulação) — {qtd} item(ns).", erro=False)
-        for campo in [self.campo_nome_emissor, self.campo_num_req, self.campo_projeto_debito,
+        for campo in [self.campo_nome_emissor, self.campo_num_req,
                       self.campo_conta_debito, self.campo_destino, self.campo_local_entrega,
                       self.campo_entregar_para]:
             campo.clear()
+        self.campo_projeto_debito.setCurrentIndex(0)
         self.campo_data_necessidade.setDate(QDate.currentDate())
         self.itens.clear()
         self._popular_tabela()

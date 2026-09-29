@@ -292,6 +292,14 @@ class SolicitacoesSaPage(QWidget):
         self.btn_aba_saida.setStyleSheet(estilo_aba)
         self.grupo_abas.addButton(self.btn_aba_saida, 2)
         linha_abas.addWidget(self.btn_aba_saida)
+
+        self.btn_aba_inserir_contas = QPushButton("Inserir contas")
+        self.btn_aba_inserir_contas.setCheckable(True)
+        self.btn_aba_inserir_contas.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_aba_inserir_contas.setStyleSheet(estilo_aba)
+        self.grupo_abas.addButton(self.btn_aba_inserir_contas, 3)
+        linha_abas.addWidget(self.btn_aba_inserir_contas)
+
         linha_abas.addStretch()
         layout.addLayout(linha_abas)
 
@@ -824,6 +832,18 @@ class SolicitacoesSaPage(QWidget):
             lay.setContentsMargins(20, 20, 20, 20)
             lay.addWidget(QLabel(f"Erro ao carregar Saída: {e}"))
         self.stacked_sa_dph.addWidget(pagina_saida)
+
+        # Página Inserir contas
+        try:
+            from ui.pages.inserir_contas_page import InserirContasPage
+            pagina_inserir_contas = InserirContasPage()
+        except Exception as e:
+            pagina_inserir_contas = QWidget()
+            lay = QVBoxLayout(pagina_inserir_contas)
+            lay.setContentsMargins(20, 20, 20, 20)
+            lay.addWidget(QLabel(f"Erro ao carregar Inserir contas: {e}"))
+        self.stacked_sa_dph.addWidget(pagina_inserir_contas)
+
         self.grupo_abas.idClicked.connect(self.stacked_sa_dph.setCurrentIndex)
 
     def _setup_shortcuts(self):
