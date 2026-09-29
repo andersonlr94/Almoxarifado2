@@ -463,6 +463,10 @@ class TransferenciaPage(QWidget):
                 enter()
                 digitar_texto(lote_tabela)
                 enter(3)
+            
+            if de_local == "10012" and para_local == "10912":
+                enter()
+                
             pyautogui.press("f4")
 
     def _limpar(self):
