@@ -738,6 +738,13 @@ class ControlePedidosPage(QWidget):
         self.tabela.verticalScrollBar().setValue(v_scroll)
         self.tabela.horizontalScrollBar().setValue(h_scroll)
 
+        # Se houver um filtro, retornar apenas um item e ele tiver DPP vazia, focar na edição da coluna DPP
+        if filtro and len(itens_exibidos) == 1:
+            if not itens_exibidos[0].get("dpp", "").strip():
+                self.tabela.setCurrentCell(0, 4)
+                QTimer.singleShot(0, lambda: self.tabela.editItem(self.tabela.item(0, 4)))
+                busca_focada = False
+
         if busca_focada:
             self.campo_busca.setFocus()
 

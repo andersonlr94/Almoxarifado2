@@ -17,6 +17,7 @@ if __name__ == "__main__":
     try:
         auto_user = auth_core.try_auto_login()
         if auto_user:
+        
             session_core.set_current_user(auto_user)
     except Exception:
         pass
