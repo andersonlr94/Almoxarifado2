@@ -42,7 +42,7 @@ class AcuracidadePage(QWidget):
         "Kardex", "Item", "Descrição", "LocNovo",
         "Primeira\ncontagem", "Segunda\ncontagem", "Divergência", "Observação",
     ]
-    COLUNAS_ESTOQUE = ["Kardex", "Código", "Descrição", "Loc novo", "Qtde novo", "Acuracidade ok"]
+    COLUNAS_ESTOQUE = ["Kardex", "Código", "Descrição", "Loc novo", "Acuracidade ok"]
 
     def __init__(self):
         super().__init__()
@@ -397,8 +397,8 @@ class AcuracidadePage(QWidget):
                         self.tabela.setColumnWidth(i, w)
         else:
             if hasattr(self.tabela.itemDelegate(), "_colunas_numericas"):
-                self.tabela.itemDelegate()._colunas_numericas = [4]
-            widths = {0: 100, 1: 120, 2: 300, 3: 110, 4: 100, 5: 120}
+                self.tabela.itemDelegate()._colunas_numericas = []
+            widths = {0: 140, 1: 140, 2: 300, 3: 110, 4: 120}
             for i, w in widths.items():
                 if i < len(colunas):
                     if i == 2:
@@ -412,8 +412,8 @@ class AcuracidadePage(QWidget):
             return
         row = item.row()
         col = item.column()
-        # A coluna 'Acuracidade ok' é a de índice 5 (na visualização de itens de estoque)
-        if col == 5:
+        # A coluna 'Acuracidade ok' é a de índice 4 (na visualização de itens de estoque)
+        if col == 4:
             novo_valor = item.text()
             item_kardex = self.tabela.item(row, 0)
             if not item_kardex:
@@ -821,12 +821,8 @@ class AcuracidadePage(QWidget):
             item3.setFlags(item3.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.tabela.setItem(row, 3, item3)
 
-            item4 = QTableWidgetItem(str(item.get("Qtde novo", "")))
-            item4.setFlags(item4.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.tabela.setItem(row, 4, item4)
-
-            # Coluna 5 é editável
-            self.tabela.setItem(row, 5, QTableWidgetItem(str(item.get("Acuracidade ok", ""))))
+            # Coluna 4 é editável
+            self.tabela.setItem(row, 4, QTableWidgetItem(str(item.get("Acuracidade ok", ""))))
         self.tabela.blockSignals(False)
 
     def _carregar_impressoras(self):
