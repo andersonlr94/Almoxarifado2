@@ -9,15 +9,18 @@ if __name__ == "__main__":
     from core import session as session_core
     from core import auth as auth_core
 
+
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     setTheme(Theme.LIGHT)
 
     # Tentativa de auto-login apenas na primeira abertura (Entrar diretamente)
     try:
+        
+        
         auto_user = auth_core.try_auto_login()
         if auto_user:
-            
+
         
             session_core.set_current_user(auto_user)
     except Exception:

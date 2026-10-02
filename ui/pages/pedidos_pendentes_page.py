@@ -212,8 +212,21 @@ class PedidosPendentesPage(QWidget):
                 itens_zero = main_win.pages.get("itens_zero")
                 if itens_zero and hasattr(itens_zero, "dados"):
                     atualizou_zero = False
+                    from datetime import datetime
+
+                    def parse_data_prog(p):
+                        data_str = p.get("Data prog", "").strip()
+                        try:
+                            if len(data_str.split("/")[-1]) == 2:
+                                return datetime.strptime(data_str, "%d/%m/%y")
+                            return datetime.strptime(data_str, "%d/%m/%Y")
+                        except (ValueError, IndexError):
+                            return datetime.max
+
                     for iz_item in itens_zero.dados:
                         k_iz = iz_item.get("kardex", "").strip()
+                        
+                        # Quantidade Programada
                         if k_iz in somas_kardex:
                             soma = somas_kardex[k_iz]
                             if soma.is_integer():
@@ -221,7 +234,24 @@ class PedidosPendentesPage(QWidget):
                             else:
                                 iz_item["qtde_prog"] = str(soma).replace(".", ",")
                             atualizou_zero = True
-                            
+
+                        # DPP
+                        if k_iz:
+                            pedidos_kardex = [p for p in self.dados if p.get("Kardex", "").strip() == k_iz]
+                            if pedidos_kardex:
+                                mais_antigo = sorted(pedidos_kardex, key=parse_data_prog)[0]
+                                numero_pc = mais_antigo.get("N do pedido", "").strip()
+                                
+                                if numero_pc and ctrl_page and hasattr(ctrl_page, "dados"):
+                                    for c_item in ctrl_page.dados:
+                                        nome_ctrl = c_item.get("nome", "").split("|")[0].strip()
+                                        if nome_ctrl == numero_pc:
+                                            dpp_val = c_item.get("dpp", "").strip()
+                                            if dpp_val and iz_item.get("dpp", "").strip() != dpp_val:
+                                                iz_item["dpp"] = dpp_val
+                                                atualizou_zero = True
+                                            break
+
                     if atualizou_zero:
                         if hasattr(itens_zero, "_salvar_json"):
                             itens_zero._salvar_json()

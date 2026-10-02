@@ -20,8 +20,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QSize, QRect
 from PySide6.QtGui import QPainter, QColor
-from ui.regras_automacao import digitar_texto, enter
+from ui.regras_automacao import digitar_texto, enter, esperar_inicio
 from ui.pages.dpp_ativos_page import CredentialsDialog
+import pyautogui
 
 try:
     from openpyxl import Workbook
@@ -156,12 +157,12 @@ class ToggleSwitch(QPushButton):
 
 class FreshStartPage(QWidget):
     COLUNAS = [
-        "Local", "Kardex", "Descrição", "Loc", "Qtde Qad", "Qtde Sci",
-        "Compras", "Fornecedor", "Pedido", "Lugar transferido",
+        "Transf", "Local", "Kardex", "Descrição", "Loc", "Qtde Qad", "Qtde Sci",
+        "Compras", "Fornecedor", "Pedido", "Lugar transf", "Loc transf", "Data",
     ]
     CHAVES = [
-        "local", "kardex", "descricao", "loc", "qtde_qad", "qtde_sci",
-        "compras", "fornecedor", "pedido", "lugar_transferido",
+        "transf", "local", "kardex", "descricao", "loc", "qtde_qad", "qtde_sci",
+        "compras", "fornecedor", "pedido", "lugar_transferido", "loc_transf", "data",
     ]
 
     def __init__(self):
@@ -311,6 +312,12 @@ class FreshStartPage(QWidget):
         self.campo_filtro.textChanged.connect(self._aplicar_filtro)
         self.filter_row.addWidget(self.campo_filtro)
 
+        self.btn_transf = QPushButton(qtawesome.icon('fa6s.truck-fast', color='#ffffff'), "  Transf")
+        self.btn_transf.setObjectName("btnPrimary")
+        self.btn_transf.setFixedHeight(32)
+        self.btn_transf.clicked.connect(self._executar_transferencia)
+        self.filter_row.addWidget(self.btn_transf)
+
         self.filter_row.addStretch()
 
         self.label_contador = QLabel("0 itens")
@@ -331,7 +338,7 @@ class FreshStartPage(QWidget):
         header = self.tabela.horizontalHeader()
         header.setStretchLastSection(True)
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        larguras = [50, 140, 200, 100, 100, 100, 100, 150, 100]
+        larguras = [50, 50, 140, 200, 100, 100, 100, 100, 150, 100, 120, 100]
         for c, largura in enumerate(larguras):
             header.resizeSection(c, largura)
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -521,15 +528,19 @@ class FreshStartPage(QWidget):
                 if len(linha) < 80:
                     continue
                 local = linha[0:9].strip()
+                lugar_transf = linha[9:18].strip()
                 kardex = linha[18:37].strip()
                 loc = linha[37:56].strip()
                 qtde_qad = linha[60:72].strip()
+                data_prn = linha[72:82].strip()
                 if local.isdigit() and kardex and loc and qtde_qad:
                     novos.append({
                         "local": local,
                         "kardex": kardex,
                         "loc": loc,
                         "qtde_qad": qtde_qad,
+                        "lugar_transferido": lugar_transf,
+                        "data": data_prn,
                     })
 
         if not novos:
@@ -557,13 +568,23 @@ class FreshStartPage(QWidget):
             chave = (item["local"], item["kardex"].upper(), item["loc"].upper())
             existente = por_chave.get(chave)
             estoque = estoque_por_kardex.get(item["kardex"].upper())
+            
+            tem_descricao = False
             if estoque is not None:
                 item["descricao"] = str(estoque.get("Descrição", ""))
                 item["qtde_sci"] = str(estoque.get("Qtde novo", ""))
                 item["fornecedor"] = str(estoque.get("Fornecedor", ""))
+                if item["descricao"].strip():
+                    tem_descricao = True
+
+            if not tem_descricao:
+                item["lugar_transferido"] = "ZMANUTE"
+
             if existente is not None:
                 existente["loc"] = item["loc"]
                 existente["qtde_qad"] = item["qtde_qad"]
+                existente["lugar_transferido"] = item["lugar_transferido"]
+                existente["data"] = item["data"]
                 if estoque is not None:
                     existente["descricao"] = item["descricao"]
                     existente["qtde_sci"] = item["qtde_sci"]
@@ -573,6 +594,9 @@ class FreshStartPage(QWidget):
                 novo_item.update(item)
                 self.dados.append(novo_item)
                 por_chave[chave] = novo_item
+
+        # Ordena a lista: itens sem descrição vão para o final
+        self.dados.sort(key=lambda x: 1 if not str(x.get("descricao", "")).strip() else 0)
 
         self._salvar_json()
         self._popular_tabela()
@@ -857,8 +881,15 @@ class FreshStartPage(QWidget):
             row = self.tabela.rowCount()
             self.tabela.insertRow(row)
             for col, chave in enumerate(self.CHAVES):
-                cell = QTableWidgetItem(str(item.get(chave, "")))
-                cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
+                cell = QTableWidgetItem()
+                if chave == "transf":
+                    cell.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+                    valor = str(item.get(chave, ""))
+                    estado = Qt.CheckState.Checked if valor.lower() in ("true", "1", "sim", "x") else Qt.CheckState.Unchecked
+                    cell.setCheckState(estado)
+                else:
+                    cell.setText(str(item.get(chave, "")))
+                    cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
                 self.tabela.setItem(row, col, cell)
             origem = self.tabela.item(row, 0)
             origem.setData(Qt.ItemDataRole.UserRole, idx)
@@ -869,9 +900,14 @@ class FreshStartPage(QWidget):
     def _inserir_linha_vazia(self):
         row = self.tabela.rowCount()
         self.tabela.insertRow(row)
-        for col in range(len(self.COLUNAS)):
-            cell = QTableWidgetItem("")
-            cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
+        for col, chave in enumerate(self.CHAVES):
+            cell = QTableWidgetItem()
+            if chave == "transf":
+                cell.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+                cell.setCheckState(Qt.CheckState.Unchecked)
+            else:
+                cell.setText("")
+                cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
             self.tabela.setItem(row, col, cell)
 
     def _item_modificado(self, item):
@@ -889,18 +925,26 @@ class FreshStartPage(QWidget):
         if idx is None:
             if row != self.tabela.rowCount() - 1:
                 return
-            if item.text().strip():
+            if chave != "transf" and item.text().strip():
                 novo_item = {}
                 for c, ch in enumerate(self.CHAVES):
                     celula = self.tabela.item(row, c)
-                    novo_item[ch] = celula.text().strip() if celula else ""
+                    if not celula:
+                        novo_item[ch] = ""
+                    elif ch == "transf":
+                        novo_item[ch] = "True" if celula.checkState() == Qt.CheckState.Checked else "False"
+                    else:
+                        novo_item[ch] = celula.text().strip()
                 self.dados.append(novo_item)
                 celula_origem.setData(Qt.ItemDataRole.UserRole, len(self.dados) - 1)
                 self._salvar_json()
                 self._inserir_linha_vazia()
             return
 
-        self.dados[idx][chave] = item.text()
+        if chave == "transf":
+            self.dados[idx][chave] = "True" if item.checkState() == Qt.CheckState.Checked else "False"
+        else:
+            self.dados[idx][chave] = item.text()
         self._salvar_json()
         if chave == "qtde_qad":
             self._calcular_total_zcentral()
@@ -958,7 +1002,7 @@ class FreshStartPage(QWidget):
                 celula.font = Font(bold=True)
             for linha in linhas:
                 ws.append(linha)
-            for col, largura in enumerate([50, 140, 200, 100, 100, 100, 100, 150, 100, 200], start=1):
+            for col, largura in enumerate([10, 15, 20, 35, 15, 15, 15, 15, 25, 15, 20, 15, 15], start=1):
                 ws.column_dimensions[chr(64 + col)].width = max(largura, 8)
             wb.save(caminho)
         except OSError as erro:
@@ -970,3 +1014,62 @@ class FreshStartPage(QWidget):
     def _atualizar_contador(self):
         total = max(0, self.tabela.rowCount() - 1)
         self.label_contador.setText(f"{total} itens")
+
+    # ── Transferência ──
+    def _executar_transferencia(self):
+        linhas_para_transferir = []
+        for row in range(self.tabela.rowCount()):
+            cell_transf = self.tabela.item(row, 0)
+            if cell_transf and cell_transf.checkState() == Qt.CheckState.Checked:
+                linhas_para_transferir.append(row)
+
+        if not linhas_para_transferir:
+            QMessageBox.information(self, "Transferência", "Nenhum item selecionado para transferência.")
+            return
+
+        esperar_inicio()
+
+        for row in linhas_para_transferir:
+            cell_kardex = self.tabela.item(row, 2)
+            cell_qtde = self.tabela.item(row, 5)
+            cell_loc = self.tabela.item(row, 4)
+            cell_lugar_transf = self.tabela.item(row, 10)
+            cell_loc_transf = self.tabela.item(row, 11)
+
+            kardex = cell_kardex.text().strip().upper() if cell_kardex else ""
+            qtde = cell_qtde.text().strip() if cell_qtde else ""
+            de_lote = cell_loc.text().strip().upper() if cell_loc else ""
+            para_lugar = cell_lugar_transf.text().strip().upper() if cell_lugar_transf else ""
+            para_lote = cell_loc_transf.text().strip().upper() if cell_loc_transf else ""
+            
+            if not para_lote:
+                para_lote = "RECEBE"
+
+            if not kardex or not qtde:
+                continue
+
+            de_local = "10912"
+            para_local = "10912"
+            de_lugar = "ZCENTRAL"
+
+            digitar_texto(kardex)
+            enter()
+            digitar_texto(qtde)
+            enter(5)
+            digitar_texto("TRANSFI")
+            enter(2)
+            digitar_texto(de_local)
+            enter()
+            digitar_texto(de_lugar)
+            enter()
+            digitar_texto(de_lote)
+            enter(2)
+            digitar_texto(para_local)
+            enter()
+            digitar_texto(para_lugar)
+            enter()
+            digitar_texto(para_lote)
+            enter(3)
+            
+            pyautogui.press("f4")
+
