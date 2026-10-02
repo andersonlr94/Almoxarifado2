@@ -4,9 +4,10 @@ import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QListWidget, QListWidgetItem, QAbstractItemView, QMessageBox,
+    QGraphicsDropShadowEffect
 )
 from PySide6.QtCore import Qt, QSize, QMimeData
-from PySide6.QtGui import QDrag
+from PySide6.QtGui import QDrag, QColor
 
 
 def _caminho_json():
@@ -17,11 +18,49 @@ def _caminho_json():
     return os.path.normpath(os.path.join(base, "Almox", "ReajusteDeCusto", "reajuste.json"))
 
 
+class ItemReajusteWidget(QWidget):
+    def __init__(self, dado, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("QWidget { background: transparent; }")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(6)
+        
+        nome = dado.get("item", "")
+        va = dado.get("valorAntigo", "")
+        vn = dado.get("valorNovo", "")
+        
+        lbl_nome = QLabel(nome)
+        lbl_nome.setStyleSheet("font-weight: 700; font-size: 14px; color: #1e293b; background: transparent;")
+        lbl_nome.setWordWrap(True)
+        layout.addWidget(lbl_nome)
+        
+        if va or vn:
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 4, 0, 0)
+            
+            lbl_va = QLabel(f"R$ {va}")
+            lbl_va.setStyleSheet("color: #94a3b8; font-size: 13px; text-decoration: line-through; background: transparent;")
+            
+            lbl_seta = QLabel(" ➔ ")
+            lbl_seta.setStyleSheet("color: #cbd5e1; font-size: 12px; font-weight: 800; background: transparent;")
+            
+            lbl_vn = QLabel(f"R$ {vn}")
+            lbl_vn.setStyleSheet("color: #10b981; font-size: 14px; font-weight: 800; background: transparent;")
+            
+            row.addWidget(lbl_va)
+            row.addWidget(lbl_seta)
+            row.addWidget(lbl_vn)
+            row.addStretch()
+            layout.addLayout(row)
+
+
 class ColunaKanban(QListWidget):
     _arrastando = None
 
-    def __init__(self, indice, callback, parent=None):
+    def __init__(self, indice, callback, factory_widget, parent=None):
         super().__init__(parent)
+        self._factory_widget = factory_widget
         self.indice = indice
         self._callback = callback
         self.setDragEnabled(True)
@@ -76,6 +115,9 @@ class ColunaKanban(QListWidget):
             elif alvo > origem:
                 alvo -= 1
             self.insertItem(alvo, item)
+            dado = item.data(Qt.ItemDataRole.UserRole)
+            if dado:
+                self.setItemWidget(item, self._factory_widget(dado))
         else:
             fonte.takeItem(fonte.row(item))
             if alvo < 0:
@@ -84,6 +126,9 @@ class ColunaKanban(QListWidget):
                 self.insertItem(alvo, item)
             item.setSelected(True)
             self.setCurrentItem(item)
+            dado = item.data(Qt.ItemDataRole.UserRole)
+            if dado:
+                self.setItemWidget(item, self._factory_widget(dado))
 
         event.acceptProposedAction()
         self._callback()
@@ -105,22 +150,20 @@ class ReajustePrecosPage(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 32, 32, 32)
+        layout.setContentsMargins(12, 6, 12, 12)
         layout.setSpacing(16)
 
-        card = QWidget()
-        card.setObjectName("pageCard")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(28, 28, 28, 28)
-        card_layout.setSpacing(16)
-
         titulo = QLabel("Reajuste de Preços")
-        titulo.setObjectName("pageTitle")
-        card_layout.addWidget(titulo)
+        titulo.setStyleSheet("font-size: 16px; font-weight: 700; color: #1e293b;")
+        
+        linha_cabecalho = QHBoxLayout()
+        linha_cabecalho.setContentsMargins(4, 0, 4, 0)
+        linha_cabecalho.addWidget(titulo)
+        linha_cabecalho.addStretch()
+        
+        layout.addLayout(linha_cabecalho)
 
-        subtitulo = QLabel("Registre reajustes e acompanhe o status em cada etapa")
-        subtitulo.setObjectName("pageSubtitle")
-        card_layout.addWidget(subtitulo)
+
 
         linha_form = QHBoxLayout()
         linha_form.setSpacing(12)
@@ -151,40 +194,52 @@ class ReajustePrecosPage(QWidget):
         self.btn_inserir.clicked.connect(self._inserir)
         linha_form.addWidget(self.btn_inserir)
 
-        card_layout.addLayout(linha_form)
+        layout.addLayout(linha_form)
 
         kanban_layout = QHBoxLayout()
         kanban_layout.setSpacing(16)
 
-        cores_fundo = ["#dbeafe", "#fef9c3", "#dcfce7"]
+        cores_fundo = ["#eff6ff", "#fefce8", "#f0fdf4"]
+        cores_borda = ["#3b82f6", "#eab308", "#22c55e"]
+        icones = ["📋", "⏳", "✅"]
 
         for i, nome in enumerate(self.COLUNAS):
             col_card = QWidget()
+            col_card.setObjectName(f"kanbanCol_{i}")
             col_card.setStyleSheet(f"""
-                QWidget {{
+                QWidget#kanbanCol_{i} {{
                     background: {cores_fundo[i]};
-                    border: 1px solid #eef1f6;
-                    border-radius: 14px;
+                    border: 1px solid #e2e8f0;
+                    border-top: 4px solid {cores_borda[i]};
+                    border-radius: 12px;
                 }}
             """)
+            shadow = QGraphicsDropShadowEffect(col_card)
+            shadow.setBlurRadius(16)
+            shadow.setXOffset(0)
+            shadow.setYOffset(4)
+            shadow.setColor(QColor(0, 0, 0, 20))
+            col_card.setGraphicsEffect(shadow)
+            
             col_layout = QVBoxLayout(col_card)
-            col_layout.setContentsMargins(12, 12, 12, 12)
-            col_layout.setSpacing(10)
+            col_layout.setContentsMargins(16, 16, 16, 16)
+            col_layout.setSpacing(12)
 
-            header = QLabel(nome)
-            header.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+            header = QLabel(f"{icones[i]}  {nome}")
+            header.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             header.setStyleSheet("""
                 QLabel {
-                    color: #1e1b4b;
+                    color: #0f172a;
                     font-family: 'Segoe UI', 'Arial', sans-serif;
                     font-size: 15px;
-                    font-weight: 700;
-                    letter-spacing: 1px;
+                    font-weight: 800;
+                    border: none;
+                    background: transparent;
                 }
             """)
             col_layout.addWidget(header)
 
-            lista = ColunaKanban(i, self._apos_movimento)
+            lista = ColunaKanban(i, self._apos_movimento, self._criar_widget_item)
             lista.setStyleSheet("""
                 QListWidget {
                     background: transparent;
@@ -194,21 +249,19 @@ class ReajustePrecosPage(QWidget):
 
                 QListWidget::item {
                     background: #ffffff;
-                    color: #374151;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 10px;
-                    padding: 8px 12px;
-                    margin: 4px 2px;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 8px;
+                    margin: 4px 0px;
                 }
 
                 QListWidget::item:hover {
-                    border-color: #c7d2fe;
+                    border-color: #94a3b8;
+                    background: #f8fafc;
                 }
 
                 QListWidget::item:selected {
-                    background: #eef2ff;
-                    border-color: #6366f1;
-                    color: #1e1b4b;
+                    background: #ffffff;
+                    border: 2px solid #6366f1;
                 }
             """)
             col_layout.addWidget(lista, 1)
@@ -216,9 +269,7 @@ class ReajustePrecosPage(QWidget):
 
             kanban_layout.addWidget(col_card, 1)
 
-        card_layout.addLayout(kanban_layout, 1)
-
-        layout.addWidget(card)
+        layout.addLayout(kanban_layout, 1)
 
     def _carregar_dados(self):
         try:
@@ -236,20 +287,17 @@ class ReajustePrecosPage(QWidget):
             col_idx = self.COLUNAS.index(status) if status in self.COLUNAS else 0
             item = self._criar_item(dado)
             self.colunas[col_idx].addItem(item)
+            self.colunas[col_idx].setItemWidget(item, self._criar_widget_item(dado))
 
     def _criar_item(self, dado):
-        item = QListWidgetItem(self._formatar(dado))
+        item = QListWidgetItem()
         item.setData(Qt.ItemDataRole.UserRole, dado)
-        item.setSizeHint(QSize(0, 48))
+        # Altura do widget costuma dar ~84px com duas linhas
+        item.setSizeHint(QSize(0, 84))
         return item
 
-    def _formatar(self, dado):
-        nome = dado.get("item", "")
-        va = dado.get("valorAntigo", "")
-        vn = dado.get("valorNovo", "")
-        if va or vn:
-            return f"{nome}\n{va} → {vn}"
-        return nome
+    def _criar_widget_item(self, dado):
+        return ItemReajusteWidget(dado)
 
     def _inserir(self):
         nome = self.campo_item.text().strip()
@@ -266,7 +314,9 @@ class ReajustePrecosPage(QWidget):
             "valorNovo": self.campo_valor_novo.text().strip(),
             "status": self.COLUNAS[0],
         }
-        self.colunas[0].addItem(self._criar_item(dado))
+        item_novo = self._criar_item(dado)
+        self.colunas[0].addItem(item_novo)
+        self.colunas[0].setItemWidget(item_novo, self._criar_widget_item(dado))
         self.campo_item.clear()
         self.campo_valor_antigo.clear()
         self.campo_valor_novo.clear()

@@ -13,7 +13,6 @@ from ui.pages.dpp_ativos_page import DppAtivosPage
 from ui.pages.estoque_page import EstoquePage
 from ui.pages.itens_zero_page import ItensZeroPage
 from ui.pages.controle_pedidos_page import ControlePedidosPage
-from ui.pages.reajuste_precos_page import ReajustePrecosPage
 from ui.pages.settings_page import SettingsPage
 from ui.pages.fornecedores_page import FornecedoresPage
 from ui.pages.pedidos_pendentes_page import PedidosPendentesPage
@@ -220,7 +219,6 @@ class MainWindow(QMainWindow):
             ("material_holders",    "Material Holders",    False),
             ("automacoes",          "Automações",          False),
             ("fornecedores",        "Fornecedores",        False),
-            ("reajuste_precos",     "Reajuste de Preços",  False),
             ("dpp_ativos",          "DPP Ativos",          False),
             ("usuarios",            "Usuários",            False),
             ("configuracoes",       "Configurações",       False),
@@ -328,19 +326,20 @@ class MainWindow(QMainWindow):
         user_row.addLayout(texts)
         user_row.addStretch()
 
-        footer_layout.addLayout(user_row)
-
-        self.btn_logout = QPushButton(" Sair")
+        self.btn_logout = QPushButton("")
         try:
             self.btn_logout.setIcon(qtawesome.icon("fa6s.right-from-bracket", color="#ef4444"))
         except Exception:
-            pass
+            self.btn_logout.setText("Sair")
+            
         self.btn_logout.setObjectName("btnLogout")
-        self.btn_logout.setFixedHeight(30)
+        self.btn_logout.setFixedSize(32, 32)
         self.btn_logout.setCursor(Qt.PointingHandCursor)
         self.btn_logout.setToolTip("Encerrar sessão e voltar ao login")
         self.btn_logout.clicked.connect(self._logout)
-        footer_layout.addWidget(self.btn_logout)
+        user_row.addWidget(self.btn_logout)
+
+        footer_layout.addLayout(user_row)
 
         self.footer_widget = footer
         self.footer_layout = footer_layout
@@ -699,7 +698,6 @@ class MainWindow(QMainWindow):
             ("material_holders",      MaterialHoldersPage),
             ("automacoes",            AutomacoesPage),
             ("fornecedores",          FornecedoresPage),
-            ("reajuste_precos",       ReajustePrecosPage),
             ("dpp_ativos",            DppAtivosPage),
             ("usuarios",              UsuariosPage),
             ("configuracoes",         SettingsPage),

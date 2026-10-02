@@ -374,6 +374,13 @@ class DigitarAEPage(QWidget):
         linha_botoes.addWidget(btn_cf)
 
         linha_botoes.addStretch()
+
+        btn_identificacao = QPushButton("Identificação")
+        btn_identificacao.setObjectName("btnGradientAmber")
+        btn_identificacao.setFixedHeight(34)
+        btn_identificacao.clicked.connect(self._abrir_identificacao)
+        linha_botoes.addWidget(btn_identificacao)
+
         card_layout.addLayout(linha_botoes)
 
         # Layout for dynamically created ID buttons
@@ -893,6 +900,440 @@ class DigitarAEPage(QWidget):
         """Open the Classificação Fiscal dialog."""
         dlg = ClassificacaoFiscalDialog(self)
         dlg.exec()
+
+    def _abrir_identificacao(self):
+        """Open the Identificação print layout dialog."""
+        dlg = IdentificacaoDialog(self)
+        dlg.exec()
+
+
+class IdentificacaoDialog(QDialog):
+    """Dialog for printing identification layout with three sections:
+    - Envio para Pinhal (top)
+    - A/C: (middle)
+    - NF: (bottom)
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Identificação - Layout para Impressão")
+        self.setMinimumSize(1200, 770)
+        self.tamanho_quadro = 'A4'
+        self._setup_ui()
+
+    def _setup_ui(self):
+        from PySide6.QtPrintSupport import QPrintPreviewWidget, QPrinter, QPrinterInfo
+        from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QLineEdit, QLabel, QPushButton, QWidget, QComboBox
+        from PySide6.QtGui import QPageSize, QPageLayout
+        from PySide6.QtCore import QMarginsF, Qt
+
+        self.setStyleSheet("QDialog { background-color: #f8fafc; }")
+
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(24, 24, 24, 24)
+        main_layout.setSpacing(24)
+
+        # Configurar a impressora base para o preview
+        self.printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        self.printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+        self.printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+        self.printer.setPageMargins(QMarginsF(17.8, 19.1, 17.8, 19.1), QPageLayout.Unit.Millimeter)
+
+        # Lado Esquerdo: Widget de preview
+        self.preview_widget = QPrintPreviewWidget(self.printer, self)
+        self.preview_widget.setZoomMode(QPrintPreviewWidget.ZoomMode.FitInView)
+        self.preview_widget.paintRequested.connect(self._desenhar_impressao)
+        self.preview_widget.setStyleSheet("""
+            QPrintPreviewWidget {
+                border: none;
+                background-color: transparent;
+            }
+            QGraphicsView {
+                background-color: #e2e8f0;
+                border: 1px solid #cbd5e1;
+                border-radius: 16px;
+            }
+        """)
+        main_layout.addWidget(self.preview_widget, stretch=7)
+
+        # Lado Direito: Painel de controles (Card)
+        right_card = QWidget()
+        right_card.setMinimumWidth(320)
+        right_card.setStyleSheet("""
+            QWidget#rightCard {
+                background-color: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 16px;
+            }
+        """)
+        right_card.setObjectName("rightCard")
+        right_panel = QVBoxLayout(right_card)
+        right_panel.setContentsMargins(24, 28, 24, 28)
+        right_panel.setSpacing(24)
+
+        titulo_painel = QLabel("Dados da Etiqueta")
+        titulo_painel.setStyleSheet("font-size: 18px; font-weight: 800; color: #0f172a; border: none; background: transparent;")
+        right_panel.addWidget(titulo_painel)
+
+        # Campos de entrada
+        campos_layout = QVBoxLayout()
+        campos_layout.setSpacing(16)
+
+        estilo_label = "font-size: 12px; font-weight: 700; color: #64748b; border: none; background: transparent;"
+        estilo_campo = """
+            QLineEdit {
+                font-size: 15px;
+                font-weight: 600;
+                color: #0f172a;
+                border: 2px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 10px 14px;
+                background-color: #f8fafc;
+            }
+            QLineEdit:focus {
+                border-color: #3b82f6;
+                background-color: #ffffff;
+            }
+            QLineEdit:hover {
+                border-color: #cbd5e1;
+            }
+        """
+        
+        # Destino
+        layout_destino = QVBoxLayout()
+        layout_destino.setSpacing(6)
+        label_destino = QLabel("ENVIO PARA")
+        label_destino.setStyleSheet(estilo_label)
+        self.campo_destino = QLineEdit()
+        self.campo_destino.setPlaceholderText("Ex: PINHAL")
+        self.campo_destino.setStyleSheet(estilo_campo)
+        self.campo_destino.textChanged.connect(self._atualizar_preview)
+        layout_destino.addWidget(label_destino)
+        layout_destino.addWidget(self.campo_destino)
+        campos_layout.addLayout(layout_destino)
+
+        # A/C
+        layout_ac = QVBoxLayout()
+        layout_ac.setSpacing(6)
+        label_ac = QLabel("A/C")
+        label_ac.setStyleSheet(estilo_label)
+        self.campo_ac = QLineEdit()
+        self.campo_ac.setPlaceholderText("Nome ou Setor")
+        self.campo_ac.setStyleSheet(estilo_campo)
+        self.campo_ac.textChanged.connect(self._atualizar_preview)
+        layout_ac.addWidget(label_ac)
+        layout_ac.addWidget(self.campo_ac)
+        campos_layout.addLayout(layout_ac)
+
+        # NF
+        layout_nf = QVBoxLayout()
+        layout_nf.setSpacing(6)
+        label_nf = QLabel("NOTA FISCAL")
+        label_nf.setStyleSheet(estilo_label)
+        self.campo_nf = QLineEdit()
+        self.campo_nf.setPlaceholderText("Nº da Nota")
+        self.campo_nf.setStyleSheet(estilo_campo)
+        self.campo_nf.textChanged.connect(self._atualizar_preview)
+        layout_nf.addWidget(label_nf)
+        layout_nf.addWidget(self.campo_nf)
+        campos_layout.addLayout(layout_nf)
+
+        # Separador
+        linha = QWidget()
+        linha.setFixedHeight(1)
+        linha.setStyleSheet("background-color: #f1f5f9; border: none;")
+        campos_layout.addWidget(linha)
+
+        # Seleção de Impressora
+        layout_impressora = QVBoxLayout()
+        layout_impressora.setSpacing(6)
+        label_impressora = QLabel("IMPRESSORA")
+        label_impressora.setStyleSheet(estilo_label)
+        
+        self.combo_impressora = QComboBox()
+        self.combo_impressora.setStyleSheet(estilo_campo.replace("QLineEdit", "QComboBox") + """
+            QComboBox::drop-down { border-left: 1px solid #e2e8f0; width: 34px; }
+        """)
+        impressoras = QPrinterInfo.availablePrinterNames()
+        self.combo_impressora.addItems(impressoras)
+        
+        impressora_padrao = QPrinterInfo.defaultPrinterName()
+        if impressora_padrao in impressoras:
+            self.combo_impressora.setCurrentText(impressora_padrao)
+            
+        layout_impressora.addWidget(label_impressora)
+        layout_impressora.addWidget(self.combo_impressora)
+        campos_layout.addLayout(layout_impressora)
+
+        # Tamanho A4 / A5
+        layout_tamanho = QVBoxLayout()
+        layout_tamanho.setSpacing(8)
+        label_tamanho = QLabel("FORMATO DA ETIQUETA")
+        label_tamanho.setStyleSheet(estilo_label)
+        layout_tamanho.addWidget(label_tamanho)
+
+        estilo_btn_toggle = """
+            QPushButton {
+                background-color: #f1f5f9;
+                color: #64748b;
+                border: none;
+                border-radius: 8px;
+                padding: 10px;
+                font-weight: 700;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: #e2e8f0;
+                color: #475569;
+            }
+            QPushButton:checked {
+                background-color: #1e1b4b;
+                color: #ffffff;
+            }
+        """
+
+        tamanho_layout = QHBoxLayout()
+        tamanho_layout.setSpacing(8)
+        self.btn_a4 = QPushButton("A4")
+        self.btn_a4.setCheckable(True)
+        self.btn_a4.setChecked(True)
+        self.btn_a4.setStyleSheet(estilo_btn_toggle)
+        self.btn_a4.clicked.connect(lambda: self._mudar_tamanho('A4'))
+
+        self.btn_a5 = QPushButton("A5")
+        self.btn_a5.setCheckable(True)
+        self.btn_a5.setStyleSheet(estilo_btn_toggle)
+        self.btn_a5.clicked.connect(lambda: self._mudar_tamanho('A5'))
+
+        tamanho_layout.addWidget(self.btn_a4)
+        tamanho_layout.addWidget(self.btn_a5)
+        
+        layout_tamanho.addLayout(tamanho_layout)
+        campos_layout.addLayout(layout_tamanho)
+
+        # Quantidade de Cópias
+        layout_qtd = QHBoxLayout()
+        layout_qtd.setSpacing(10)
+        
+        label_qtd = QLabel("QTDE")
+        label_qtd.setStyleSheet(estilo_label)
+        
+        btn_layout_setas = QVBoxLayout()
+        btn_layout_setas.setSpacing(2)
+        btn_up = QPushButton("▲")
+        btn_down = QPushButton("▼")
+        btn_up.setFixedSize(22, 18)
+        btn_down.setFixedSize(22, 18)
+        
+        estilo_btn_seta = """
+            QPushButton {
+                background-color: #f1f5f9;
+                color: #475569;
+                border: 1px solid #cbd5e1;
+                border-radius: 4px;
+                font-size: 9px;
+            }
+            QPushButton:hover {
+                background-color: #e2e8f0;
+            }
+        """
+        btn_up.setStyleSheet(estilo_btn_seta)
+        btn_down.setStyleSheet(estilo_btn_seta)
+        btn_layout_setas.addWidget(btn_up)
+        btn_layout_setas.addWidget(btn_down)
+        
+        self.campo_qtd = QLineEdit("1")
+        self.campo_qtd.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.campo_qtd.setStyleSheet(estilo_campo)
+        self.campo_qtd.setFixedWidth(60)
+        
+        def increment_qtd():
+            try: val = int(self.campo_qtd.text())
+            except: val = 1
+            if val < 999: self.campo_qtd.setText(str(val + 1))
+            
+        def decrement_qtd():
+            try: val = int(self.campo_qtd.text())
+            except: val = 1
+            if val > 1: self.campo_qtd.setText(str(val - 1))
+            
+        btn_up.clicked.connect(increment_qtd)
+        btn_down.clicked.connect(decrement_qtd)
+        
+        layout_qtd.addWidget(label_qtd)
+        layout_qtd.addWidget(self.campo_qtd)
+        layout_qtd.addLayout(btn_layout_setas)
+        layout_qtd.addStretch(1)
+
+        campos_layout.addLayout(layout_qtd)
+
+        right_panel.addLayout(campos_layout)
+        
+        # Espaçador para empurrar os botões para baixo
+        right_panel.addStretch(1)
+
+        # Botões Principais
+        btn_layout = QVBoxLayout()
+        btn_layout.setSpacing(10)
+
+        btn_imprimir = QPushButton("Imprimir Etiqueta")
+        btn_imprimir.setFixedHeight(44)
+        btn_imprimir.setStyleSheet("""
+            QPushButton {
+                background-color: #3b82f6;
+                color: #ffffff;
+                border: none;
+                border-radius: 10px;
+                font-size: 15px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background-color: #2563eb;
+            }
+            QPushButton:pressed {
+                background-color: #1d4ed8;
+            }
+        """)
+        btn_imprimir.clicked.connect(self._imprimir)
+        btn_layout.addWidget(btn_imprimir)
+
+        btn_fechar = QPushButton("Cancelar")
+        btn_fechar.setFixedHeight(44)
+        btn_fechar.setStyleSheet("""
+            QPushButton {
+                background-color: #f1f5f9;
+                color: #475569;
+                border: none;
+                border-radius: 10px;
+                font-size: 15px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background-color: #e2e8f0;
+                color: #0f172a;
+            }
+            QPushButton:pressed {
+                background-color: #cbd5e1;
+            }
+        """)
+        btn_fechar.clicked.connect(self.accept)
+        btn_layout.addWidget(btn_fechar)
+
+        right_panel.addLayout(btn_layout)
+
+        main_layout.addWidget(right_card, stretch=3)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Forçar o preview a se desenhar após exibir o dialog
+        self._atualizar_preview()
+
+    def _mudar_tamanho(self, tamanho):
+        self.tamanho_quadro = tamanho
+        self.btn_a4.setChecked(tamanho == 'A4')
+        self.btn_a5.setChecked(tamanho == 'A5')
+        self._atualizar_preview()
+
+    def _atualizar_preview(self):
+        if hasattr(self, 'preview_widget'):
+            self.preview_widget.updatePreview()
+
+    def _desenhar_impressao(self, printer):
+        """Função unificada que desenha tanto na tela (preview) quanto na impressora real."""
+        from PySide6.QtGui import QPainter, QFont, QPen, QColor
+        from PySide6.QtCore import Qt, QRectF
+        from PySide6.QtPrintSupport import QPrinter
+
+        painter = QPainter(printer)
+        
+        # O (0,0) do QPainter no QPrinter começa na margem imprimível (pageRect).
+        page_rect = printer.pageRect(QPrinter.Unit.DevicePixel)
+        
+        width = page_rect.width()
+        height = page_rect.height()
+
+        if getattr(self, 'tamanho_quadro', 'A4') == 'A5':
+            # Usa apenas a metade esquerda da folha (formato retrato A5)
+            width = width / 2
+
+        # Para garantir que o quadro fique centralizado e não seja cortado por
+        # margens não imprimíveis da impressora, criamos uma margem extra de 5%.
+        margem_x = width * 0.05
+        margem_y = height * 0.05
+
+        # Importante: Como o QPainter já considera (0,0) o início da área útil,
+        # não devemos somar page_rect.left() ou top().
+        content_rect = QRectF(
+            margem_x, 
+            margem_y, 
+            width - 2 * margem_x, 
+            height - 2 * margem_y
+        )
+
+        # Desenhar quadro da folha
+        pen_width = int(content_rect.width() * 0.003)
+        if pen_width < 1: pen_width = 1
+        painter.setPen(QPen(QColor("#1e1b4b"), pen_width))
+        painter.drawRect(content_rect)
+
+        third_height = content_rect.height() / 3
+
+        painter.setPen(QPen(QColor("#1e1b4b"), pen_width))
+        painter.drawLine(content_rect.left(), int(content_rect.top() + third_height), content_rect.right(), int(content_rect.top() + third_height))
+        painter.drawLine(content_rect.left(), int(content_rect.top() + 2 * third_height), content_rect.right(), int(content_rect.top() + 2 * third_height))
+
+        # Configuração de fonte dinâmica baseada na menor dimensão
+        ref_size = min(content_rect.width(), content_rect.height())
+
+        font_texto = QFont("Arial")
+        font_texto.setBold(True)
+        # Tamanho adaptado para caber o texto na mesma linha
+        font_texto.setPixelSize(int(ref_size * 0.07))
+
+        # Seção 1: Envio para Pinhal / Destino
+        destino = self.campo_destino.text().strip().upper() if hasattr(self, 'campo_destino') else ""
+        if not destino:
+            destino = "PINHAL"
+        texto_destino = f"ENVIO PARA {destino}"
+
+        painter.setFont(font_texto)
+        painter.setPen(QColor("#1e1b4b"))
+        painter.drawText(QRectF(content_rect.left(), content_rect.top(), content_rect.width(), third_height), Qt.AlignmentFlag.AlignCenter, texto_destino)
+
+        # Seção 2: A/C
+        ac_text = self.campo_ac.text().strip() if hasattr(self, 'campo_ac') else ""
+        texto_ac = f"A/C: {ac_text}" if ac_text else "A/C:"
+        rect_secao_2 = QRectF(content_rect.left(), content_rect.top() + third_height, content_rect.width(), third_height)
+        painter.drawText(rect_secao_2, Qt.AlignmentFlag.AlignCenter, texto_ac)
+
+        # Seção 3: NF
+        nf_text = self.campo_nf.text().strip() if hasattr(self, 'campo_nf') else ""
+        texto_nf = f"NF: {nf_text}" if nf_text else "NF:"
+        rect_secao_3 = QRectF(content_rect.left(), content_rect.top() + 2 * third_height, content_rect.width(), third_height)
+        painter.drawText(rect_secao_3, Qt.AlignmentFlag.AlignCenter, texto_nf)
+
+        painter.end()
+
+    def _imprimir(self):
+        from PySide6.QtWidgets import QMessageBox
+
+        nome_impressora = self.combo_impressora.currentText()
+        if nome_impressora:
+            self.printer.setPrinterName(nome_impressora)
+
+        if hasattr(self, 'campo_qtd'):
+            try:
+                qtd = int(self.campo_qtd.text())
+            except:
+                qtd = 1
+            self.printer.setCopyCount(qtd)
+
+        try:
+            self._desenhar_impressao(self.printer)
+            QMessageBox.information(self, "Sucesso", f"Identificação enviada para a impressora {nome_impressora}!")
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Ocorreu um erro ao tentar imprimir: {e}")
 
 
 class ClassificacaoFiscalDialog(QDialog):

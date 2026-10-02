@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QEvent, Qt, QSize, Signal
 from PySide6.QtGui import QFont, QIcon, QShortcut, QKeySequence
+from ui.pages.reajuste_precos_page import ReajustePrecosPage
 
 
 class LembreteEdit(QLineEdit):
@@ -100,7 +101,7 @@ class QuadroLembretes(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 18, 18, 14)
+        layout.setContentsMargins(18, 6, 18, 14)
         layout.setSpacing(12)
 
         # Cabeçalho do quadro
@@ -484,8 +485,13 @@ class LembretesPage(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 32, 32, 32)
-        layout.setSpacing(16)
+        layout.setContentsMargins(32, 12, 32, 32)
+        
+        card = QWidget()
+        card.setObjectName("pageCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(8, 8, 8, 8)
+        card_layout.setSpacing(16)
 
         self.quadro_sa_pendente = QuadroLembretes(
             "Lembrete de SA pendente",
@@ -499,6 +505,7 @@ class LembretesPage(QWidget):
             "Lembretes pessoal",
             _caminho_lembretes_pessoais_json(),
         )
+        self.pagina_reajuste_precos = ReajustePrecosPage()
 
         linha_abas = QHBoxLayout()
         linha_abas.setSpacing(8)
@@ -534,6 +541,7 @@ class LembretesPage(QWidget):
             (self.quadro_sa_pendente, "Lembrete de SA pendente"),
             (self.quadro_time, "Lembrete do time"),
             (self.quadro_pessoal, "Lembretes pessoal"),
+            (self.pagina_reajuste_precos, "Reajuste de Preços"),
         ]):
             btn = QPushButton(titulo)
             btn.setCheckable(True)
@@ -548,14 +556,9 @@ class LembretesPage(QWidget):
         self.grupo_abas.idClicked.connect(self.stacked.setCurrentIndex)
         
         layout.addLayout(linha_abas)
+        card_layout.addWidget(self.stacked, 1)
 
-        pane = QFrame()
-        pane.setStyleSheet("QFrame { background: #ffffff; border: 1px solid #eef1f6; border-radius: 16px; }")
-        pane_layout = QVBoxLayout(pane)
-        pane_layout.setContentsMargins(12, 12, 12, 12)
-        pane_layout.addWidget(self.stacked)
-        
-        layout.addWidget(pane, 1)
+        layout.addWidget(card)
 
         self.atalho_novo = QShortcut(QKeySequence("Ctrl+N"), self)
         self.atalho_novo.activated.connect(self._novo_lembrete_na_aba_ativa)
@@ -564,6 +567,8 @@ class LembretesPage(QWidget):
         self.quadro_sa_pendente._carregar_lembretes()
         self.quadro_time._carregar_lembretes()
         self.quadro_pessoal._carregar_lembretes()
+        if hasattr(self.pagina_reajuste_precos, "_carregar_dados"):
+            self.pagina_reajuste_precos._carregar_dados()
 
     def _novo_lembrete_na_aba_ativa(self):
         quadro = self.tabs.currentWidget()
