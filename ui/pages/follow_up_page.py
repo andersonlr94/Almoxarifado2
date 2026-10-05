@@ -79,6 +79,11 @@ class FollowUpPage(QWidget):
         self.btn_exportar.clicked.connect(self._exportar_excel)
         linha_top.addWidget(self.btn_exportar)
 
+        self.btn_email = QPushButton("Enviar por Email")
+        self.btn_email.setFixedHeight(30)
+        self.btn_email.clicked.connect(self._enviar_email)
+        linha_top.addWidget(self.btn_email)
+
         self.label_contador = QLabel("0 itens")
         self.label_contador.setObjectName("statusLabel")
         linha_top.addWidget(self.label_contador)
@@ -320,3 +325,143 @@ class FollowUpPage(QWidget):
                 QMessageBox.information(self, "Sucesso", "Dados exportados com sucesso!")
             except Exception as e:
                 QMessageBox.critical(self, "Erro", f"Ocorreu um erro ao exportar: {str(e)}")
+
+    def _enviar_email(self):
+        try:
+            import win32com.client as win32
+        except ImportError:
+            QMessageBox.warning(self, "Aviso", "Biblioteca pywin32 não encontrada para integrar com o Outlook.")
+            return
+
+        colunas_desejadas = ["DPP", "Kardex", "Código", "Qtde programada", "Qtde entregue", "Qtde pendente"]
+        colunas_exportacao = ["DPP", "KARDEX", "CÓDIGO", "PROGRAMADO", "ENTREGUE", "PENDENTE"]
+        colunas_indices = []
+        for col in colunas_desejadas:
+            if col in self.COLUNAS:
+                colunas_indices.append(self.COLUNAS.index(col))
+            else:
+                colunas_indices.append(-1)
+
+        # Construir tabela HTML
+        html = [
+            "<html><head><meta charset='utf-8'></head><body>",
+            "<!--StartFragment-->",
+            "<p style='font-family: Arial, sans-serif;'>Olá,<br><br>Segue a tabela de follow-up:</p>",
+            "<table border='1' cellpadding='0' cellspacing='0' style='border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11px; line-height: 1.0;'>"
+        ]
+        
+        html.append("<tr>")
+        for col_name in colunas_exportacao:
+            html.append(f"<th bgcolor='#0070C0' align='center' style='background-color: #0070C0; color: #ffffff; text-align: center; padding-left: 4px; padding-right: 4px; mso-line-height-rule: exactly; line-height: 11px;'><center><span style='color: #ffffff;'><font color='#ffffff'>{col_name}</font></span></center></th>")
+        html.append("</tr>")
+
+        for row in range(self.tabela.rowCount()):
+            html.append("<tr>")
+            for col_idx in colunas_indices:
+                if col_idx != -1:
+                    item = self.tabela.item(row, col_idx)
+                    texto = item.text() if item else ""
+                else:
+                    texto = ""
+                html.append(f"<td align='center' style='text-align: center; padding-left: 4px; padding-right: 4px; mso-line-height-rule: exactly; line-height: 11px;'><center>{texto}</center></td>")
+            html.append("</tr>")
+
+        html.append("</table>")
+        html.append("<p>Atenciosamente,</p>")
+        html.append("<!--EndFragment-->")
+        html.append("</body></html>")
+
+        html_body = "".join(html)
+
+        try:
+            outlook = win32.Dispatch('outlook.application')
+            mail = outlook.CreateItem(0) # 0 = olMailItem
+            mail.Subject = "Follow-up de Pedidos"
+            
+            fornecedores_tabela = set()
+            col_fornecedor_idx = self.COLUNAS.index("Fornecedor") if "Fornecedor" in self.COLUNAS else -1
+            
+            if col_fornecedor_idx != -1:
+                for row in range(self.tabela.rowCount()):
+                    item_forn = self.tabela.item(row, col_fornecedor_idx)
+                    if item_forn:
+                        forn_texto = item_forn.text().strip()
+                        if forn_texto:
+                            fornecedores_tabela.add(forn_texto)
+
+            if len(fornecedores_tabela) == 1:
+                fornecedor_unico = fornecedores_tabela.pop()
+                mail.Subject = f"Follow-up de Pedidos - {fornecedor_unico}"
+                
+            mail.HTMLBody = html_body
+            mail.Display()
+            
+        except Exception as e:
+            try:
+                import win32clipboard
+                
+                # Prepara o HTML especificamente para o formato de Área de Transferência do Windows
+                html_str = html_body
+                header = (
+                    "Version:0.9\r\n"
+                    "StartHTML:{0:08d}\r\n"
+                    "EndHTML:{1:08d}\r\n"
+                    "StartFragment:{2:08d}\r\n"
+                    "EndFragment:{3:08d}\r\n"
+                )
+                
+                html_bytes = html_str.encode('utf-8')
+                dummy_header = header.format(0,0,0,0)
+                header_len = len(dummy_header.encode('utf-8'))
+                
+                start_html = header_len
+                end_html = header_len + len(html_bytes)
+                
+                start_fragment_str = "<!--StartFragment-->"
+                end_fragment_str = "<!--EndFragment-->"
+                
+                start_frag_idx = html_bytes.find(start_fragment_str.encode('utf-8')) + len(start_fragment_str.encode('utf-8'))
+                end_frag_idx = html_bytes.find(end_fragment_str.encode('utf-8'))
+                
+                start_fragment = header_len + start_frag_idx
+                end_fragment = header_len + end_frag_idx
+                
+                header_formatado = header.format(start_html, end_html, start_fragment, end_fragment)
+                clipboard_html = header_formatado.encode('utf-8') + html_bytes
+                
+                win32clipboard.OpenClipboard()
+                win32clipboard.EmptyClipboard()
+                cf_html = win32clipboard.RegisterClipboardFormat("HTML Format")
+                win32clipboard.SetClipboardData(cf_html, clipboard_html)
+                
+                # Também adicionar texto puro como fallback de segurança
+                text_fallback = ["Olá,\r\n\r\nSegue a tabela de follow-up:\r\n"]
+                cabecalho = " | ".join(colunas_exportacao)
+                text_fallback.append(cabecalho)
+                text_fallback.append("-" * len(cabecalho))
+                
+                for row in range(self.tabela.rowCount()):
+                    linha = []
+                    for col_idx in colunas_indices:
+                        if col_idx != -1:
+                            item = self.tabela.item(row, col_idx)
+                            linha.append(item.text() if item else "")
+                        else:
+                            linha.append("")
+                    text_fallback.append(" | ".join(linha))
+                
+                text_fallback.append("\r\nAtenciosamente,")
+                texto_puro = "\r\n".join(text_fallback)
+                
+                win32clipboard.SetClipboardText(texto_puro, win32clipboard.CF_UNICODETEXT)
+                win32clipboard.CloseClipboard()
+
+                QMessageBox.information(self, "Tabela copiada", 
+                    "A tabela formatada foi COPIADA para a sua área de transferência com formato nativo do Windows!\n\n"
+                    "Basta abrir o seu e-mail preferido, criar uma nova mensagem e colar (Ctrl + V).")
+            except Exception as clipboard_err:
+                try:
+                    win32clipboard.CloseClipboard()
+                except:
+                    pass
+                QMessageBox.critical(self, "Erro", f"Ocorreu um erro ao abrir o Outlook: {str(e)}\n\nE falha ao copiar: {str(clipboard_err)}")

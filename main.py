@@ -10,9 +10,13 @@ if __name__ == "__main__":
     from core import auth as auth_core
 
 
+
+
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     setTheme(Theme.LIGHT)
+
+
 
     # Tentativa de auto-login apenas na primeira abertura (Entrar diretamente)
     try:
@@ -25,6 +29,7 @@ if __name__ == "__main__":
             session_core.set_current_user(auto_user)
     except Exception:
         pass
+    
 
     # Loop de login -> MainWindow -> logout -> login novamente
     exit_code = 0
