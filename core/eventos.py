@@ -28,7 +28,7 @@ import uuid
 import time
 from datetime import datetime, timedelta
 
-COOLDOWN_SEG = 30  # não permite novo clique para o mesmo destinatário antes disso
+COOLDOWN_SEG = 5  # não permite novo clique para o mesmo destinatário antes disso
 TTL_SEG = 60 * 60 * 2  # auto-limpeza após 2h (caso destinatário nunca leia)
 BOTAO_ID = "btn_enviar_separando"  # novo nome (mantém compat com btn_notificar_separando)
 BOTAO_ID_LEGADO = "btn_notificar_separando"

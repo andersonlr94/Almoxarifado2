@@ -18,12 +18,14 @@ if __name__ == "__main__":
 
 
 
+
     # Tentativa de auto-login apenas na primeira abertura (Entrar diretamente)
     try:
         
         
         auto_user = auth_core.try_auto_login()
         if auto_user:
+
 
         
             session_core.set_current_user(auto_user)

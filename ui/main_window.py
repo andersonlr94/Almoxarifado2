@@ -111,7 +111,8 @@ class MainWindow(QMainWindow):
         # banner de notificação (overlay no content)
         self._notif_banner = None
         self._notif_timer = None
-        self._iniciar_watcher_eventos()
+        # Desativado temporariamente a pedido do usuário
+        # self._iniciar_watcher_eventos()
         # contador de eventos não lidos (sino)
         self._eventos_nao_lidos = 0
         self._badge_notif = None

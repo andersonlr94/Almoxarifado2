@@ -375,9 +375,27 @@ class DetalhesEstoqueDialog(QDialog):
         coluna_direita_layout.addStretch()
         colunas.addWidget(coluna_direita, 1)
         layout.addLayout(colunas)
+        linha_rodape = QHBoxLayout()
+        
+        self.combo_enviar_usuario = QComboBox()
+        self.combo_enviar_usuario.setPlaceholderText("Para quem?")
+        self.combo_enviar_usuario.setFixedWidth(180)
+        self._atualizar_combo_usuarios()
+        
+        self.btn_enviar = QPushButton(qta.icon('fa6s.paper-plane', color='#ffffff'), "  Enviar")
+        self.btn_enviar.setObjectName("btn_transferir")
+        self.btn_enviar.setFixedHeight(32)
+        self.btn_enviar.clicked.connect(self._enviar_impressao)
+        
+        linha_rodape.addWidget(self.combo_enviar_usuario)
+        linha_rodape.addWidget(self.btn_enviar)
+        linha_rodape.addStretch()
+        
         botoes = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         botoes.rejected.connect(self.reject)
-        layout.addWidget(botoes)
+        linha_rodape.addWidget(botoes)
+        
+        layout.addLayout(linha_rodape)
 
     def _on_campo_kardex_changed(self, index):
         if index > 0:
@@ -523,6 +541,67 @@ class DetalhesEstoqueDialog(QDialog):
         except Exception as erro:
             QMessageBox.critical(self, "Erro de Impressão", f"Falha ao enviar ZPL para a impressora: {erro}")
             return
+
+    def _atualizar_combo_usuarios(self):
+        try:
+            from core import auth as auth_core
+            from core import session as session_core
+            self.combo_enviar_usuario.clear()
+            self.combo_enviar_usuario.addItem("Selecione usuário...", None)
+            usuarios = auth_core.list_users(sanitize=True)
+            atual = session_core.get_username().lower() if session_core.get_username() else ""
+            for u in sorted(usuarios, key=lambda x: (x.get("display_name") or x.get("username","")).lower()):
+                if (u.get("username") or "").strip().lower() == atual:
+                    continue
+                if not u.get("active", True):
+                    continue
+                display = u.get("display_name") or u.get("username")
+                label = f"{display} ({u.get('username')})"
+                self.combo_enviar_usuario.addItem(label, u.get("username"))
+        except Exception:
+            pass
+
+    def _enviar_impressao(self):
+        para = self.combo_enviar_usuario.currentData()
+        if not para:
+            QMessageBox.warning(self, "Enviar", "Selecione o usuário de destino.")
+            return
+
+        qtde_val = self.campo_qtde_etiqueta.text().strip()
+        if not qtde_val:
+            qtde_val = "1"
+        try:
+            qtd = int(qtde_val)
+        except ValueError:
+            qtd = 1
+            
+        loc_selecionado = self.grupo_botoes_etiqueta.checkedButton().text()
+        loc_display = self.campo_loc_novo.text() if loc_selecionado == "Loc novo" else self.campo_loc_retorno.text()
+
+        codigo = self.campo_codigo.currentText()
+        kardex = self.campo_kardex.currentText()
+        descricao = str(self.item.get("Descrição", "")).strip()
+        qtde_item = self.campo_qtde_item.text().strip()
+
+        itens = []
+        for _ in range(qtd):
+            itens.append({
+                "layout": "estoque",
+                "codigo": codigo,
+                "kardex": kardex,
+                "descricao": descricao,
+                "loc_override": loc_display,
+                "pedido": "",
+                "requisitante": "",
+                "qtde": qtde_item,
+            })
+
+        try:
+            from core import eventos as ev
+            evento = ev.enviar_para_usuario(para, botao_id="btn_enviar_estoque", page="estoque", extra={"itens": itens})
+            QMessageBox.information(self, "Enviado", f"Item(ns) enviado(s) para impressão automática.")
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Falha ao enviar: {e}")
 
 
 class EditorDelegate(QStyledItemDelegate):
