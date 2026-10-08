@@ -226,11 +226,10 @@ class FreshStartPage(QWidget):
                 resposta.exec()
 
                 if self._credenciais is None:
-                    dialog = CredentialsDialog(self)
-                    if dialog.exec() != QDialog.DialogCode.Accepted:
+                    usr, pwd = CredentialsDialog.get_credentials(self)
+                    if usr is None:
                         return
-                    dados = dialog.obter_dados()
-                    self._credenciais = (dados["usuario"], dados["senha"])
+                    self._credenciais = (usr, pwd)
 
                 os.makedirs(os.path.dirname(caminho), exist_ok=True)
                 self._baixar_zcusto_com_winscp(
@@ -254,7 +253,7 @@ class FreshStartPage(QWidget):
 
         self._calcular_total_zcentral()
         self._calcular_total_dph()
-        QMessageBox.information(self, "zCusto", "Valores do zCusto atualizados.")
+        QMessageBox.information(self, "zCusto", "zCusto OK")
 
     # ── UI ──
     def _setup_ui(self):
@@ -487,14 +486,13 @@ class FreshStartPage(QWidget):
 
                 pyautogui.press("f4")
 
-                dialog = CredentialsDialog(self)
-                if dialog.exec() != dialog.DialogCode.Accepted:
+                usr, pwd = CredentialsDialog.get_credentials(self)
+                if usr is None:
                     return
 
-                dados = dialog.obter_dados()
                 os.makedirs(os.path.dirname(caminho), exist_ok=True)
                 self._baixar_zcentral_com_winscp(
-                    dados["usuario"], dados["senha"], caminho
+                    usr, pwd, caminho
                 )
             except Exception as erro:
                 QMessageBox.warning(self, "Erro ao baixar arquivo", str(erro))
@@ -611,6 +609,8 @@ class FreshStartPage(QWidget):
         main_win = self.window()
         if hasattr(main_win, "pages") and "itens_zero" in main_win.pages:
             main_win.pages["itens_zero"]._sincronizar()
+            
+        QMessageBox.information(self, "zCentral", "zCentral OK")
 
     def _baixar_zcentral_com_winscp(self, usuario, senha, destino_local):
         import sys

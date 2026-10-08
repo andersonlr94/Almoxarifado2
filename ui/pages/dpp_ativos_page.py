@@ -5,10 +5,12 @@ import getpass
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QDialog, QFormLayout, QApplication, QMessageBox
+    QPushButton, QDialog, QFormLayout, QApplication, QMessageBox, QCheckBox
 )
 from ui.regras_automacao import digitar_texto, enter
 from urllib.parse import quote
+from core import session as session_core
+from core import auth as auth_core
 
 class CredentialsDialog(QDialog):
     """Diálogo simplificado para inserção de usuário e senha."""
@@ -53,6 +55,10 @@ class CredentialsDialog(QDialog):
         form_layout.addRow(QLabel("Usuário:"), self.campo_usuario)
         form_layout.addRow(QLabel("Senha:"), self.campo_senha)
 
+        self.chk_salvar = QCheckBox("Salvar acesso")
+        self.chk_salvar.setStyleSheet("color: #475569; font-size: 12px;")
+        form_layout.addRow("", self.chk_salvar)
+
         layout.addLayout(form_layout)
 
         botoes_layout = QHBoxLayout()
@@ -77,10 +83,22 @@ class CredentialsDialog(QDialog):
         layout.addLayout(botoes_layout)
 
     def accept(self):
+        usuario = self.campo_usuario.text()
+        senha = self.campo_senha.text()
         self._dados = {
-            "usuario": self.campo_usuario.text(),
-            "senha": self.campo_senha.text(),
+            "usuario": usuario,
+            "senha": senha,
         }
+        if self.chk_salvar.isChecked():
+            curr = session_core.get_current_user()
+            if curr:
+                try:
+                    auth_core.update_user(curr["username"], senha_id=senha, qad_user=usuario)
+                    curr["SenhaID"] = auth_core.cipher_qad_password(senha)
+                    curr["QadUser"] = usuario
+                    session_core.set_current_user(curr)
+                except Exception as e:
+                    print("Erro ao salvar acesso:", e)
         super().accept()
 
     def obter_dados(self):
@@ -90,6 +108,20 @@ class CredentialsDialog(QDialog):
             "usuario": self.campo_usuario.text(),
             "senha": self.campo_senha.text(),
         }
+
+    @classmethod
+    def get_credentials(cls, parent=None):
+        curr = session_core.get_current_user()
+        if curr and curr.get("SenhaID"):
+            qad_user = curr.get("QadUser") or os.environ.get("USERNAME") or os.environ.get("USER") or getpass.getuser()
+            senha = auth_core.decipher_qad_password(curr.get("SenhaID"))
+            return qad_user, senha
+        
+        dialog = cls(parent)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            dados = dialog.obter_dados()
+            return dados["usuario"], dados["senha"]
+        return None, None
 
 
 class DppAtivosPage(QWidget):
@@ -240,17 +272,14 @@ class DppAtivosPage(QWidget):
             enter(2)
 
             if self._credenciais is None:
-                dialog = CredentialsDialog(self)
-
-                if dialog.exec() != QDialog.DialogCode.Accepted:
+                usr, pwd = CredentialsDialog.get_credentials(self)
+                if usr is None:
                     self._atualizar_status(
                         "Operação cancelada.",
                         "#dc2626"
                     )
                     return
-
-                dados = dialog.obter_dados()
-                self._credenciais = (dados["usuario"], dados["senha"])
+                self._credenciais = (usr, pwd)
             else:
                 resposta = QMessageBox(self)
                 resposta.setWindowTitle("Relatório")

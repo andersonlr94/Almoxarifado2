@@ -1057,9 +1057,18 @@ class IdentificacaoDialog(QDialog):
         impressoras = QPrinterInfo.availablePrinterNames()
         self.combo_impressora.addItems(impressoras)
         
-        impressora_padrao = QPrinterInfo.defaultPrinterName()
-        if impressora_padrao in impressoras:
-            self.combo_impressora.setCurrentText(impressora_padrao)
+        import config
+        impressora_salva = config.obter_impressora_padrao()
+        if impressora_salva and impressora_salva in impressoras:
+            self.combo_impressora.setCurrentText(impressora_salva)
+        else:
+            impressora_padrao = QPrinterInfo.defaultPrinterName()
+            if impressora_padrao in impressoras:
+                self.combo_impressora.setCurrentText(impressora_padrao)
+                
+        self.combo_impressora.currentIndexChanged.connect(
+            lambda: config.definir_impressora_padrao(self.combo_impressora.currentText())
+        )
             
         layout_impressora.addWidget(label_impressora)
         layout_impressora.addWidget(self.combo_impressora)

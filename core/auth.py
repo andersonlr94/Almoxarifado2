@@ -118,6 +118,36 @@ def is_hashed(value: str) -> bool:
     return False
 
 # ---------------------------------------------------------------------------
+# Criptografia Simétrica (para senha QAD)
+# ---------------------------------------------------------------------------
+
+_QAD_SECRET = b"almox_qad_secret_2026_xyz!"
+
+def cipher_qad_password(password: str) -> str:
+    """Ofusca a senha usando XOR e Base64 para não ficar em texto puro."""
+    if not password:
+        return ""
+    pwd_bytes = password.encode("utf-8")
+    xored = bytearray()
+    for i, b in enumerate(pwd_bytes):
+        xored.append(b ^ _QAD_SECRET[i % len(_QAD_SECRET)])
+    return base64.b64encode(xored).decode("ascii")
+
+def decipher_qad_password(cipher_text: str) -> str:
+    """Reverte a ofuscação da senha QAD."""
+    if not cipher_text:
+        return ""
+    try:
+        xored = base64.b64decode(cipher_text.encode("ascii"))
+        pwd_bytes = bytearray()
+        for i, b in enumerate(xored):
+            pwd_bytes.append(b ^ _QAD_SECRET[i % len(_QAD_SECRET)])
+        return pwd_bytes.decode("utf-8")
+    except Exception:
+        # Fallback caso seja senha antiga em texto puro
+        return cipher_text
+
+# ---------------------------------------------------------------------------
 # IO
 # ---------------------------------------------------------------------------
 
@@ -283,7 +313,7 @@ def create_user(username: str, password: str, display_name: str = "", role: str 
     return sanitized
 
 
-def update_user(username: str, display_name: str | None = None, role: str | None = None, active: bool | None = None, new_password: str | None = None):
+def update_user(username: str, display_name: str | None = None, role: str | None = None, active: bool | None = None, new_password: str | None = None, senha_id: str | None = None, qad_user: str | None = None):
     """Atualiza campos de um usuário existente."""
     users = load_users()
     alvo = _normalize_username(username)
@@ -311,6 +341,10 @@ def update_user(username: str, display_name: str | None = None, role: str | None
                 if len(new_password) < 4:
                     raise ValueError("Senha deve ter ao menos 4 caracteres.")
                 u["password_hash"] = hash_password(new_password)
+            if senha_id is not None:
+                u["SenhaID"] = cipher_qad_password(senha_id)
+            if qad_user is not None:
+                u["QadUser"] = qad_user
             u["updated_at"] = datetime.now().isoformat(timespec="seconds")
             break
     if not found:
