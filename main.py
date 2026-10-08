@@ -30,6 +30,7 @@ if __name__ == "__main__":
         
             session_core.set_current_user(auto_user)
     except Exception:
+        
         pass
     
 

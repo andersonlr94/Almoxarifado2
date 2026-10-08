@@ -9,7 +9,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=numpy_binaries,
-    datas=numpy_datas,
+    datas=numpy_datas + [('recursos', 'recursos')],
     hiddenimports=numpy_hiddenimports,
     hookspath=[],
     hooksconfig={},

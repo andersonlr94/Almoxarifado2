@@ -485,6 +485,8 @@ class FreshStartPage(QWidget):
                     digitar_texto(texto)
                     enter(quantidade)
 
+                pyautogui.press("f4")
+
                 dialog = CredentialsDialog(self)
                 if dialog.exec() != dialog.DialogCode.Accepted:
                     return
@@ -611,7 +613,10 @@ class FreshStartPage(QWidget):
             main_win.pages["itens_zero"]._sincronizar()
 
     def _baixar_zcentral_com_winscp(self, usuario, senha, destino_local):
+        import sys
+        base_dir = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         caminhos = [
+            os.path.join(base_dir, "recursos", "winscp", "WinSCP.com"),
             r"C:\Program Files (x86)\WinSCp-FTP\WinSCP.com",
             r"C:\Program Files (x86)\WinSCp-FTP\WinSCP\WinSCP.com",
         ]
@@ -640,7 +645,10 @@ class FreshStartPage(QWidget):
             raise Exception(mensagem)
 
     def _baixar_zcusto_com_winscp(self, usuario, senha, destino_local):
+        import sys
+        base_dir = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         caminhos = [
+            os.path.join(base_dir, "recursos", "winscp", "WinSCP.com"),
             r"C:\Program Files (x86)\WinSCp-FTP\WinSCP.com",
             r"C:\Program Files (x86)\WinSCp-FTP\WinSCP\WinSCP.com",
         ]
