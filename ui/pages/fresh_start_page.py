@@ -634,7 +634,12 @@ class FreshStartPage(QWidget):
             f'get zCentral.prn "{destino_local}"',
             "exit",
         ]
-        resultado = subprocess.run(comando, capture_output=True, text=True)
+        resultado = subprocess.run(
+            comando, 
+            capture_output=True, 
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
         if resultado.returncode != 0:
             raise Exception(resultado.stderr or resultado.stdout)
         if not os.path.isfile(destino_local):
@@ -672,6 +677,7 @@ class FreshStartPage(QWidget):
                 capture_output=True,
                 text=True,
                 timeout=60,
+                creationflags=subprocess.CREATE_NO_WINDOW
             )
         except subprocess.TimeoutExpired as erro:
             raise Exception("O WinSCP excedeu o limite de 60 segundos.") from erro

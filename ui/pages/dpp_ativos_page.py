@@ -169,6 +169,7 @@ class DppAtivosPage(QWidget):
                 capture_output=True,
                 text=True,
                 timeout=60,
+                creationflags=subprocess.CREATE_NO_WINDOW
             )
         except subprocess.TimeoutExpired as erro:
             raise Exception(

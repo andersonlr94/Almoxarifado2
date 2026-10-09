@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QSize, QMimeData
 from PySide6.QtGui import QDrag, QColor
+from qfluentwidgets import ToolButton, FluentIcon
 
 
 def _caminho_json():
@@ -18,8 +19,35 @@ def _caminho_json():
     return os.path.normpath(os.path.join(base, "Almox", "ReajusteDeCusto", "reajuste.json"))
 
 
+class ElidedLabel(QLabel):
+    def __init__(self, text="", parent=None):
+        super().__init__(parent)
+        self._text = text
+        self.setMinimumWidth(10)
+
+    def setText(self, text):
+        self._text = text
+        self.update()
+
+    def text(self):
+        return self._text
+
+    def paintEvent(self, event):
+        from PySide6.QtGui import QPainter
+        painter = QPainter(self)
+        metrics = painter.fontMetrics()
+        elided = metrics.elidedText(self._text, Qt.TextElideMode.ElideRight, self.width())
+        painter.drawText(self.rect(), self.alignment(), elided)
+
+    def sizeHint(self):
+        return QSize(10, self.fontMetrics().height())
+
+    def minimumSizeHint(self):
+        return QSize(10, self.fontMetrics().height())
+
+
 class ItemReajusteWidget(QWidget):
-    def __init__(self, dado, parent=None):
+    def __init__(self, dado, callback_edit=None, callback_excluir=None, parent=None):
         super().__init__(parent)
         self.setStyleSheet("QWidget { background: transparent; }")
         layout = QVBoxLayout(self)
@@ -27,13 +55,58 @@ class ItemReajusteWidget(QWidget):
         layout.setSpacing(6)
         
         nome = dado.get("item", "")
+        codigo = dado.get("codigo_item", "")
+        desc = dado.get("descricao", "")
+        forn = dado.get("fornecedor", "")
         va = dado.get("valorAntigo", "")
         vn = dado.get("valorNovo", "")
         
-        lbl_nome = QLabel(nome)
+        row_nome = QHBoxLayout()
+        row_nome.setContentsMargins(0, 0, 0, 0)
+        
+        texto_titulo = f"{nome}   {codigo}" if codigo and codigo != nome else nome
+        lbl_nome = QLabel(texto_titulo)
         lbl_nome.setStyleSheet("font-weight: 700; font-size: 14px; color: #1e293b; background: transparent;")
         lbl_nome.setWordWrap(True)
-        layout.addWidget(lbl_nome)
+        row_nome.addWidget(lbl_nome, 1)
+        
+        if callback_edit or callback_excluir:
+            btn_layout = QHBoxLayout()
+            btn_layout.setSpacing(4)
+            btn_layout.setContentsMargins(0, 0, 0, 0)
+            
+            if callback_edit:
+                btn_edit = ToolButton(FluentIcon.EDIT.icon(color=QColor("#94a3b8")))
+                btn_edit.setFixedSize(20, 20)
+                btn_edit.setIconSize(QSize(12, 12))
+                btn_edit.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn_edit.setStyleSheet("ToolButton { background: transparent; border-radius: 4px; } ToolButton:hover { background: #e2e8f0; }")
+                btn_edit.clicked.connect(lambda: callback_edit(dado))
+                btn_layout.addWidget(btn_edit)
+                
+            if callback_excluir:
+                btn_excluir = ToolButton(FluentIcon.DELETE.icon(color=QColor("#94a3b8")))
+                btn_excluir.setFixedSize(20, 20)
+                btn_excluir.setIconSize(QSize(12, 12))
+                btn_excluir.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn_excluir.setStyleSheet("ToolButton { background: transparent; border-radius: 4px; } ToolButton:hover { background: #fee2e2; }")
+                btn_excluir.clicked.connect(lambda: callback_excluir(dado))
+                btn_layout.addWidget(btn_excluir)
+                
+            row_nome.addLayout(btn_layout)
+            
+        layout.addLayout(row_nome)
+        
+        if desc:
+            lbl_desc = ElidedLabel(desc)
+            lbl_desc.setStyleSheet("font-size: 12px; color: #475569; background: transparent;")
+            layout.addWidget(lbl_desc)
+            
+        if forn:
+            lbl_forn = QLabel(forn)
+            lbl_forn.setStyleSheet("font-size: 12px; color: #64748b; font-style: italic; background: transparent;")
+            lbl_forn.setWordWrap(True)
+            layout.addWidget(lbl_forn)
         
         if va or vn:
             row = QHBoxLayout()
@@ -275,6 +348,14 @@ class ReajustePrecosPage(QWidget):
         try:
             with open(_caminho_json(), "r", encoding="utf-8") as f:
                 self.dados = json.load(f)
+                
+            for dado in self.dados:
+                if not dado.get("descricao") and not dado.get("fornecedor"):
+                    desc, forn, cod = self._buscar_info_item(dado.get("item", ""))
+                    dado["descricao"] = desc
+                    dado["fornecedor"] = forn
+                    dado["codigo_item"] = cod
+                    
         except (FileNotFoundError, json.JSONDecodeError):
             self.dados = []
         self._popular_kanban()
@@ -292,12 +373,57 @@ class ReajustePrecosPage(QWidget):
     def _criar_item(self, dado):
         item = QListWidgetItem()
         item.setData(Qt.ItemDataRole.UserRole, dado)
-        # Altura do widget costuma dar ~84px com duas linhas
-        item.setSizeHint(QSize(0, 84))
+        altura = 84
+        if dado.get("descricao"): altura += 20
+        if dado.get("fornecedor"): altura += 20
+        item.setSizeHint(QSize(0, altura))
         return item
 
     def _criar_widget_item(self, dado):
-        return ItemReajusteWidget(dado)
+        return ItemReajusteWidget(dado, self._editar_item, self._excluir_item)
+
+    def _editar_item(self, dado):
+        self.campo_item.setText(dado.get("item", ""))
+        self.campo_valor_antigo.setText(dado.get("valorAntigo", ""))
+        self.campo_valor_novo.setText(dado.get("valorNovo", ""))
+        self.campo_item.setFocus()
+        
+        self._id_em_edicao = dado.get("id")
+        self.btn_inserir.setText("Salvar")
+
+    def _excluir_item(self, dado):
+        resposta = QMessageBox.question(
+            self,
+            "Confirmação",
+            f"Deseja realmente excluir o reajuste do item {dado.get('item', '')}?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if resposta == QMessageBox.StandardButton.Yes:
+            self.dados = [d for d in self._coletar_dados() if d.get("id") != dado.get("id")]
+            self._popular_kanban()
+            self._salvar()
+
+    def _buscar_info_item(self, kardex):
+        import config
+        caminho_json = os.path.normpath(os.path.join(config.obter_caminho_jsons(), "Almox", "ItensAlmoxarifado", "ItensAlmoxarifado.json"))
+        try:
+            with open(caminho_json, "r", encoding="utf-8") as f:
+                itens = json.load(f)
+                for item in itens:
+                    if str(item.get("Kardex", "")) == str(kardex):
+                        chaves = list(item.keys())
+                        cod_key = next((k for k in chaves if k.startswith("C") and "digo" in k), "Código")
+                        desc_key = next((k for k in chaves if k.startswith("Descri")), "Descrição")
+                        forn_key = "Fornecedor"
+                        
+                        codigo = item.get(cod_key, "")
+                        desc = item.get(desc_key, "")
+                        forn = item.get(forn_key, "")
+                        return desc, forn, codigo
+        except Exception:
+            pass
+        return "", "", ""
 
     def _inserir(self):
         nome = self.campo_item.text().strip()
@@ -305,11 +431,40 @@ class ReajustePrecosPage(QWidget):
             QMessageBox.warning(self, "Aviso", "Informe o item.")
             self.campo_item.setFocus()
             return
+        
         dados = self._coletar_dados()
+        desc, forn, cod = self._buscar_info_item(nome)
+        
+        if hasattr(self, '_id_em_edicao') and self._id_em_edicao is not None:
+            for d in dados:
+                if d.get("id") == self._id_em_edicao:
+                    d["item"] = nome
+                    d["codigo_item"] = cod
+                    d["descricao"] = desc
+                    d["fornecedor"] = forn
+                    d["valorAntigo"] = self.campo_valor_antigo.text().strip()
+                    d["valorNovo"] = self.campo_valor_novo.text().strip()
+                    break
+            self.dados = dados
+            self._id_em_edicao = None
+            self.btn_inserir.setText("Inserir")
+            self._popular_kanban()
+            self._salvar()
+            
+            self.campo_item.clear()
+            self.campo_valor_antigo.clear()
+            self.campo_valor_novo.clear()
+            self.campo_item.setFocus()
+            return
+
         proximo_id = max([d.get("id", 0) for d in dados], default=0) + 1
+        
         dado = {
             "id": proximo_id,
             "item": nome,
+            "codigo_item": cod,
+            "descricao": desc,
+            "fornecedor": forn,
             "valorAntigo": self.campo_valor_antigo.text().strip(),
             "valorNovo": self.campo_valor_novo.text().strip(),
             "status": self.COLUNAS[0],
