@@ -31,7 +31,11 @@ class EditorDelegate(QStyledItemDelegate):
         editor = super().createEditor(parent, option, index)
         if isinstance(editor, QLineEdit):
             editor.setMinimumHeight(34)
-            editor.setStyleSheet("padding: 4px 8px;")
+            editor.setContentsMargins(0, 0, 0, 0)
+            editor.setStyleSheet(
+                "padding: 0px; margin: 0px; border: none; "
+                "border-bottom: 2px solid #6366f1; border-radius: 0px;"
+            )
         return editor
 
 

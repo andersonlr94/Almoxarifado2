@@ -1,0 +1,351 @@
+import json
+import os
+
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
+    QAbstractItemView, QStyledItemDelegate, QMessageBox,
+)
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QGuiApplication
+
+
+class EditorDelegate(QStyledItemDelegate):
+    def sizeHint(self, option, index):
+        base = super().sizeHint(option, index)
+        return QSize(base.width(), max(base.height(), 34))
+
+    def createEditor(self, parent, option, index):
+        editor = super().createEditor(parent, option, index)
+        if isinstance(editor, QLineEdit):
+            editor.setMinimumHeight(34)
+            editor.setStyleSheet("padding: 4px 8px;")
+        return editor
+
+
+def _caminho_json():
+    import config
+    base = config.obter_caminho_jsons()
+    if not base:
+        return ""
+    return os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "PedidosPendentes", "PedidosPendentes.json"))
+
+
+class PedidosPendentesPage(QWidget):
+    COLUNAS = [
+        "N do pedido", "Kardex", "Código", "Fornecedor",
+        "Data prog", "Semana prog", "Qtde programada", "Data entrega",
+        "N de AR", "Entrada", "Qtde entregue", "Qtde pendente",
+        "Requisitante", "Destino", "Status", "Observação",
+    ]
+
+    def __init__(self):
+        super().__init__()
+        self.dados = []
+        self._setup_ui()
+        self._carregar_dados()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._carregar_dados()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(32, 32, 32, 32)
+        layout.setSpacing(16)
+
+        card = QWidget()
+        card.setObjectName("pageCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(28, 28, 28, 28)
+        card_layout.setSpacing(16)
+
+        titulo = QLabel("Pedidos Pendentes")
+        titulo.setObjectName("pageTitle")
+        card_layout.addWidget(titulo)
+
+        linha_top = QHBoxLayout()
+        linha_top.setSpacing(8)
+
+        btn_atualizar = QPushButton("Atualizar")
+        btn_atualizar.setObjectName("btnPrimary")
+        btn_atualizar.setFixedHeight(34)
+        btn_atualizar.clicked.connect(self._atualizar)
+        linha_top.addWidget(btn_atualizar)
+
+        self.campo_filtro = QLineEdit()
+        self.campo_filtro.setPlaceholderText("Pesquisar...")
+        self.campo_filtro.setFixedHeight(34)
+        self.campo_filtro.setFixedWidth(200)
+        self.campo_filtro.setStyleSheet("padding: 2px 8px;")
+        self.campo_filtro.textChanged.connect(self._aplicar_filtro)
+        linha_top.addWidget(self.campo_filtro)
+
+        self.label_contador = QLabel("0 itens")
+        self.label_contador.setObjectName("statusLabel")
+        linha_top.addWidget(self.label_contador)
+
+        linha_top.addStretch()
+        card_layout.addLayout(linha_top)
+
+        self.tabela = QTableWidget(0, len(self.COLUNAS))
+        self.tabela.setHorizontalHeaderLabels(self.COLUNAS)
+        header = self.tabela.horizontalHeader()
+        header.setStyleSheet(
+            "QHeaderView::section {"
+            "  font-size: 9px;"
+            "  font-weight: 600;"
+            "  background-color: #f8fafc;"
+            "  color: #64748b;"
+            "  text-transform: uppercase;"
+            "  letter-spacing: 0.5px;"
+            "  padding: 8px 12px;"
+            "  border: none;"
+            "  border-bottom: 2px solid #e2e8f0;"
+            "}"
+        )
+        header.setStretchLastSection(False)
+        for c in range(self.tabela.columnCount()):
+            header.setSectionResizeMode(c, QHeaderView.ResizeMode.Interactive)
+            largura = 150 if c == 1 else 180 if c in (2, 3) else 100
+            header.resizeSection(c, largura)
+        self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
+        self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
+        self.tabela.setAlternatingRowColors(False)
+        self.tabela.verticalHeader().setDefaultSectionSize(28)
+        self.tabela.verticalHeader().setMinimumSectionSize(24)
+        self.tabela.verticalHeader().setVisible(False)
+        self.tabela.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.tabela.setItemDelegate(EditorDelegate(self.tabela))
+        self.tabela.setVisible(True)
+        card_layout.addWidget(self.tabela)
+
+        layout.addWidget(card)
+
+    def _popular_tabela(self):
+        self.tabela.setVisible(True)
+        self.tabela.blockSignals(True)
+        self.tabela.setRowCount(0)
+        filtro_texto = self.campo_filtro.text().strip().lower()
+        for item in self.dados:
+            if filtro_texto:
+                texto = " ".join(str(v) for v in item.values()).lower()
+                if filtro_texto not in texto:
+                    continue
+            row = self.tabela.rowCount()
+            self.tabela.insertRow(row)
+            for col, chave in enumerate(self.COLUNAS):
+                valor = str(item.get(chave, ""))
+                cell = QTableWidgetItem(valor)
+                cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.tabela.setItem(row, col, cell)
+        self.tabela.blockSignals(False)
+        self.label_contador.setText(f"{self.tabela.rowCount()} itens")
+
+    def _atualizar(self):
+        clipboard = QGuiApplication.clipboard()
+        texto = clipboard.text()
+        if not texto.strip():
+            QMessageBox.warning(self, "Aviso", "A área de transferência está vazia.")
+            return
+
+        linhas = [l.strip() for l in texto.replace("\r\n", "\n").split("\n") if l.strip()]
+        if not linhas:
+            return
+
+        header, dados_linha = self._separar_cabecalho(linhas)
+        if not dados_linha:
+            QMessageBox.warning(self, "Aviso", "Não há dados válidos para atualizar.")
+            return
+
+        colunas = len(dados_linha[0].split("\t"))
+
+        if colunas != len(self.COLUNAS):
+            QMessageBox.warning(
+                self,
+                "Formato inválido",
+                f"A tabela copiada deve ter {len(self.COLUNAS)} colunas."
+            )
+            return
+
+        self.dados.clear()
+        for linha in dados_linha:
+            partes = linha.split("\t")
+            if len(partes) < 2:
+                continue
+            item = {}
+            for col, chave in enumerate(self.COLUNAS):
+                item[chave] = partes[col].strip() if col < len(partes) else ""
+            self.dados.append(item)
+
+        self._popular_tabela()
+        self._salvar_pedidos_pendentes()
+
+        # Também executa a lógica do botão Atualizar da página Controle de Pedidos
+        # E envia os dados copiados para a página Follow-up
+        try:
+            main_win = self.window()
+            if main_win and hasattr(main_win, "pages"):
+                ctrl_page = main_win.pages.get("controle_pedidos")
+                if ctrl_page and hasattr(ctrl_page, "_adicionar_linha"):
+                    ctrl_page._adicionar_linha()
+                    
+                follow_up = main_win.pages.get("follow_up")
+                if follow_up and hasattr(follow_up, "atualizar_dados"):
+                    follow_up.atualizar_dados(self.dados)
+                    
+                # Agrupar quantidades programadas por Kardex
+                somas_kardex = {}
+                for p in self.dados:
+                    k = p.get("Kardex", "").strip()
+                    if not k:
+                        continue
+                    qtde_str = p.get("Qtde programada", "0")
+                    if isinstance(qtde_str, str):
+                        qtde_str = qtde_str.replace(".", "").replace(",", ".")
+                    try:
+                        qtde = float(qtde_str)
+                    except ValueError:
+                        qtde = 0.0
+                    somas_kardex[k] = somas_kardex.get(k, 0.0) + qtde
+
+                itens_zero = main_win.pages.get("itens_zero")
+                if itens_zero and hasattr(itens_zero, "dados"):
+                    atualizou_zero = False
+                    from datetime import datetime
+
+                    def parse_data_prog(p):
+                        data_str = p.get("Data prog", "").strip()
+                        try:
+                            if len(data_str.split("/")[-1]) == 2:
+                                return datetime.strptime(data_str, "%d/%m/%y")
+                            return datetime.strptime(data_str, "%d/%m/%Y")
+                        except (ValueError, IndexError):
+                            return datetime.max
+
+                    for iz_item in itens_zero.dados:
+                        k_iz = iz_item.get("kardex", "").strip()
+                        
+                        # Quantidade Programada
+                        if k_iz in somas_kardex:
+                            soma = somas_kardex[k_iz]
+                            if soma.is_integer():
+                                iz_item["qtde_prog"] = str(int(soma))
+                            else:
+                                iz_item["qtde_prog"] = str(soma).replace(".", ",")
+                            atualizou_zero = True
+
+                        # DPP
+                        if k_iz:
+                            pedidos_kardex = [p for p in self.dados if p.get("Kardex", "").strip() == k_iz]
+                            if pedidos_kardex:
+                                mais_antigo = sorted(pedidos_kardex, key=parse_data_prog)[0]
+                                numero_pc = mais_antigo.get("N do pedido", "").strip()
+                                
+                                if numero_pc and ctrl_page and hasattr(ctrl_page, "dados"):
+                                    for c_item in ctrl_page.dados:
+                                        nome_ctrl = c_item.get("nome", "").split("|")[0].strip()
+                                        if nome_ctrl == numero_pc:
+                                            dpp_val = c_item.get("dpp", "").strip()
+                                            if dpp_val and iz_item.get("dpp", "").strip() != dpp_val:
+                                                iz_item["dpp"] = dpp_val
+                                                atualizou_zero = True
+                                            break
+
+                    if atualizou_zero:
+                        if hasattr(itens_zero, "_salvar_json"):
+                            itens_zero._salvar_json()
+                        if hasattr(itens_zero, "_popular_tabela"):
+                            itens_zero._popular_tabela()
+
+                estoque_page = main_win.pages.get("estoque")
+                if estoque_page and hasattr(estoque_page, "dados"):
+                    atualizou_estoque = False
+                    for est_item in estoque_page.dados:
+                        k_est = str(est_item.get("Kardex", "")).strip()
+                        if not k_est:
+                            continue
+                        
+                        novo_valor = ""
+                        if k_est in somas_kardex:
+                            soma = somas_kardex[k_est]
+                            if soma > 0:
+                                if soma.is_integer():
+                                    novo_valor = str(int(soma))
+                                else:
+                                    novo_valor = str(soma).replace(".", ",")
+                        
+                        valor_atual = str(est_item.get("Pend. entrega compras", "")).strip()
+                        if valor_atual != novo_valor:
+                            est_item["Pend. entrega compras"] = novo_valor
+                            atualizou_estoque = True
+
+                    if atualizou_estoque:
+                        if hasattr(estoque_page, "_salvar_json"):
+                            estoque_page._salvar_json()
+                        if hasattr(estoque_page, "_popular_tabela"):
+                            estoque_page._popular_tabela()
+
+        except Exception as e:
+            print(f"Erro ao atualizar páginas conectadas: {e}")
+
+        QMessageBox.information(
+            self,
+            "Sucesso",
+            "Pedidos atualizados com sucesso!"
+        )
+
+    def _separar_cabecalho(self, linhas):
+        if not linhas:
+            return None, []
+
+        primeiras_partes = linhas[0].split("\t")
+        if self._eh_linha_cabecalho(primeiras_partes):
+            return [p.strip() for p in primeiras_partes], linhas[1:]
+
+        return None, linhas
+
+    def _normalizar_coluna(self, texto):
+        texto = texto.strip().lower()
+        for original, substituicao in {
+            "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u",
+            "ã": "a", "õ": "o", "â": "a", "ê": "e", "ô": "o",
+            "ç": "c",
+        }.items():
+            texto = texto.replace(original, substituicao)
+        return "".join(ch for ch in texto if ch.isalnum())
+
+    def _eh_linha_cabecalho(self, partes):
+        if not partes:
+            return False
+        nome_normalizado = self._normalizar_coluna(partes[0])
+        return nome_normalizado in {"npedido", "ndopedido", "pedido", "kardex", "codigo", "fornecedor"}
+
+    def _salvar_pedidos_pendentes(self):
+        import config
+        base = config.obter_caminho_jsons()
+        if not base:
+            config.avisar_sem_pasta(self)
+            return
+        pasta_json = os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "PedidosPendentes"))
+        os.makedirs(pasta_json, exist_ok=True)
+        caminho_arquivo = os.path.join(pasta_json, "PedidosPendentes.json")
+        with open(caminho_arquivo, "w", encoding="utf-8") as f:
+            json.dump(self.dados, f, ensure_ascii=False, indent=2)
+
+    def _carregar_dados(self):
+        try:
+            caminho = _caminho_json()
+            if caminho and os.path.isfile(caminho):
+                with open(caminho, "r", encoding="utf-8") as f:
+                    self.dados = json.load(f)
+            else:
+                self.dados = []
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            self.dados = []
+        self.tabela.setVisible(True)
+        self._popular_tabela()
+
+    def _aplicar_filtro(self):
+        self.tabela.setVisible(True)
+        self._popular_tabela()

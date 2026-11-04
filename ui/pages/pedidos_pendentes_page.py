@@ -31,13 +31,22 @@ def _caminho_json():
     return os.path.normpath(os.path.join(base, "Almox", "ControlePedidos", "PedidosPendentes", "PedidosPendentes.json"))
 
 
+def _caminho_itens():
+    import config
+    base = config.obter_caminho_jsons()
+    if not base:
+        return ""
+    return os.path.normpath(os.path.join(base, "Almox", "ItensAlmoxarifado", "ItensAlmoxarifado.json"))
+
+
 class PedidosPendentesPage(QWidget):
     COLUNAS = [
         "N do pedido", "Kardex", "Código", "Fornecedor",
         "Data prog", "Semana prog", "Qtde programada", "Data entrega",
         "N de AR", "Entrada", "Qtde entregue", "Qtde pendente",
-        "Requisitante", "Destino", "Status", "Observação",
+        "Requisitante", "Destino", "Status", "Observação", "Custo unit", "Custo total",
     ]
+    COLUNAS_ENTRADA = COLUNAS[:-2]
 
     def __init__(self):
         super().__init__()
@@ -84,6 +93,11 @@ class PedidosPendentesPage(QWidget):
         self.label_contador = QLabel("0 itens")
         self.label_contador.setObjectName("statusLabel")
         linha_top.addWidget(self.label_contador)
+
+        linha_top.addSpacing(24)
+        self.label_total_custos = QLabel("Custo total pendente: R$ 0,00")
+        self.label_total_custos.setObjectName("statusLabel")
+        linha_top.addWidget(self.label_total_custos)
 
         linha_top.addStretch()
         card_layout.addLayout(linha_top)
@@ -141,6 +155,58 @@ class PedidosPendentesPage(QWidget):
                 self.tabela.setItem(row, col, cell)
         self.tabela.blockSignals(False)
         self.label_contador.setText(f"{self.tabela.rowCount()} itens")
+        total_custos = 0.0
+        for row in range(self.tabela.rowCount()):
+            item_custo = self.tabela.item(row, self.COLUNAS.index("Custo total"))
+            custo = self._converter_numero(item_custo.text() if item_custo else "")
+            if custo is not None:
+                total_custos += custo
+        self.label_total_custos.setText(
+            f"Custo total pendente: R$ {self._formatar_valor(total_custos)}"
+        )
+
+    @staticmethod
+    def _converter_numero(valor):
+        texto = str(valor or "").strip().replace("R$", "").replace(" ", "")
+        if not texto:
+            return None
+        if "," in texto:
+            texto = texto.replace(".", "").replace(",", ".")
+        try:
+            return float(texto)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _formatar_valor(valor):
+        if valor is None:
+            return ""
+        return f"{valor:.2f}".replace(".", ",")
+
+    def _atualizar_custos(self):
+        try:
+            with open(_caminho_itens(), "r", encoding="utf-8") as arquivo:
+                itens = json.load(arquivo)
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            itens = []
+
+        itens_por_kardex = {}
+        colecao = itens if isinstance(itens, list) else itens.values() if isinstance(itens, dict) else []
+        for item in colecao:
+            if not isinstance(item, dict):
+                continue
+            kardex = str(item.get("Kardex", item.get("kardex", ""))).strip()
+            if kardex:
+                itens_por_kardex[kardex] = item
+
+        for pedido in self.dados:
+            item = itens_por_kardex.get(str(pedido.get("Kardex", "")).strip())
+            custo_unit = self._converter_numero(item.get("Custo", "") if item else "")
+            quantidade = self._converter_numero(pedido.get("Qtde pendente", ""))
+            pedido["Custo unit"] = self._formatar_valor(custo_unit)
+            pedido["Custo total"] = self._formatar_valor(
+                custo_unit * quantidade if custo_unit is not None and quantidade is not None else None
+            )
 
     def _atualizar(self):
         clipboard = QGuiApplication.clipboard()
@@ -160,11 +226,11 @@ class PedidosPendentesPage(QWidget):
 
         colunas = len(dados_linha[0].split("\t"))
 
-        if colunas != len(self.COLUNAS):
+        if colunas != len(self.COLUNAS_ENTRADA):
             QMessageBox.warning(
                 self,
                 "Formato inválido",
-                f"A tabela copiada deve ter {len(self.COLUNAS)} colunas."
+                f"A tabela copiada deve ter {len(self.COLUNAS_ENTRADA)} colunas."
             )
             return
 
@@ -174,7 +240,7 @@ class PedidosPendentesPage(QWidget):
             if len(partes) < 2:
                 continue
             item = {}
-            for col, chave in enumerate(self.COLUNAS):
+            for col, chave in enumerate(self.COLUNAS_ENTRADA):
                 item[chave] = partes[col].strip() if col < len(partes) else ""
             self.dados.append(item)
 
@@ -289,6 +355,10 @@ class PedidosPendentesPage(QWidget):
         except Exception as e:
             print(f"Erro ao atualizar páginas conectadas: {e}")
 
+        self._atualizar_custos()
+        self._popular_tabela()
+        self._salvar_pedidos_pendentes()
+
         QMessageBox.information(
             self,
             "Sucesso",
@@ -343,6 +413,7 @@ class PedidosPendentesPage(QWidget):
                 self.dados = []
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             self.dados = []
+        self._atualizar_custos()
         self.tabela.setVisible(True)
         self._popular_tabela()
 
