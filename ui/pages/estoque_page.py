@@ -646,7 +646,7 @@ class CarregarEstoqueThread(QThread):
             self.erro.emit(str(e))
 
 class EstoquePage(QWidget):
-    COLUNAS_RESUMIDAS = [1, 2, 3, 4, 5, 6, 7, 40, 41, 8, 20, 22]
+    COLUNAS_RESUMIDAS = [1, 2, 3, 4, 5, 6, 7, 40, 41, 8, 20, 22, 42]
 
     HEADERS_RESUMIDOS = [
         "Kardex",
@@ -661,6 +661,7 @@ class EstoquePage(QWidget):
         "Fornecedor",
         "Custo",
         "Consumo médio",
+        "SCI x QAD",
     ]
 
     COLUNAS = [
@@ -674,7 +675,7 @@ class EstoquePage(QWidget):
         "Separar p/ holder", "Separar p/ mesa", "Item de estoque",
         "Pino de contato", "Ativo/Obsol.", "Classificação Fiscal", "IPI",
         "Observações", "Doc. evidência", "Descrição de evidência",
-        "QtdeDPH", "Qtde QAD",
+        "QtdeDPH", "Qtde QAD", "SCI x QAD",
     ]
 
     CHAVES = [
@@ -688,7 +689,7 @@ class EstoquePage(QWidget):
         "Separar p/ holder", "Separar p/ mesa", "Item de estoque",
         "Pino de contato", "Ativo/Obsol.", "Classificação Fiscal", "IPI",
         "Observações", "Doc. evidência", "Descrição de evidência",
-        "QtdeDPH", "Qtde QAD",
+        "QtdeDPH", "Qtde QAD", "SCI x QAD",
     ]
 
     CAMPOS_DETALHES = [
@@ -708,6 +709,7 @@ class EstoquePage(QWidget):
         self.dados = []
         self._texto_filtro_cache = []
         self.modo_resumido = True
+        self._filtro_apenas_nao_ok = False
         self._setup_ui()
         self.atalho_detalhes = QShortcut(QKeySequence("Ctrl+P"), self)
         self.atalho_detalhes.setContext(Qt.ShortcutContext.WindowShortcut)
@@ -1063,6 +1065,11 @@ class EstoquePage(QWidget):
         # New order
         coluna_esquerda.addWidget(self.detalhes_box)
         
+        self.btn_indicador_sci_qad = QPushButton("Divergente 0")
+        self.btn_indicador_sci_qad.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_indicador_sci_qad.setFixedHeight(28)
+        self.btn_indicador_sci_qad.clicked.connect(self._toggle_filtro_nao_ok)
+
         linha_filtro_botoes = QHBoxLayout()
         linha_filtro_botoes.setSpacing(10)
         linha_filtro_botoes.addWidget(self.campo_filtro)
@@ -1071,6 +1078,7 @@ class EstoquePage(QWidget):
         linha_filtro_botoes.addWidget(btn_inserir)
         linha_filtro_botoes.addWidget(btn_exportar)
         linha_filtro_botoes.addStretch()
+        linha_filtro_botoes.addWidget(self.btn_indicador_sci_qad)
         
         coluna_esquerda.addLayout(linha_filtro_botoes)
         coluna_esquerda.addStretch()
@@ -1288,6 +1296,8 @@ class EstoquePage(QWidget):
                 largura = 125
             elif c in (40, 41):
                 largura = 66
+            elif c == 42:
+                largura = 85
             else:
                 largura = 120
 
@@ -1402,6 +1412,8 @@ class EstoquePage(QWidget):
         # filtra usando cache
         filtrados = []
         cache = self._texto_filtro_cache
+        total_nao_ok_modo = 0
+
         for idx, item in enumerate(self.dados):
             if self.modo_resumido:
                 ativo = str(item.get("Ativo/Obsol.", "")).strip().lower()
@@ -1409,6 +1421,14 @@ class EstoquePage(QWidget):
                     continue
                 codigo = str(item.get("Código", "")).strip().upper()
                 if codigo.endswith("AT") or codigo.endswith("(AT)"):
+                    continue
+
+            val_sci = str(item.get("SCI x QAD", "")).strip().upper()
+            if val_sci != "OK":
+                total_nao_ok_modo += 1
+
+            if getattr(self, "_filtro_apenas_nao_ok", False):
+                if val_sci == "OK":
                     continue
 
             if filtro_texto:
@@ -1457,12 +1477,21 @@ class EstoquePage(QWidget):
             for c in range(len(self.COLUNAS)):
                 self.tabela.setColumnHidden(c, False)
 
+            header = self.tabela.horizontalHeader()
+            for logico in range(len(self.COLUNAS)):
+                pos = header.visualIndex(logico)
+
+                if pos != logico:
+                    header.moveSection(pos, logico)
+
         self.tabela.blockSignals(False)
         self.tabela.setUpdatesEnabled(True)
 
         self.label_contador.setText(
             str(self.tabela.rowCount())
         )
+
+        self._atualizar_indicador_sci_qad(total_nao_ok_modo)
 
         self._atualizar_detalhes()
 
@@ -1537,7 +1566,22 @@ class EstoquePage(QWidget):
 
             return
 
-        colunas = len(dados_linha[0].split("\t"))
+        partes_primeira = dados_linha[0].split("\t")
+        colunas = len(partes_primeira)
+
+        # Trata possíveis tabulações extras no fim da linha
+        if colunas == 25 and not partes_primeira[-1].strip():
+            colunas = 24
+        elif colunas == 41 and not partes_primeira[-1].strip():
+            colunas = 40
+        elif colunas not in (24, 40) and header:
+            colunas_hdr = len(header)
+            if colunas_hdr == 25 and not header[-1].strip():
+                colunas_hdr = 24
+            elif colunas_hdr == 41 and not header[-1].strip():
+                colunas_hdr = 40
+            if colunas_hdr in (24, 40):
+                colunas = colunas_hdr
 
         if colunas == 40:
             resposta = QMessageBox.question(
@@ -1571,7 +1615,7 @@ class EstoquePage(QWidget):
             QMessageBox.warning(
                 self,
                 "Formato inválido",
-                "A tabela copiada deve ter 40 ou 24 colunas."
+                f"A tabela copiada deve ter 40 ou 24 colunas (foram encontradas {colunas} colunas)."
             )
 
             self.modo_resumido = modo_anterior
@@ -1666,6 +1710,7 @@ class EstoquePage(QWidget):
 
         dph_idx = 7
         qad_idx = 8
+        sci_qad_idx = 23
 
         if header:
             mapa = self._obter_indices_parciais(header)
@@ -1687,6 +1732,15 @@ class EstoquePage(QWidget):
 
             if "Loc retorno" in mapa:
                 loc_retorno_idx = mapa["Loc retorno"]
+
+            if "QtdeDPH" in mapa:
+                dph_idx = mapa["QtdeDPH"]
+
+            if "Qtde QAD" in mapa:
+                qad_idx = mapa["Qtde QAD"]
+
+            if "SCI x QAD" in mapa:
+                sci_qad_idx = mapa["SCI x QAD"]
 
         max_idx = max(
             kardex_idx,
@@ -1748,6 +1802,13 @@ class EstoquePage(QWidget):
             if qad_idx >= 0 and len(partes) > qad_idx:
                 item["Qtde QAD"] = (
                     partes[qad_idx].strip()
+                )
+
+            if sci_qad_idx >= 0:
+                item["SCI x QAD"] = (
+                    partes[sci_qad_idx].strip()
+                    if len(partes) > sci_qad_idx
+                    else ""
                 )
 
             atualizou = True
@@ -1846,6 +1907,10 @@ class EstoquePage(QWidget):
 
             "qtdeqad": "Qtde QAD",
             "qtdqad": "Qtde QAD",
+
+            "scixqad": "SCI x QAD",
+            "sciqad": "SCI x QAD",
+            "scivsqad": "SCI x QAD",
         }
 
         for indice, coluna in enumerate(header):
@@ -1869,12 +1934,83 @@ class EstoquePage(QWidget):
             self._filtro_timer.stop()
         except Exception:
             pass
+        self._filtro_apenas_nao_ok = False
         self.campo_filtro.clear()
         self.campo_filtro.setFocus()
         # limpa imediatamente sem esperar debounce
         self._popular_tabela()
         if self.tabela.rowCount() == 1:
             self.tabela.selectRow(0)
+
+    def _toggle_filtro_nao_ok(self):
+        self._filtro_apenas_nao_ok = not getattr(self, "_filtro_apenas_nao_ok", False)
+        self._popular_tabela()
+
+    def _atualizar_indicador_sci_qad(self, total_nao_ok):
+        if not hasattr(self, "btn_indicador_sci_qad"):
+            return
+
+        self.btn_indicador_sci_qad.setText(f"Divergente {total_nao_ok}")
+
+        ativo_filtro = getattr(self, "_filtro_apenas_nao_ok", False)
+
+        if total_nao_ok > 0:
+            if ativo_filtro:
+                self.btn_indicador_sci_qad.setStyleSheet("""
+                    QPushButton {
+                        background-color: #dc2626;
+                        color: #ffffff;
+                        border: 1px solid #b91c1c;
+                        border-radius: 8px;
+                        padding: 0 12px;
+                        font-size: 11px;
+                        font-weight: 700;
+                    }
+                    QPushButton:hover {
+                        background-color: #b91c1c;
+                    }
+                """)
+                self.btn_indicador_sci_qad.setToolTip(
+                    "Filtro ativo: exibindo apenas itens onde SCI x QAD ≠ OK.\nClique para remover este filtro."
+                )
+            else:
+                self.btn_indicador_sci_qad.setStyleSheet("""
+                    QPushButton {
+                        background-color: #fef2f2;
+                        color: #dc2626;
+                        border: 1px solid #fecaca;
+                        border-radius: 8px;
+                        padding: 0 12px;
+                        font-size: 11px;
+                        font-weight: 700;
+                    }
+                    QPushButton:hover {
+                        background-color: #fee2e2;
+                        border-color: #fca5a5;
+                    }
+                """)
+                self.btn_indicador_sci_qad.setToolTip(
+                    f"Existem {total_nao_ok} itens na listagem onde a coluna SCI x QAD não possui 'OK'.\nClique para filtrar apenas estes itens."
+                )
+        else:
+            self.btn_indicador_sci_qad.setStyleSheet("""
+                QPushButton {
+                    background-color: #f0fdf4;
+                    color: #16a34a;
+                    border: 1px solid #bbf7d0;
+                    border-radius: 8px;
+                    padding: 0 12px;
+                    font-size: 11px;
+                    font-weight: 700;
+                }
+                QPushButton:hover {
+                    background-color: #dcfce7;
+                    border-color: #86efac;
+                }
+            """)
+            self.btn_indicador_sci_qad.setToolTip(
+                "Todos os itens da listagem possuem 'OK' na coluna SCI x QAD."
+            )
 
     def _atualizar_detalhes(self):
         kardex = ""
