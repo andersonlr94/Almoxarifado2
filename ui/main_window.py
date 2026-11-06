@@ -11,6 +11,7 @@ from ui.pages.inicio_page import InicioPage
 from ui.pages.programacao_agulhas_page import ProgramacaoAgulhasPage
 from ui.pages.dpp_ativos_page import DppAtivosPage
 from ui.pages.estoque_page import EstoquePage
+from ui.pages.analise_estoque_page import AnaliseEstoquePage
 from ui.pages.itens_zero_page import ItensZeroPage
 from ui.pages.controle_pedidos_page import ControlePedidosPage
 from ui.pages.settings_page import SettingsPage
@@ -35,6 +36,7 @@ SIDEBAR_COLLAPSED_WIDTH = 58
 
 NAV_ICONS = {
     "estoque": ("fa6s.box", "box"),
+    "analise_estoque": ("fa6s.chart-line", "chart-line"),
     "itens_zero": ("mdi6.basket-remove-outline", "basket-remove"),
     "acuracidade": ("mdi6.target", "target"),
     "controle_pedidos": ("mdi6.clipboard-check-outline", "clipboard-check"),
@@ -209,6 +211,7 @@ class MainWindow(QMainWindow):
 
         self._nav_items = [
             ("estoque",           "Estoque",               False),
+            ("analise_estoque",   "Análise de Estoque",    False),
             ("itens_zero",        "Itens com Estoque 0",   False),
             ("acuracidade",       "Acuracidade",           False),
             ("controle_pedidos",  "Controle de Pedidos",   False),
@@ -688,6 +691,7 @@ class MainWindow(QMainWindow):
         pages = [
             ("inicio",                InicioPage),
             ("estoque",               EstoquePage),
+            ("analise_estoque",       AnaliseEstoquePage),
             ("itens_zero",            ItensZeroPage),
             ("acuracidade",           AcuracidadePage),
             ("controle_pedidos",      ControlePedidosPage),

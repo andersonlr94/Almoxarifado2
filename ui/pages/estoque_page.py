@@ -730,7 +730,7 @@ class EstoquePage(QWidget):
 
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(28, 16, 28, 16)
-        card_layout.setSpacing(18)
+        card_layout.setSpacing(10)
 
         # =====================================================
         # =====================================================
@@ -738,94 +738,90 @@ class EstoquePage(QWidget):
         topo.setSpacing(18)
 
         coluna_esquerda = QVBoxLayout()
-        coluna_esquerda.setSpacing(12)
+        coluna_esquerda.setSpacing(10)
 
         # Título removido conforme solicitado
 
-        btn_inserir = QPushButton("Inserir informações")
-        btn_inserir.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_inserir.setFixedSize(130, 28)
-
-        btn_inserir.setStyleSheet("""
-            QPushButton {
-                background-color: #5b61f6;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 14px;
-                font-weight: 600;
-            }
-
-            QPushButton:hover {
-                background-color: #4b51e6;
-            }
-
-            QPushButton:pressed {
-                background-color: #4147d2;
-            }
-        """)
-
-        btn_inserir.clicked.connect(self._atualizar)
-        
+        # Botões de ação da barra superior
         btn_recarregar = QPushButton()
-        btn_recarregar.setIcon(qta.icon("fa6s.rotate-right", color="#5b61f6"))
+        btn_recarregar.setIcon(qta.icon("fa6s.arrows-rotate", color="#4f46e5"))
+        btn_recarregar.setIconSize(QSize(14, 14))
         btn_recarregar.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_recarregar.setFixedSize(28, 28)
-        btn_recarregar.setToolTip("Atualizar (ler dados novamente)")
+        btn_recarregar.setFixedSize(34, 34)
+        btn_recarregar.setToolTip("Atualizar dados do estoque")
         btn_recarregar.setStyleSheet("""
             QPushButton {
-                background-color: transparent;
-                border: 2px solid #5b61f6;
-                border-radius: 10px;
+                background-color: #ffffff;
+                border: 1px solid #dce3ee;
+                border-radius: 8px;
             }
             QPushButton:hover {
                 background-color: #eef2ff;
+                border-color: #c7d2fe;
             }
             QPushButton:pressed {
                 background-color: #e0e7ff;
+                border-color: #a5b4fc;
             }
         """)
         btn_recarregar.clicked.connect(self._carregar_dados)
 
-        linha_botoes = QHBoxLayout()
-        linha_botoes.setSpacing(10)
-        linha_botoes.addWidget(btn_recarregar)
-        linha_botoes.addWidget(btn_inserir)
-
-        btn_exportar = QPushButton("📊 Exportar Excel")
-        btn_exportar.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_exportar.setFixedSize(130, 28)
-        btn_exportar.setStyleSheet("""
+        btn_inserir = QPushButton(" Inserir informações")
+        btn_inserir.setIcon(qta.icon("fa6s.file-import", color="#ffffff"))
+        btn_inserir.setIconSize(QSize(13, 13))
+        btn_inserir.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_inserir.setFixedHeight(34)
+        btn_inserir.setToolTip("Inserir ou atualizar dados copiados para a área de transferência")
+        btn_inserir.setStyleSheet("""
             QPushButton {
-                background-color: #16a34a;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 14px;
+                background-color: #4f46e5;
+                color: #ffffff;
+                border: 1px solid #4338ca;
+                border-radius: 8px;
+                padding: 0 14px;
+                font-size: 12px;
                 font-weight: 600;
             }
             QPushButton:hover {
-                background-color: #15803d;
+                background-color: #4338ca;
+                border-color: #3730a3;
             }
             QPushButton:pressed {
-                background-color: #166534;
+                background-color: #3730a3;
+            }
+        """)
+        btn_inserir.clicked.connect(self._atualizar)
+
+        btn_exportar = QPushButton(" Exportar Excel")
+        btn_exportar.setIcon(qta.icon("fa6s.file-excel", color="#ffffff"))
+        btn_exportar.setIconSize(QSize(13, 13))
+        btn_exportar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_exportar.setFixedHeight(34)
+        btn_exportar.setToolTip("Exportar listagem atual para planilha Excel (.xlsx)")
+        btn_exportar.setStyleSheet("""
+            QPushButton {
+                background-color: #10b981;
+                color: #ffffff;
+                border: 1px solid #059669;
+                border-radius: 8px;
+                padding: 0 14px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #059669;
+                border-color: #047857;
+            }
+            QPushButton:pressed {
+                background-color: #047857;
             }
         """)
         btn_exportar.clicked.connect(self._exportar_excel)
 
-        linha_botoes.addWidget(btn_exportar)
-        linha_botoes.addStretch()
-        # coluna_esquerda.addLayout(linha_botoes)
-
-        filtro_layout = QHBoxLayout()
-        filtro_layout.setSpacing(6)
-        filtro_layout.setContentsMargins(0, 0, 0, 0)
-
         self.campo_filtro = QLineEdit()
         self.campo_filtro.setPlaceholderText("⌕   Pesquisar...")
         self.campo_filtro.setFixedHeight(34)
-        self.campo_filtro.setFixedWidth(300)
-        self.campo_filtro.setStyleSheet("padding: 2px 8px;")
+        self.campo_filtro.setFixedWidth(280)
         # Timer debounce para não travar digitação (filtro só após 280ms sem digitar)
         self._filtro_timer = QTimer(self)
         self._filtro_timer.setSingleShot(True)
@@ -835,56 +831,55 @@ class EstoquePage(QWidget):
 
         self.campo_filtro.setStyleSheet("""
             QLineEdit {
-                background: white;
+                background: #ffffff;
                 color: #17203f;
                 border: 1px solid #dce3ee;
-                border-radius: 10px;
-                padding-left: 15px;
-                padding-right: 40px;
+                border-radius: 8px;
+                padding-left: 12px;
+                padding-right: 12px;
                 font-size: 13px;
             }
-
             QLineEdit:focus {
-                border: 1px solid #6366f1;
+                border: 1.5px solid #6366f1;
             }
         """)
 
         self.btn_limpar_filtro = QPushButton("✕")
         self.btn_limpar_filtro.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_limpar_filtro.setFixedSize(32, 32)
+        self.btn_limpar_filtro.setFixedSize(34, 34)
         self.btn_limpar_filtro.setToolTip("Limpar filtro")
         self.btn_limpar_filtro.clicked.connect(self._limpar_filtro)
         self.btn_limpar_filtro.setStyleSheet("""
             QPushButton {
-                background: transparent;
+                background: #ffffff;
                 color: #9ca3af;
-                border: none;
-                border-radius: 6px;
-                font-size: 14px;
+                border: 1px solid #dce3ee;
+                border-radius: 8px;
+                font-size: 13px;
                 font-weight: 600;
             }
             QPushButton:hover {
-                background: #f3f4f6;
-                color: #6b7280;
+                background: #fef2f2;
+                color: #ef4444;
+                border-color: #fca5a5;
             }
             QPushButton:pressed {
-                background: #e5e7eb;
-                color: #4b5563;
+                background: #fee2e2;
+                color: #dc2626;
             }
         """)
 
-        filtro_layout.addWidget(self.campo_filtro)
-        filtro_layout.addWidget(self.btn_limpar_filtro)
-        filtro_layout.addStretch()
-
-# removed old additions
-
         # =====================================================
-        # CARD CENTRAL - ITEM SELECIONADO
+        # CARD CENTRAL - ITEM SELECIONADO (VISÃO GERAL)
         # =====================================================
+        ALTURA_VISAO_GERAL = 120
+        ALTURA_CONTADOR_BOX = 120
+        ALTURA_BTN_TOGGLE = 34
+        ESPACO_QUADROS = 10
+
         self.detalhes_box = QWidget()
         self.detalhes_box.setObjectName("detalhesBox")
-        self.detalhes_box.setMinimumHeight(128)
+        self.detalhes_box.setFixedHeight(ALTURA_VISAO_GERAL)
         self.detalhes_box.setMinimumWidth(670)
 
         self.detalhes_box.setStyleSheet("""
@@ -1067,7 +1062,7 @@ class EstoquePage(QWidget):
         
         self.btn_indicador_sci_qad = QPushButton("Divergente 0")
         self.btn_indicador_sci_qad.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_indicador_sci_qad.setFixedHeight(28)
+        self.btn_indicador_sci_qad.setFixedHeight(34)
         self.btn_indicador_sci_qad.clicked.connect(self._toggle_filtro_nao_ok)
 
         linha_filtro_botoes = QHBoxLayout()
@@ -1081,7 +1076,6 @@ class EstoquePage(QWidget):
         linha_filtro_botoes.addWidget(self.btn_indicador_sci_qad)
         
         coluna_esquerda.addLayout(linha_filtro_botoes)
-        coluna_esquerda.addStretch()
         
         topo.addLayout(coluna_esquerda)
 
@@ -1091,7 +1085,7 @@ class EstoquePage(QWidget):
         # =====================================================
         contador_box = QWidget()
         contador_box.setFixedWidth(141)
-        contador_box.setFixedHeight(96)
+        contador_box.setFixedHeight(ALTURA_CONTADOR_BOX)
 
         contador_box.setStyleSheet("""
             QWidget {
@@ -1158,7 +1152,7 @@ class EstoquePage(QWidget):
         self.btn_toggle = QPushButton("⛶  Visão completa")
         self.btn_toggle.setObjectName("btnSecondary")
         self.btn_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_toggle.setFixedSize(141, 35)
+        self.btn_toggle.setFixedSize(141, ALTURA_BTN_TOGGLE)
         self.btn_toggle.setCheckable(True)
         self.btn_toggle.clicked.connect(self._alternar_modo)
 
@@ -1185,15 +1179,15 @@ class EstoquePage(QWidget):
 
         coluna_direita_superior = QWidget()
         coluna_direita_superior.setFixedWidth(141)
+        coluna_direita_superior.setFixedHeight(ALTURA_CONTADOR_BOX + ESPACO_QUADROS + ALTURA_BTN_TOGGLE)
         coluna_superior_layout = QVBoxLayout(coluna_direita_superior)
         coluna_superior_layout.setContentsMargins(0, 0, 0, 0)
-        coluna_superior_layout.setSpacing(12)
+        coluna_superior_layout.setSpacing(ESPACO_QUADROS)
 
         coluna_superior_layout.addWidget(contador_box)
         coluna_superior_layout.addWidget(self.btn_toggle)
-        coluna_superior_layout.addStretch()
 
-        topo.addWidget(coluna_direita_superior, 0, Qt.AlignmentFlag.AlignTop)
+        topo.addWidget(coluna_direita_superior)
         card_layout.addLayout(topo)
 
         # =====================================================
@@ -1956,15 +1950,17 @@ class EstoquePage(QWidget):
 
         if total_nao_ok > 0:
             if ativo_filtro:
+                self.btn_indicador_sci_qad.setIcon(qta.icon("fa6s.filter", color="#ffffff"))
+                self.btn_indicador_sci_qad.setIconSize(QSize(12, 12))
                 self.btn_indicador_sci_qad.setStyleSheet("""
                     QPushButton {
                         background-color: #dc2626;
                         color: #ffffff;
                         border: 1px solid #b91c1c;
                         border-radius: 8px;
-                        padding: 0 12px;
-                        font-size: 11px;
-                        font-weight: 700;
+                        padding: 0 14px;
+                        font-size: 12px;
+                        font-weight: 600;
                     }
                     QPushButton:hover {
                         background-color: #b91c1c;
@@ -1974,15 +1970,17 @@ class EstoquePage(QWidget):
                     "Filtro ativo: exibindo apenas itens onde SCI x QAD ≠ OK.\nClique para remover este filtro."
                 )
             else:
+                self.btn_indicador_sci_qad.setIcon(qta.icon("fa6s.triangle-exclamation", color="#dc2626"))
+                self.btn_indicador_sci_qad.setIconSize(QSize(12, 12))
                 self.btn_indicador_sci_qad.setStyleSheet("""
                     QPushButton {
                         background-color: #fef2f2;
                         color: #dc2626;
                         border: 1px solid #fecaca;
                         border-radius: 8px;
-                        padding: 0 12px;
-                        font-size: 11px;
-                        font-weight: 700;
+                        padding: 0 14px;
+                        font-size: 12px;
+                        font-weight: 600;
                     }
                     QPushButton:hover {
                         background-color: #fee2e2;
@@ -1993,15 +1991,17 @@ class EstoquePage(QWidget):
                     f"Existem {total_nao_ok} itens na listagem onde a coluna SCI x QAD não possui 'OK'.\nClique para filtrar apenas estes itens."
                 )
         else:
+            self.btn_indicador_sci_qad.setIcon(qta.icon("fa6s.circle-check", color="#16a34a"))
+            self.btn_indicador_sci_qad.setIconSize(QSize(12, 12))
             self.btn_indicador_sci_qad.setStyleSheet("""
                 QPushButton {
                     background-color: #f0fdf4;
                     color: #16a34a;
                     border: 1px solid #bbf7d0;
                     border-radius: 8px;
-                    padding: 0 12px;
-                    font-size: 11px;
-                    font-weight: 700;
+                    padding: 0 14px;
+                    font-size: 12px;
+                    font-weight: 600;
                 }
                 QPushButton:hover {
                     background-color: #dcfce7;
