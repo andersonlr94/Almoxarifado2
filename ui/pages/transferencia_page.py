@@ -4,7 +4,7 @@ import os
 import pyautogui
 import qtawesome
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QRadioButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QButtonGroup, QMessageBox, QFrame, QSizePolicy
 )
@@ -26,6 +26,10 @@ class TransferenciaPage(QWidget):
         self.dados = []
         self._setup_ui()
         self._carregar_dados()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._garantir_linha_vazia()
 
     # ── UI ──────────────────────────────────────────────────────────────
     def _setup_ui(self):
@@ -247,6 +251,12 @@ class TransferenciaPage(QWidget):
         header.resizeSection(2, 160)
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabela.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.tabela.setEditTriggers(
+            QAbstractItemView.EditTrigger.DoubleClicked |
+            QAbstractItemView.EditTrigger.SelectedClicked |
+            QAbstractItemView.EditTrigger.EditKeyPressed |
+            QAbstractItemView.EditTrigger.AnyKeyPressed
+        )
         self.tabela.setAlternatingRowColors(True)
         self.tabela.verticalHeader().setDefaultSectionSize(32)
         self.tabela.verticalHeader().setMinimumSectionSize(26)
@@ -256,7 +266,7 @@ class TransferenciaPage(QWidget):
         # altura total do quadro — ocupa espaço restante
         right_layout.addWidget(self.tabela, 1)
 
-        hint = QLabel("Dica: copie 3 colunas da planilha (Item  •  Qtde  •  Lote) e clique em \"Colar da área de transferência\"")
+        hint = QLabel("Dica: preencha diretamente na tabela (uma linha vazia sempre fica disponível) ou copie 3 colunas da planilha e use \"Colar\"")
         hint.setStyleSheet("color:#94a3b8; font-size:11px; padding-left:2px;")
         hint.setWordWrap(True)
         right_layout.addWidget(hint)
@@ -301,26 +311,109 @@ class TransferenciaPage(QWidget):
     def _atualizar_estado_botoes(self):
         tem_sel = bool(self.tabela.selectionModel().selectedRows())
         self.btn_remover_sel.setEnabled(tem_sel)
-        self.btn_executar.setEnabled(self.tabela.rowCount() > 0)
+        self.btn_executar.setEnabled(len(self.dados) > 0)
 
     # ── Dados ─────────────────────────────────────────────────────────
     def _carregar_dados(self):
         try:
             with open(_caminho_json(), "r", encoding="utf-8") as f:
-                self.dados = json.load(f)
+                brutos = json.load(f)
+                if isinstance(brutos, list):
+                    self.dados = [
+                        d for d in brutos
+                        if isinstance(d, dict) and (
+                            str(d.get("item", "")).strip() or
+                            str(d.get("qtde", "")).strip() or
+                            str(d.get("lote", "")).strip()
+                        )
+                    ]
+                else:
+                    self.dados = []
         except (FileNotFoundError, json.JSONDecodeError):
             self.dados = []
         self._popular_tabela()
+
+    def _inserir_linha_vazia(self, row):
+        self.tabela.blockSignals(True)
+        self.tabela.insertRow(row)
+
+        it_item = QTableWidgetItem("")
+        self.tabela.setItem(row, 0, it_item)
+
+        it_qtde = QTableWidgetItem("")
+        it_qtde.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.tabela.setItem(row, 1, it_qtde)
+
+        it_lote = QTableWidgetItem("")
+        it_lote.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.tabela.setItem(row, 2, it_lote)
+        self.tabela.blockSignals(False)
+
+    def _garantir_linha_vazia(self):
+        total_linhas = self.tabela.rowCount()
+        if total_linhas == 0:
+            self._inserir_linha_vazia(0)
+            return
+
+        ultima_row = total_linhas - 1
+        it_ult = self.tabela.item(ultima_row, 0).text().strip() if self.tabela.item(ultima_row, 0) else ""
+        qt_ult = self.tabela.item(ultima_row, 1).text().strip() if self.tabela.item(ultima_row, 1) else ""
+        lo_ult = self.tabela.item(ultima_row, 2).text().strip() if self.tabela.item(ultima_row, 2) else ""
+
+        if it_ult or qt_ult or lo_ult:
+            # A última linha foi preenchida! Adiciona nova linha vazia no fim
+            self._inserir_linha_vazia(total_linhas)
+        else:
+            # Se a última linha já é vazia e a penúltima também for vazia, remove a excedente
+            while self.tabela.rowCount() > 1:
+                tot = self.tabela.rowCount()
+                u_row = tot - 1
+                pen_row = tot - 2
+
+                u_it = self.tabela.item(u_row, 0).text().strip() if self.tabela.item(u_row, 0) else ""
+                u_qt = self.tabela.item(u_row, 1).text().strip() if self.tabela.item(u_row, 1) else ""
+                u_lo = self.tabela.item(u_row, 2).text().strip() if self.tabela.item(u_row, 2) else ""
+
+                p_it = self.tabela.item(pen_row, 0).text().strip() if self.tabela.item(pen_row, 0) else ""
+                p_qt = self.tabela.item(pen_row, 1).text().strip() if self.tabela.item(pen_row, 1) else ""
+                p_lo = self.tabela.item(pen_row, 2).text().strip() if self.tabela.item(pen_row, 2) else ""
+
+                if not (u_it or u_qt or u_lo) and not (p_it or p_qt or p_lo):
+                    curr = self.tabela.currentRow()
+                    self.tabela.blockSignals(True)
+                    if curr == u_row:
+                        self.tabela.removeRow(pen_row)
+                    else:
+                        self.tabela.removeRow(u_row)
+                    self.tabela.blockSignals(False)
+                else:
+                    break
+
+    def _sincronizar_dados_da_tabela(self):
+        novos_dados = []
+        for r in range(self.tabela.rowCount()):
+            it = self.tabela.item(r, 0).text().strip().upper() if self.tabela.item(r, 0) else ""
+            qt = self.tabela.item(r, 1).text().strip() if self.tabela.item(r, 1) else ""
+            lo = self.tabela.item(r, 2).text().strip().upper() if self.tabela.item(r, 2) else ""
+            if it or qt or lo:
+                novos_dados.append({"item": it, "qtde": qt, "lote": lo})
+        self.dados = novos_dados
+        self._salvar_json()
+        self._atualizar_contador()
+        self._atualizar_estado_botoes()
 
     def _popular_tabela(self):
         self.tabela.blockSignals(True)
         self.tabela.setRowCount(0)
         for registro in self.dados:
-            row = self.tabela.rowCount()
-            self.tabela.insertRow(row)
             item_val = str(registro.get("item", "")).strip().upper()
             qtde_val = str(registro.get("qtde", "")).strip()
             lote_val = str(registro.get("lote", "")).strip().upper()
+            if not (item_val or qtde_val or lote_val):
+                continue
+
+            row = self.tabela.rowCount()
+            self.tabela.insertRow(row)
 
             it_item = QTableWidgetItem(item_val)
             it_item.setToolTip(item_val)
@@ -333,35 +426,52 @@ class TransferenciaPage(QWidget):
             it_lote = QTableWidgetItem(lote_val)
             it_lote.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.tabela.setItem(row, 2, it_lote)
+
         self.tabela.blockSignals(False)
+        self._garantir_linha_vazia()
         self._atualizar_contador()
         self._atualizar_estado_botoes()
-        if self.tabela.rowCount() == 0:
-            self.tabela.setToolTip("Nenhum item — cole dados da planilha")
+        if len(self.dados) == 0:
+            self.tabela.setToolTip("Digite os dados diretamente na tabela ou cole da planilha")
         else:
             self.tabela.setToolTip("")
 
     def _ao_editar_item(self, item):
+        if not item:
+            return
         row = item.row()
         col = item.column()
-        texto = item.text().strip().upper()
-        if 0 <= row < len(self.dados):
+        texto = item.text().strip()
+        if col in (0, 2):
+            texto = texto.upper()
+
+        if item.text() != texto:
+            self.tabela.blockSignals(True)
+            item.setText(texto)
             if col == 0:
-                self.dados[row]["item"] = texto
-            elif col == 1:
-                self.dados[row]["qtde"] = texto
-            elif col == 2:
-                self.dados[row]["lote"] = texto
-            self._salvar_json()
+                item.setToolTip(texto)
+            self.tabela.blockSignals(False)
+
+        self._sincronizar_dados_da_tabela()
+        self._garantir_linha_vazia()
 
     def _atualizar_contador(self):
-        n = self.tabela.rowCount()
+        n = len(self.dados)
         if n == 1:
             self.label_contador.setText("1 item")
         else:
             self.label_contador.setText(f"{n} itens")
 
     def _colar(self):
+        focus_w = QApplication.focusWidget()
+        campos_form = (
+            self.campo_de_local, self.campo_de_lugar, self.campo_de_lote,
+            self.campo_para_local, self.campo_para_lugar, self.campo_para_lote
+        )
+        if isinstance(focus_w, QLineEdit) and focus_w not in campos_form:
+            focus_w.paste()
+            return
+
         from PySide6.QtGui import QGuiApplication
         texto = QGuiApplication.clipboard().text()
         if not texto or not texto.strip():
@@ -392,23 +502,37 @@ class TransferenciaPage(QWidget):
             return
         self._salvar_json()
         self._popular_tabela()
-        self.label_contador.setText(f"{self.tabela.rowCount()} itens  •  +{novos} colados")
+        self.label_contador.setText(f"{len(self.dados)} itens  •  +{novos} colados")
 
     def _remover_selecionados(self):
         sel = self.tabela.selectionModel().selectedRows()
         if not sel:
             return
         rows = sorted(set(i.row() for i in sel), reverse=True)
+        self.tabela.blockSignals(True)
         for r in rows:
-            if 0 <= r < len(self.dados):
-                self.dados.pop(r)
-        self._salvar_json()
-        self._popular_tabela()
+            if 0 <= r < self.tabela.rowCount():
+                self.tabela.removeRow(r)
+        self.tabela.blockSignals(False)
+        self._sincronizar_dados_da_tabela()
+        self._garantir_linha_vazia()
 
     def _executar(self):
-        if self.tabela.rowCount() == 0:
+        linhas_execucao = []
+        for row in range(self.tabela.rowCount()):
+            it = self.tabela.item(row, 0)
+            qt = self.tabela.item(row, 1)
+            lo = self.tabela.item(row, 2)
+            kardex = it.text().strip().upper() if it else ""
+            qtde = qt.text().strip().upper() if qt else ""
+            lote_tabela = lo.text().strip().upper() if lo else ""
+            if kardex or qtde or lote_tabela:
+                linhas_execucao.append((kardex, qtde, lote_tabela))
+
+        if not linhas_execucao:
             QMessageBox.information(self, "Executar", "Nenhum item na tabela.")
             return
+
         de_local = self.campo_de_local.text().strip().upper()
         de_lugar = self.campo_de_lugar.text().strip().upper()
         de_lote = self.campo_de_lote.text().strip().upper()
@@ -422,10 +546,7 @@ class TransferenciaPage(QWidget):
             pass  # Prossegue diretamente mesmo se vazio
         
         esperar_inicio()
-        for row in range(self.tabela.rowCount()):
-            kardex = self.tabela.item(row, 0).text().upper() if self.tabela.item(row, 0) else ""
-            qtde = self.tabela.item(row, 1).text().upper() if self.tabela.item(row, 1) else ""
-            lote_tabela = self.tabela.item(row, 2).text().upper() if self.tabela.item(row, 2) else ""
+        for kardex, qtde, lote_tabela in linhas_execucao:
             digitar_texto(kardex)
             enter()
             digitar_texto(qtde)
@@ -470,7 +591,7 @@ class TransferenciaPage(QWidget):
             pyautogui.press("f4")
 
     def _limpar(self):
-        if self.tabela.rowCount() == 0:
+        if len(self.dados) == 0 and self.tabela.rowCount() <= 1:
             return
         
         self.dados.clear()
@@ -493,7 +614,13 @@ class TransferenciaPage(QWidget):
             return
         try:
             os.makedirs(os.path.dirname(caminho), exist_ok=True)
+            dados_para_salvar = [
+                d for d in self.dados
+                if str(d.get("item", "")).strip() or
+                   str(d.get("qtde", "")).strip() or
+                   str(d.get("lote", "")).strip()
+            ]
             with open(caminho, "w", encoding="utf-8") as f:
-                json.dump(self.dados, f, ensure_ascii=False, indent=2)
+                json.dump(dados_para_salvar, f, ensure_ascii=False, indent=2)
         except OSError:
             pass

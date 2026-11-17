@@ -10,6 +10,7 @@ import matplotlib
 matplotlib.use("QtAgg")
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from matplotlib.ticker import FuncFormatter
 
 import qtawesome
 
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
     QStyledItemDelegate, QFileDialog, QMessageBox, QDialog,
+    QComboBox, QCheckBox, QFrame, QSizePolicy,
 )
 from PySide6.QtCore import Qt, QSize, QRect
 from PySide6.QtGui import QPainter, QColor
@@ -155,6 +157,24 @@ class ToggleSwitch(QPushButton):
             painter.drawText(text_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, text)
 
 
+class TabelaFreshStart(QTableWidget):
+    """Tabela com sizeHint contido para evitar que o layout force expansão da janela."""
+    def sizeHint(self):
+        return QSize(600, 220)
+
+    def minimumSizeHint(self):
+        return QSize(300, 100)
+
+
+class ChartCanvas(FigureCanvas):
+    """Canvas com sizeHint contido para evitar que o matplotlib force expansão da janela."""
+    def sizeHint(self):
+        return QSize(600, 220)
+
+    def minimumSizeHint(self):
+        return QSize(300, 100)
+
+
 class FreshStartPage(QWidget):
     COLUNAS = [
         "Transf", "Local", "Kardex", "Descrição", "Loc", "Qtde Qad", "Qtde Sci",
@@ -165,11 +185,20 @@ class FreshStartPage(QWidget):
         "compras", "fornecedor", "pedido", "lugar_transferido", "loc_transf", "data",
     ]
 
+    def sizeHint(self):
+        return QSize(1000, 650)
+
+    def minimumSizeHint(self):
+        return QSize(600, 320)
+
     def __init__(self):
         super().__init__()
         self.dados = []
         self._credenciais = None
-        self._estado_grafico = 0
+        self._estado_grafico = 1
+        self._dados_grafico_atual = []
+        self._annot = None
+        self._ax = None
         self._setup_ui()
         self._carregar_dados()
 
@@ -253,6 +282,8 @@ class FreshStartPage(QWidget):
 
         self._calcular_total_zcentral()
         self._calcular_total_dph()
+        self._registrar_atualizacao()
+        self._atualizar_grafico()
         QMessageBox.information(self, "zCusto", "zCusto OK")
 
     # ── UI ──
@@ -331,8 +362,9 @@ class FreshStartPage(QWidget):
 
         table_card_layout.addLayout(self.filter_row)
 
-        self.tabela = QTableWidget(0, len(self.COLUNAS))
+        self.tabela = TabelaFreshStart(0, len(self.COLUNAS))
         self.tabela.setObjectName("tabelaFreshStart")
+        self.tabela.setSizeAdjustPolicy(QAbstractItemView.SizeAdjustPolicy.AdjustIgnored)
         self.tabela.setHorizontalHeaderLabels(self.COLUNAS)
         header = self.tabela.horizontalHeader()
         header.setStretchLastSection(True)
@@ -350,37 +382,10 @@ class FreshStartPage(QWidget):
         self.tabela.itemChanged.connect(self._item_modificado)
         table_card_layout.addWidget(self.tabela)
 
-        self.total_row = QHBoxLayout()
-        self.total_row.setSpacing(8)
-        self.total_row.addStretch()
-        label_total = QLabel("Valor total zCentral:")
-        label_total.setObjectName("statusLabel")
-        self.total_row.addWidget(label_total)
+        # Rótulos internos mantidos para compatibilidade com cálculo e histórico
         self.label_total_zcentral = QLabel("R$ 0,00")
-        self.label_total_zcentral.setObjectName("statusLabel")
-        self.label_total_zcentral.setStyleSheet("font-size: 15px; font-weight: 700; color: #6366f1;")
-        self.total_row.addWidget(self.label_total_zcentral)
-
-        self.total_row.addSpacing(24)
-
-        label_total_dph = QLabel("Valor DPH:")
-        label_total_dph.setObjectName("statusLabel")
-        self.total_row.addWidget(label_total_dph)
         self.label_total_dph = QLabel("R$ 0,00")
-        self.label_total_dph.setObjectName("statusLabel")
-        self.label_total_dph.setStyleSheet("font-size: 15px; font-weight: 700; color: #16a34a;")
-        self.total_row.addWidget(self.label_total_dph)
-
-        self.total_row.addSpacing(24)
-
-        label_total_dif = QLabel("Valor Central zCentral-DPH:")
-        label_total_dif.setObjectName("statusLabel")
-        self.total_row.addWidget(label_total_dif)
         self.label_total_dph_dif = QLabel("R$ 0,00")
-        self.label_total_dph_dif.setObjectName("statusLabel")
-        self.label_total_dph_dif.setStyleSheet("font-size: 15px; font-weight: 700; color: #ea580c;")
-        self.total_row.addWidget(self.label_total_dph_dif)
-        table_card_layout.addLayout(self.total_row)
 
         self.layout.addWidget(self.table_card)
 
@@ -391,36 +396,287 @@ class FreshStartPage(QWidget):
         self.chart_card_layout.setContentsMargins(18, 14, 18, 14)
         self.chart_card_layout.setSpacing(10)
 
+        # Cabeçalho do Gráfico
         chart_header = QHBoxLayout()
+        chart_header.setSpacing(8)
+
         chart_titulo = QLabel("Evolução dos valores")
         chart_titulo.setObjectName("pageSubtitle")
         chart_header.addWidget(chart_titulo)
+
+        badge_sub = QLabel("Histórico Financeiro")
+        badge_sub.setStyleSheet("""
+            QLabel {
+                background-color: #eef2ff;
+                color: #4f46e5;
+                font-size: 10px;
+                font-weight: 700;
+                padding: 2px 8px;
+                border-radius: 6px;
+                border: 1px solid #c7d2fe;
+            }
+        """)
+        chart_header.addWidget(badge_sub)
         chart_header.addStretch()
+
+        self.botao_recolher = QPushButton()
+        self.botao_recolher.setObjectName("btnRecolherGrafico")
+        self.botao_recolher.setIcon(qtawesome.icon('fa6s.chevron-down', color='#6366f1'))
+        self.botao_recolher.setIconSize(QSize(12, 12))
+        self.botao_recolher.setFixedSize(28, 28)
+        self.botao_recolher.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.botao_recolher.setToolTip("Recolher gráfico")
+        self.botao_recolher.setStyleSheet(
+            "QPushButton#btnRecolherGrafico {"
+            " background-color: #ffffff; border: 1px solid #e2e8f0;"
+            " border-radius: 8px;"
+            "}"
+            "QPushButton#btnRecolherGrafico:hover {"
+            " background-color: #eef2ff; border-color: #c7d2fe;"
+            "}"
+        )
+        self.botao_recolher.clicked.connect(self._recolher_ou_expandir_grafico)
+        chart_header.addWidget(self.botao_recolher)
 
         self.botao_grafico = QPushButton()
         self.botao_grafico.setObjectName("btnExpandirGrafico")
-        self.botao_grafico.setIcon(qtawesome.icon('fa6s.window-minimize', color='#94a3b8'))
-        self.botao_grafico.setIconSize(QSize(14, 14))
+        self.botao_grafico.setIcon(qtawesome.icon('fa6s.up-right-and-down-left-from-center', color='#6366f1'))
+        self.botao_grafico.setIconSize(QSize(12, 12))
         self.botao_grafico.setFixedSize(28, 28)
         self.botao_grafico.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.botao_grafico.setToolTip("Expandir gráfico")
+        self.botao_grafico.setToolTip("Maximizar gráfico")
         self.botao_grafico.setStyleSheet(
             "QPushButton#btnExpandirGrafico {"
-            " background-color: transparent; border: 1px solid #e2e8f0;"
+            " background-color: #ffffff; border: 1px solid #e2e8f0;"
             " border-radius: 8px;"
             "}"
             "QPushButton#btnExpandirGrafico:hover {"
             " background-color: #eef2ff; border-color: #c7d2fe;"
             "}"
         )
-        self.botao_grafico.clicked.connect(self._alternar_grafico)
+        self.botao_grafico.clicked.connect(self._maximizar_ou_restaurar_grafico)
         chart_header.addWidget(self.botao_grafico)
 
         self.chart_card_layout.addLayout(chart_header)
 
+        # ── Cartões de Resumo KPI ──
+        def _criar_card_kpi(titulo, cor_borda, cor_texto, icone_nome=""):
+            card = QFrame()
+            card.setObjectName("kpiCard")
+            card.setStyleSheet(f"""
+                QFrame#kpiCard {{
+                    background-color: #ffffff;
+                    border: 1px solid {cor_borda};
+                    border-radius: 10px;
+                }}
+            """)
+            lay = QVBoxLayout(card)
+            lay.setContentsMargins(10, 6, 10, 6)
+            lay.setSpacing(2)
+
+            topo = QHBoxLayout()
+            topo.setSpacing(6)
+            if icone_nome:
+                try:
+                    ico = QLabel()
+                    ico.setPixmap(qtawesome.icon(icone_nome, color=cor_texto).pixmap(12, 12))
+                    topo.addWidget(ico)
+                except Exception:
+                    pass
+            lbl_tit = QLabel(titulo.upper())
+            lbl_tit.setStyleSheet("color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;")
+            topo.addWidget(lbl_tit)
+            topo.addStretch()
+            lay.addLayout(topo)
+
+            lbl_val = QLabel("R$ 0,00")
+            lbl_val.setStyleSheet(f"color: {cor_texto}; font-size: 14px; font-weight: 800;")
+            lbl_val.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            lay.addWidget(lbl_val)
+
+            return card, lbl_val
+
+        self.kpi_widget = QWidget()
+        kpi_lay = QHBoxLayout(self.kpi_widget)
+        kpi_lay.setContentsMargins(0, 0, 0, 0)
+        kpi_lay.setSpacing(10)
+
+        card_zc, self.lbl_kpi_zcentral = _criar_card_kpi("zCentral Atual", "#c7d2fe", "#4338ca", "fa6s.warehouse")
+        card_dp, self.lbl_kpi_dph = _criar_card_kpi("DPH Atual", "#a7f3d0", "#059669", "fa6s.boxes-stacked")
+        card_df, self.lbl_kpi_dif = _criar_card_kpi("Diferença (zC - DPH)", "#fed7aa", "#d97706", "fa6s.scale-balanced")
+        card_dt, self.lbl_kpi_data = _criar_card_kpi("Último Registro", "#e2e8f0", "#475569", "fa6s.calendar-day")
+        self.lbl_kpi_data.setText("-")
+
+        kpi_lay.addWidget(card_zc)
+        kpi_lay.addWidget(card_dp)
+        kpi_lay.addWidget(card_df)
+        kpi_lay.addWidget(card_dt)
+        self.chart_card_layout.addWidget(self.kpi_widget)
+
+        # ── Barra de Controles do Gráfico ──
+        self.controls_widget = QWidget()
+        ctrl_lay = QHBoxLayout(self.controls_widget)
+        ctrl_lay.setContentsMargins(0, 2, 0, 2)
+        ctrl_lay.setSpacing(8)
+
+        lbl_per = QLabel("Período:")
+        lbl_per.setStyleSheet("color: #475569; font-size: 11px; font-weight: 700;")
+        ctrl_lay.addWidget(lbl_per)
+
+        self.combo_periodo = QComboBox()
+        self.combo_periodo.addItems(["Todos os registros", "Últimos 30 dias", "Últimos 15 dias", "Últimos 7 dias"])
+        self.combo_periodo.setStyleSheet("""
+            QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #dce3ee;
+                border-radius: 8px;
+                padding: 4px 10px;
+                font-size: 11px;
+                font-weight: 600;
+                color: #334155;
+                min-height: 22px;
+            }
+            QComboBox:hover {
+                border-color: #6366f1;
+            }
+        """)
+        self.combo_periodo.currentIndexChanged.connect(self._atualizar_grafico)
+        ctrl_lay.addWidget(self.combo_periodo)
+
+        lbl_tipo = QLabel("Tipo:")
+        lbl_tipo.setStyleSheet("color: #475569; font-size: 11px; font-weight: 700; margin-left: 4px;")
+        ctrl_lay.addWidget(lbl_tipo)
+
+        self.combo_tipo = QComboBox()
+        self.combo_tipo.addItems(["Linhas com Área", "Linhas Simples", "Barras Agrupadas"])
+        self.combo_tipo.setStyleSheet("""
+            QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #dce3ee;
+                border-radius: 8px;
+                padding: 4px 10px;
+                font-size: 11px;
+                font-weight: 600;
+                color: #334155;
+                min-height: 22px;
+            }
+            QComboBox:hover {
+                border-color: #6366f1;
+            }
+        """)
+        self.combo_tipo.currentIndexChanged.connect(self._atualizar_grafico)
+        ctrl_lay.addWidget(self.combo_tipo)
+
+        def _separador():
+            sep = QFrame()
+            sep.setFrameShape(QFrame.Shape.VLine)
+            sep.setStyleSheet("background-color: #e2e8f0; max-width: 1px; min-height: 18px;")
+            return sep
+
+        ctrl_lay.addWidget(_separador())
+
+        lbl_ser = QLabel("Séries:")
+        lbl_ser.setStyleSheet("color: #475569; font-size: 11px; font-weight: 700;")
+        ctrl_lay.addWidget(lbl_ser)
+
+        def _estilo_pill(cor_prim, cor_bg, cor_txt):
+            return f"""
+                QPushButton {{
+                    background-color: #ffffff;
+                    color: #64748b;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 12px;
+                    padding: 3px 10px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }}
+                QPushButton:hover {{
+                    background-color: #f8fafc;
+                    border-color: {cor_prim};
+                    color: {cor_txt};
+                }}
+                QPushButton:checked {{
+                    background-color: {cor_bg};
+                    color: {cor_txt};
+                    border: 1.5px solid {cor_prim};
+                    font-weight: 700;
+                }}
+            """
+
+        self.btn_toggle_zcentral = QPushButton("●  zCentral")
+        self.btn_toggle_zcentral.setCheckable(True)
+        self.btn_toggle_zcentral.setChecked(True)
+        self.btn_toggle_zcentral.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_toggle_zcentral.setToolTip("Ligar/desligar exibição do zCentral")
+        self.btn_toggle_zcentral.setStyleSheet(_estilo_pill("#6366f1", "#e0e7ff", "#4338ca"))
+        self.btn_toggle_zcentral.clicked.connect(self._atualizar_grafico)
+        ctrl_lay.addWidget(self.btn_toggle_zcentral)
+
+        self.btn_toggle_dph = QPushButton("●  DPH")
+        self.btn_toggle_dph.setCheckable(True)
+        self.btn_toggle_dph.setChecked(True)
+        self.btn_toggle_dph.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_toggle_dph.setToolTip("Ligar/desligar exibição do DPH")
+        self.btn_toggle_dph.setStyleSheet(_estilo_pill("#10b981", "#dcfce7", "#15803d"))
+        self.btn_toggle_dph.clicked.connect(self._atualizar_grafico)
+        ctrl_lay.addWidget(self.btn_toggle_dph)
+
+        self.btn_toggle_dif = QPushButton("●  Diferença")
+        self.btn_toggle_dif.setCheckable(True)
+        self.btn_toggle_dif.setChecked(True)
+        self.btn_toggle_dif.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_toggle_dif.setToolTip("Ligar/desligar exibição da Diferença (zCentral - DPH)")
+        self.btn_toggle_dif.setStyleSheet(_estilo_pill("#f97316", "#ffedd5", "#c2410c"))
+        self.btn_toggle_dif.clicked.connect(self._atualizar_grafico)
+        ctrl_lay.addWidget(self.btn_toggle_dif)
+
+        ctrl_lay.addWidget(_separador())
+
+        self.chk_valores = QCheckBox("Rótulos")
+        self.chk_valores.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.chk_valores.setToolTip("Exibir os valores monetários sobre os pontos do gráfico")
+        self.chk_valores.setStyleSheet("""
+            QCheckBox {
+                font-size: 11px;
+                font-weight: 600;
+                color: #475569;
+                spacing: 5px;
+            }
+        """)
+        self.chk_valores.toggled.connect(self._atualizar_grafico)
+        ctrl_lay.addWidget(self.chk_valores)
+
+        ctrl_lay.addStretch()
+
+        btn_recarregar_grafico = QPushButton()
+        btn_recarregar_grafico.setIcon(qtawesome.icon('fa6s.rotate', color='#6366f1'))
+        btn_recarregar_grafico.setIconSize(QSize(12, 12))
+        btn_recarregar_grafico.setFixedSize(28, 28)
+        btn_recarregar_grafico.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_recarregar_grafico.setToolTip("Recarregar dados do gráfico")
+        btn_recarregar_grafico.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                border: 1px solid #dce3ee;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #eef2ff;
+                border-color: #c7d2fe;
+            }
+        """)
+        btn_recarregar_grafico.clicked.connect(self._atualizar_grafico)
+        ctrl_lay.addWidget(btn_recarregar_grafico)
+
+        self.chart_card_layout.addWidget(self.controls_widget)
+
+        # ── Canvas Matplotlib ──
         self.figure = Figure(figsize=(8, 3.2), facecolor="none")
-        self.figure.subplots_adjust(left=0.06, right=0.98, top=0.92, bottom=0.18)
-        self.canvas = FigureCanvas(self.figure)
+        self.figure.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.18)
+        self.canvas = ChartCanvas(self.figure)
+        self.canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.canvas.mpl_connect("motion_notify_event", self._on_canvas_hover)
+        self.canvas.mpl_connect("axes_leave_event", self._on_canvas_leave)
         self.chart_card_layout.addWidget(self.canvas)
 
         self.layout.addWidget(self.chart_card)
@@ -731,94 +987,391 @@ class FreshStartPage(QWidget):
         except OSError:
             pass
 
+    # ── Métodos de Formatação e Tooltips do Gráfico ──
+    def _formatar_moeda(self, valor):
+        return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def _formatar_moeda_eixo(self, val, pos):
+        if abs(val) >= 1_000_000:
+            return f"R$ {val / 1_000_000:.1f}M".replace(".", ",")
+        elif abs(val) >= 1_000:
+            return f"R$ {val / 1_000:.0f}k"
+        elif abs(val) == 0:
+            return "R$ 0"
+        else:
+            return f"R$ {val:.0f}"
+
+    def _formatar_moeda_ponto(self, val):
+        if abs(val) >= 1_000_000:
+            return f"{val / 1_000_000:.2f}M".replace(".", ",")
+        elif abs(val) >= 1_000:
+            return f"{val / 1_000:.0f}k"
+        else:
+            return f"{val:.0f}"
+
+    def _on_canvas_leave(self, event):
+        if hasattr(self, "_annot") and self._annot and self._annot.get_visible():
+            self._annot.set_visible(False)
+            self.canvas.draw_idle()
+
+    def _on_canvas_hover(self, event):
+        if not hasattr(self, "_annot") or not self._annot or not hasattr(self, "_dados_grafico_atual"):
+            return
+        if not hasattr(self, "_ax") or event.inaxes != self._ax or not self._dados_grafico_atual:
+            if self._annot.get_visible():
+                self._annot.set_visible(False)
+                self.canvas.draw_idle()
+            return
+
+        x = event.xdata
+        if x is None:
+            return
+
+        idx = int(round(x))
+        if 0 <= idx < len(self._dados_grafico_atual):
+            data_str, zc, dp, df = self._dados_grafico_atual[idx]
+
+            linhas = [f"📅 {data_str}"]
+            y_pts = []
+            if self.btn_toggle_zcentral.isChecked():
+                linhas.append(f"● zCentral: {self._formatar_moeda(zc)}")
+                y_pts.append(zc)
+            if self.btn_toggle_dph.isChecked():
+                linhas.append(f"● DPH: {self._formatar_moeda(dp)}")
+                y_pts.append(dp)
+            if self.btn_toggle_dif.isChecked():
+                linhas.append(f"● Diferença: {self._formatar_moeda(df)}")
+                y_pts.append(df)
+
+            texto = "\n".join(linhas)
+            y_pos = max(y_pts) if y_pts else (event.ydata if event.ydata is not None else 0)
+
+            self._annot.xy = (idx, y_pos)
+            self._annot.set_text(texto)
+            self._annot.set_visible(True)
+            self.canvas.draw_idle()
+        else:
+            if self._annot.get_visible():
+                self._annot.set_visible(False)
+                self.canvas.draw_idle()
+
     # ── Gráfico ──
     def _atualizar_grafico(self):
-        self.figure.clear()
-        ax = self.figure.add_subplot(111)
-        ax.set_facecolor("none")
-        for spine in ax.spines.values():
-            spine.set_visible(False)
-        ax.tick_params(colors="#94a3b8", length=0)
-        ax.grid(axis="y", color="#e2e8f0", linewidth=0.8, alpha=0.6)
+        if not hasattr(self, "canvas") or not hasattr(self, "combo_periodo"):
+            return
 
+        self.figure.clear()
         registros = _carregar_historico()
+
         if not registros:
-            ax.tick_params(bottom=False, labelbottom=False)
+            ax = self.figure.add_subplot(111)
+            self._ax = ax
+            ax.set_facecolor("none")
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+            ax.tick_params(colors="#94a3b8", length=0, bottom=False, labelbottom=False, left=False, labelleft=False)
             ax.text(
-                0.5, 0.5, "Sem dados no histórico ainda",
+                0.5, 0.5, "Nenhum histórico registrado ainda em DadosFreshStart.json",
                 transform=ax.transAxes,
                 ha="center", va="center",
-                fontsize=12, color="#94a3b8",
+                fontsize=11, color="#94a3b8", fontweight="600"
             )
+            self.lbl_kpi_zcentral.setText("R$ 0,00")
+            self.lbl_kpi_dph.setText("R$ 0,00")
+            self.lbl_kpi_dif.setText("R$ 0,00")
+            self.lbl_kpi_data.setText("Sem registros")
+            self._dados_grafico_atual = []
             self.canvas.draw()
             return
 
-        datas = [r[0] for r in registros]
-        series = [
-            ([r[1] for r in registros], "zCentral", "#6366f1"),
-            ([r[2] for r in registros], "DPH", "#22c55e"),
-            ([r[3] for r in registros], "zCentral - DPH", "#f97316"),
-        ]
-        xs = list(range(len(registros)))
+        def _parse_data_str(d_str):
+            try:
+                return datetime.strptime(d_str, "%d/%m/%Y")
+            except Exception:
+                return datetime.min
 
-        for valores, nome, cor in series:
-            ax.plot(
-                xs, valores,
-                label=nome, color=cor, linewidth=2.5, zorder=3,
-                marker="o", markersize=5,
-                markerfacecolor="#ffffff", markeredgecolor=cor, markeredgewidth=2,
+        registros.sort(key=lambda r: _parse_data_str(r[0]))
+
+        # Atualiza os cartões KPI com o registro mais recente
+        ultimo = registros[-1]
+        self.lbl_kpi_zcentral.setText(self._formatar_moeda(ultimo[1]))
+        self.lbl_kpi_dph.setText(self._formatar_moeda(ultimo[2]))
+        self.lbl_kpi_dif.setText(self._formatar_moeda(ultimo[3]))
+        self.lbl_kpi_data.setText(f"{ultimo[0]} ({len(registros)} reg.)")
+
+        # Filtra pelo período selecionado
+        periodo = self.combo_periodo.currentText()
+        if "7" in periodo:
+            regs = registros[-7:]
+        elif "15" in periodo:
+            regs = registros[-15:]
+        elif "30" in periodo:
+            regs = registros[-30:]
+        elif "90" in periodo:
+            regs = registros[-90:]
+        else:
+            regs = list(registros)
+
+        if not regs:
+            regs = list(registros)
+
+        # Filtra séries ativas
+        mostrar_zc = self.btn_toggle_zcentral.isChecked()
+        mostrar_dp = self.btn_toggle_dph.isChecked()
+        mostrar_df = self.btn_toggle_dif.isChecked()
+
+        series_ativas = []
+        if mostrar_zc:
+            series_ativas.append(([r[1] for r in regs], "zCentral", "#6366f1"))
+        if mostrar_dp:
+            series_ativas.append(([r[2] for r in regs], "DPH", "#10b981"))
+        if mostrar_df:
+            series_ativas.append(([r[3] for r in regs], "zCentral - DPH", "#f97316"))
+
+        self.figure.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.18)
+        ax = self.figure.add_subplot(111)
+        self._ax = ax
+        ax.set_facecolor("none")
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        ax.tick_params(colors="#64748b", length=0, labelsize=9)
+        ax.grid(axis="y", color="#e2e8f0", linewidth=0.8, linestyle="--", alpha=0.7)
+
+        if not series_ativas:
+            ax.tick_params(bottom=False, labelbottom=False, left=False, labelleft=False)
+            ax.text(
+                0.5, 0.5, "Nenhuma série selecionada. Ative ao menos uma série nos botões acima.",
+                transform=ax.transAxes,
+                ha="center", va="center",
+                fontsize=11, color="#64748b", fontweight="600"
             )
-            ax.fill_between(xs, valores, color=cor, alpha=0.08, zorder=2)
+            self._dados_grafico_atual = []
+            self.canvas.draw()
+            return
 
-        ax.set_xticks(xs)
-        ax.set_xticklabels(datas, rotation=30, ha="right", fontsize=8, color="#94a3b8")
+        datas = [r[0] for r in regs]
+        n_pts = len(datas)
+        xs = list(range(n_pts))
+
+        tipo_grafico = self.combo_tipo.currentText()
+        mostrar_rotulos = self.chk_valores.isChecked()
+
+        if "Barra" in tipo_grafico:
+            n_series = len(series_ativas)
+            largura_total = 0.75
+            largura_barra = largura_total / n_series
+
+            for i, (valores, nome, cor) in enumerate(series_ativas):
+                x_pos = [x - (largura_total / 2) + (i + 0.5) * largura_barra for x in xs]
+                rects = ax.bar(x_pos, valores, width=largura_barra, label=nome, color=cor, alpha=0.88, zorder=3)
+                if mostrar_rotulos:
+                    for rect, val in zip(rects, valores):
+                        y_val = rect.get_height()
+                        ax.annotate(
+                            self._formatar_moeda_ponto(val),
+                            xy=(rect.get_x() + rect.get_width() / 2, y_val),
+                            xytext=(0, 3),
+                            textcoords="offset points",
+                            ha="center", va="bottom",
+                            fontsize=7, fontweight="700", color=cor
+                        )
+        else:
+            com_area = "Área" in tipo_grafico
+            for valores, nome, cor in series_ativas:
+                ax.plot(
+                    xs, valores,
+                    label=nome, color=cor, linewidth=2.5, zorder=4,
+                    marker="o", markersize=5 if n_pts <= 25 else 3,
+                    markerfacecolor="#ffffff", markeredgecolor=cor, markeredgewidth=2,
+                )
+                if com_area:
+                    ax.fill_between(xs, valores, color=cor, alpha=0.06, zorder=2)
+
+                if mostrar_rotulos:
+                    passo_rot = 1 if n_pts <= 15 else (2 if n_pts <= 30 else max(1, n_pts // 10))
+                    for idx_pt in range(0, n_pts, passo_rot):
+                        val_pt = valores[idx_pt]
+                        ax.annotate(
+                            self._formatar_moeda_ponto(val_pt),
+                            xy=(xs[idx_pt], val_pt),
+                            xytext=(0, 6),
+                            textcoords="offset points",
+                            ha="center", va="bottom",
+                            fontsize=7.5, fontweight="600", color=cor,
+                            bbox=dict(boxstyle="round,pad=0.2", fc="#ffffff", ec=cor, lw=0.8, alpha=0.85)
+                        )
+                    if (n_pts - 1) % passo_rot != 0 and n_pts > 0:
+                        val_ult = valores[-1]
+                        ax.annotate(
+                            self._formatar_moeda_ponto(val_ult),
+                            xy=(xs[-1], val_ult),
+                            xytext=(0, 6),
+                            textcoords="offset points",
+                            ha="center", va="bottom",
+                            fontsize=7.5, fontweight="700", color=cor,
+                            bbox=dict(boxstyle="round,pad=0.2", fc="#ffffff", ec=cor, lw=1.0, alpha=0.9)
+                        )
+
+        # Configuração do Eixo X
+        ax.set_xlim(-0.6, n_pts - 0.4)
+        if n_pts <= 12:
+            indices_ticks = xs
+            rotulos_ticks = [datas[i][:5] if "/" in datas[i] else datas[i] for i in xs]
+        elif n_pts <= 25:
+            indices_ticks = xs[::2]
+            if xs[-1] not in indices_ticks:
+                indices_ticks.append(xs[-1])
+            rotulos_ticks = [datas[i][:5] if "/" in datas[i] else datas[i] for i in indices_ticks]
+        else:
+            step = max(2, n_pts // 10)
+            indices_ticks = xs[::step]
+            if xs[-1] not in indices_ticks:
+                indices_ticks.append(xs[-1])
+            rotulos_ticks = [datas[i][:5] if "/" in datas[i] else datas[i] for i in indices_ticks]
+
+        ax.set_xticks(indices_ticks)
+        ax.set_xticklabels(rotulos_ticks, rotation=0, ha="center", fontsize=8.5, color="#64748b", fontweight="500")
+
+        # Configuração do Eixo Y
+        ax.yaxis.set_major_formatter(FuncFormatter(self._formatar_moeda_eixo))
+        y_min, y_max = ax.get_ylim()
+        margem = (y_max - y_min) * 0.12 if y_max > y_min else 1.0
+        ax.set_ylim(max(0, y_min - margem * 0.2), y_max + margem)
+
         ax.legend(
-            loc="upper left", frameon=False, fontsize=9,
-            labelcolor="#334155",
+            loc="upper left", frameon=True, facecolor="#ffffff", edgecolor="#e2e8f0",
+            framealpha=0.92, fontsize=8.5, labelcolor="#334155"
         )
+
+        self._dados_grafico_atual = [(r[0], r[1], r[2], r[3]) for r in regs]
+        self._xs_grafico_atual = xs
+
+        self._annot = ax.annotate(
+            "",
+            xy=(0, 0),
+            xytext=(12, 12),
+            textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.5", fc="#1e1b4b", ec="#4338ca", lw=1.2, alpha=0.94),
+            color="#ffffff",
+            fontsize=8.5,
+            fontweight="600"
+        )
+        self._annot.set_visible(False)
+
         self.canvas.draw()
+
+    def _recolher_ou_expandir_grafico(self):
+        if self._estado_grafico == 0:
+            self._estado_grafico = 1
+        else:
+            self._estado_grafico = 0
+        self._aplicar_estado_grafico()
+
+    def _maximizar_ou_restaurar_grafico(self):
+        if self._estado_grafico == 2:
+            self._estado_grafico = 1
+        else:
+            self._estado_grafico = 2
+        self._aplicar_estado_grafico()
 
     def _alternar_grafico(self):
         self._estado_grafico = (self._estado_grafico + 1) % 3
         self._aplicar_estado_grafico()
 
     def _aplicar_estado_grafico(self):
+        win = self.window()
+        tam_antigo = win.size() if (win and hasattr(win, "size") and not win.isMaximized()) else None
+
         maximizado = self._estado_grafico == 2
-        for i in range(self.filter_row.count()):
-            item = self.filter_row.itemAt(i)
-            if item.widget():
-                item.widget().setVisible(not maximizado)
-        self.tabela.setVisible(not maximizado)
+        self.table_card.setVisible(not maximizado)
+
         if self._estado_grafico == 0:
+            # Gráfico totalmente recolhido: exibe os cards KPI na parte inferior da tela
+            self.kpi_widget.setVisible(True)
+            self.controls_widget.setVisible(False)
             self.canvas.setVisible(False)
-            self.chart_card.setFixedHeight(40)
-            self.chart_card_layout.setContentsMargins(10, 4, 10, 4)
-            self.chart_card_layout.setSpacing(0)
+            self.canvas.setMinimumHeight(0)
+            self.canvas.setMaximumHeight(0)
+            self.chart_card.setMinimumHeight(0)
+            self.chart_card.setMaximumHeight(16777215)
+            self.chart_card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+            self.chart_card_layout.setContentsMargins(18, 10, 18, 10)
+            self.chart_card_layout.setSpacing(8)
+            self.layout.setStretch(1, 1)
             self.layout.setStretch(2, 0)
-            self.botao_grafico.setIcon(qtawesome.icon('fa6s.window-minimize', color='#94a3b8'))
-            self.botao_grafico.setToolTip("Expandir para meia tela")
-        elif self._estado_grafico == 1:
-            self.canvas.setVisible(True)
-            self.chart_card.setMinimumHeight(0)
-            self.chart_card.setMaximumHeight(16777215)
-            self.chart_card_layout.setContentsMargins(18, 14, 18, 14)
-            self.chart_card_layout.setSpacing(10)
-            self.canvas.setMinimumHeight(260)
-            self.canvas.setMaximumHeight(16777215)
-            self.layout.setStretch(2, 1)
-            self.botao_grafico.setIcon(qtawesome.icon('fa6s.window-restore', color='#6366f1'))
+            if hasattr(self, "botao_recolher"):
+                self.botao_recolher.setIcon(qtawesome.icon('fa6s.chevron-up', color='#6366f1'))
+                self.botao_recolher.setToolTip("Expandir gráfico")
+            self.botao_grafico.setIcon(qtawesome.icon('fa6s.up-right-and-down-left-from-center', color='#6366f1'))
             self.botao_grafico.setToolTip("Maximizar gráfico")
-        else:
+        elif self._estado_grafico == 1:
+            # Estado normal: tabela em cima, gráfico com controles e cards embaixo
+            self.kpi_widget.setVisible(True)
+            self.controls_widget.setVisible(True)
             self.canvas.setVisible(True)
             self.chart_card.setMinimumHeight(0)
             self.chart_card.setMaximumHeight(16777215)
+            self.chart_card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+            self.chart_card_layout.setContentsMargins(18, 12, 18, 12)
+            self.chart_card_layout.setSpacing(8)
+            self.canvas.setMinimumHeight(140)
+            self.canvas.setMaximumHeight(16777215)
+            self.layout.setStretch(1, 1)
+            self.layout.setStretch(2, 1)
+            if hasattr(self, "botao_recolher"):
+                self.botao_recolher.setIcon(qtawesome.icon('fa6s.chevron-down', color='#6366f1'))
+                self.botao_recolher.setToolTip("Recolher gráfico")
+            self.botao_grafico.setIcon(qtawesome.icon('fa6s.up-right-and-down-left-from-center', color='#6366f1'))
+            self.botao_grafico.setToolTip("Maximizar gráfico")
+            self.canvas.draw_idle()
+        else:
+            # Maximizado: gráfico ocupa toda a tela, tabela oculta
+            self.kpi_widget.setVisible(True)
+            self.controls_widget.setVisible(True)
+            self.canvas.setVisible(True)
+            self.chart_card.setMinimumHeight(0)
+            self.chart_card.setMaximumHeight(16777215)
+            self.chart_card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
             self.chart_card_layout.setContentsMargins(18, 14, 18, 14)
             self.chart_card_layout.setSpacing(10)
-            self.canvas.setMinimumHeight(260)
+            self.canvas.setMinimumHeight(200)
             self.canvas.setMaximumHeight(16777215)
-            self.layout.setStretch(2, 8)
-            self.botao_grafico.setIcon(qtawesome.icon('fa6s.window-maximize', color='#6366f1'))
-            self.botao_grafico.setToolTip("Minimizar gráfico")
+            self.layout.setStretch(1, 0)
+            self.layout.setStretch(2, 1)
+            if hasattr(self, "botao_recolher"):
+                self.botao_recolher.setIcon(qtawesome.icon('fa6s.chevron-down', color='#6366f1'))
+                self.botao_recolher.setToolTip("Recolher gráfico")
+            self.botao_grafico.setIcon(qtawesome.icon('fa6s.down-left-and-up-right-to-center', color='#6366f1'))
+            self.botao_grafico.setToolTip("Restaurar tamanho normal")
+            self.canvas.draw_idle()
+
+        self.chart_card.updateGeometry()
+
+        # Garante que a janela principal nunca se expanda além dos limites da tela ou do tamanho original
+        if win and hasattr(win, "resize") and not win.isMaximized():
+            from PySide6.QtGui import QGuiApplication
+            tela = win.screen() or QGuiApplication.primaryScreen()
+            if tela:
+                geo = tela.availableGeometry()
+                largura_ref = tam_antigo.width() if tam_antigo else win.width()
+                altura_ref = tam_antigo.height() if tam_antigo else win.height()
+                largura = max(800, min(largura_ref, geo.width()))
+                altura = max(500, min(altura_ref, geo.height()))
+                win.resize(largura, altura)
+
+                pos = win.pos()
+                novo_x = pos.x()
+                novo_y = pos.y()
+                if novo_x + largura > geo.right():
+                    novo_x = max(geo.left(), geo.right() - largura)
+                if novo_y + altura > geo.bottom():
+                    novo_y = max(geo.top(), geo.bottom() - altura)
+                if novo_x < geo.left():
+                    novo_x = geo.left()
+                if novo_y < geo.top():
+                    novo_y = geo.top()
+                if novo_x != pos.x() or novo_y != pos.y():
+                    win.move(novo_x, novo_y)
 
     # ── Custo zCentral ──
     def _ler_custos_unitarios(self):
@@ -851,7 +1404,10 @@ class FreshStartPage(QWidget):
             custo = custos.get(kardex.upper(), 0.0)
             qtde = _parse_numero(str(item.get("qtde_qad", "")))
             total += custo * qtde
-        self.label_total_zcentral.setText(f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        texto = f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        self.label_total_zcentral.setText(texto)
+        if hasattr(self, "lbl_kpi_zcentral"):
+            self.lbl_kpi_zcentral.setText(texto)
 
     def _calcular_total_dph(self):
         total = 0.0
@@ -871,14 +1427,20 @@ class FreshStartPage(QWidget):
                         total += custo * qtde
             except (FileNotFoundError, json.JSONDecodeError):
                 pass
-        self.label_total_dph.setText(f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        texto = f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        self.label_total_dph.setText(texto)
+        if hasattr(self, "lbl_kpi_dph"):
+            self.lbl_kpi_dph.setText(texto)
         self._atualizar_total_central_dph()
 
     def _atualizar_total_central_dph(self):
         zcentral = _parse_numero(self.label_total_zcentral.text().replace("R$", "").strip())
         dph = _parse_numero(self.label_total_dph.text().replace("R$", "").strip())
         valor = zcentral - dph
-        self.label_total_dph_dif.setText(f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        texto = f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        self.label_total_dph_dif.setText(texto)
+        if hasattr(self, "lbl_kpi_dif"):
+            self.lbl_kpi_dif.setText(texto)
 
     # ── Tabela ──
     def _popular_tabela(self):

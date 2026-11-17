@@ -232,10 +232,10 @@ class AnaliseEstoquePage(QWidget):
         super().__init__()
         self.dados = []
         self._texto_filtro_cache = []
-        self.modo_pendentes = False
+        self.modo_pendentes = True
         self.modo_agrupado = False
         self._ordem_saldo_asc = True
-        self._filtro_apenas_pendentes = False
+        self._filtro_apenas_pendentes = True
         self._linhas_filtradas_atuais = []
         self._mapa_itens_almox = None
         self._mapa_pedidos_prog = None
@@ -616,7 +616,7 @@ class AnaliseEstoquePage(QWidget):
             }
         """)
         self.btn_agrupar.clicked.connect(self._toggle_agrupamento)
-        self.btn_agrupar.setVisible(False)
+        self.btn_agrupar.setVisible(True)
 
         self.btn_indicador_custo = QPushButton("Total Pendente: R$ 0,00")
         self.btn_indicador_custo.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -719,6 +719,8 @@ class AnaliseEstoquePage(QWidget):
         self.btn_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_toggle.setFixedSize(141, ALTURA_BTN_TOGGLE)
         self.btn_toggle.setCheckable(True)
+        self.btn_toggle.setChecked(True)
+        self.btn_toggle.setToolTip("Clique para voltar a SAs Pendentes (18 colunas)")
         self.btn_toggle.clicked.connect(self._toggle_filtro_pendentes)
         self.btn_toggle.setStyleSheet("""
             QPushButton {
@@ -1166,7 +1168,7 @@ class AnaliseEstoquePage(QWidget):
                     if col == 0:
                         cell.setData(Qt.ItemDataRole.UserRole, item)
 
-                    # Alinhamento e estilizações no modo SAs Pendentes
+                    # Alinhamento e estilizações no modo Relatório (9 colunas)
                     if chave in ("SA", "Requisição", "Kardex", "Qtde estoque", "Qte programado"):
                         cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                         if chave == "Qtde estoque":
@@ -1242,13 +1244,13 @@ class AnaliseEstoquePage(QWidget):
         self.modo_pendentes = not self.modo_pendentes
         self._filtro_apenas_pendentes = self.modo_pendentes
         self.btn_toggle.setChecked(self.modo_pendentes)
-        self.btn_toggle.setText("▣  Relatório" if self.modo_pendentes else "⚡  SAs Pendentes")
+        self.btn_toggle.setText("⚡  SAs Pendentes" if self.modo_pendentes else "▣  Relatório")
         self.btn_toggle.setToolTip(
-            "Clique para voltar ao Relatório (18 colunas)"
+            "Clique para voltar a SAs Pendentes (18 colunas)"
             if self.modo_pendentes
-            else "Alternar para tabela de SAs Pendentes (9 colunas)"
+            else "Alternar para Relatório (9 colunas com Saldo)"
         )
-        # O botão agrupar/desagrupar aparece apenas na tabela de SAs Pendentes
+        # O botão agrupar/desagrupar aparece apenas na tabela de Relatório (9 colunas)
         self.btn_agrupar.setVisible(self.modo_pendentes)
         if not self.modo_pendentes:
             self.modo_agrupado = False
@@ -1285,7 +1287,7 @@ class AnaliseEstoquePage(QWidget):
                 qtd = item.get("_qtd_itens_agrupados")
                 self._labels_valores["SA"].setText(f"({qtd} SAs agrupadas)")
 
-        # No modo SAs pendentes, garante que o quadro superior exiba os valores oficiais de estoque do próprio sistema
+        # No modo Relatório (9 colunas), garante que o quadro superior exiba os valores oficiais de estoque do próprio sistema
         if self.modo_pendentes and self._mapa_itens_almox:
             mapa_k_almox, mapa_c_almox = self._mapa_itens_almox
             kardex = str(item.get("Kardex", "") or "").strip()
@@ -1325,14 +1327,14 @@ class AnaliseEstoquePage(QWidget):
             self._filtro_timer.stop()
         except Exception:
             pass
-        self.modo_pendentes = False
+        self.modo_pendentes = True
         self.modo_agrupado = False
         self._ordem_saldo_asc = True
-        self._filtro_apenas_pendentes = False
-        self.btn_toggle.setChecked(False)
+        self._filtro_apenas_pendentes = True
+        self.btn_toggle.setChecked(True)
         self.btn_toggle.setText("⚡  SAs Pendentes")
-        self.btn_toggle.setToolTip("Alternar para tabela de SAs Pendentes (9 colunas)")
-        self.btn_agrupar.setVisible(False)
+        self.btn_toggle.setToolTip("Clique para voltar a SAs Pendentes (18 colunas)")
+        self.btn_agrupar.setVisible(True)
         self.btn_agrupar.setChecked(False)
         self.btn_agrupar.setText(" Agrupar por item")
         self.btn_agrupar.setIcon(qta.icon("fa6s.layer-group", color="#4338ca"))
@@ -1574,7 +1576,7 @@ class AnaliseEstoquePage(QWidget):
             QMessageBox.warning(self, "Aviso", "Não existem dados para exportar.")
             return
 
-        sufixo = "_sas_pendentes" if self.modo_pendentes else "_relatorio"
+        sufixo = "_relatorio" if self.modo_pendentes else "_sas_pendentes"
         arquivo, _ = QFileDialog.getSaveFileName(
             self,
             "Salvar Análise de Estoque",

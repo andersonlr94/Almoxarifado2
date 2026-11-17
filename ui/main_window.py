@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QPushButton, QStackedWidget, QLabel, QSizePolicy, QSpacerItem, QScrollArea, QMessageBox, QFrame
 )
 from PySide6.QtCore import Qt, QSize, QRect, QPropertyAnimation, QEasingCurve
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QGuiApplication
 from ui.styles import FUSION_QSS
 from ui.pages.inicio_page import InicioPage
 from ui.pages.programacao_agulhas_page import ProgramacaoAgulhasPage
@@ -86,7 +86,12 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._logout_requested = False
         self.setWindowTitle("Almoxarifado")
-        self.resize(1280, 800)
+        tela = QGuiApplication.primaryScreen()
+        if tela:
+            geo = tela.availableGeometry()
+            self.resize(min(1280, geo.width()), min(800, geo.height()))
+        else:
+            self.resize(1280, 800)
         self.setStyleSheet(FUSION_QSS)
         self._collapsed = False
 

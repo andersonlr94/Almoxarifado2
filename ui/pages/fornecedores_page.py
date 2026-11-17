@@ -64,8 +64,8 @@ def _caminho_json():
 
 
 class FornecedoresPage(QWidget):
-    COLUNAS = ["Índice", "Fornecedor", "Email", "Telefone", "DUNS"]
-    CHAVES = ["indice", "fornecedor", "email", "telefone", "duns"]
+    COLUNAS = ["Índice", "Fornecedor", "Email", "Telefone", "DUNS", "Observação"]
+    CHAVES = ["indice", "fornecedor", "email", "telefone", "duns", "observacao"]
 
     def __init__(self):
         super().__init__()
@@ -134,7 +134,7 @@ class FornecedoresPage(QWidget):
         linha_top.addStretch()
 
         self.campo_busca = QLineEdit()
-        self.campo_busca.setPlaceholderText("Pesquisar por nome, email, telefone ou DUNS...")
+        self.campo_busca.setPlaceholderText("Pesquisar por nome, email, telefone, DUNS ou observação...")
         self.campo_busca.setFixedHeight(34)
         self.campo_busca.setFixedWidth(260)
         self.campo_busca.setStyleSheet("padding: 2px 8px;")
@@ -193,13 +193,15 @@ class FornecedoresPage(QWidget):
         header.setStretchLastSection(True)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(0, 70)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(2, 240)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        header.resizeSection(1, 260)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+        header.resizeSection(2, 220)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
         header.resizeSection(3, 140)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
         header.resizeSection(4, 110)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
 
         self.tabela.setColumnHidden(0, True)
 
@@ -283,7 +285,7 @@ class FornecedoresPage(QWidget):
                         cell.setFlags(cell.flags() | Qt.ItemFlag.ItemIsEditable)
                     else:
                         cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                    if chave == "fornecedor":
+                    if chave in ("fornecedor", "observacao"):
                         cell.setToolTip(valor)
                     elif chave == "email" and valor and not EMAIL_RE.match(valor):
                         cell.setData(Qt.BackgroundRole, QBrush(QColor("#fef2f2")))
@@ -583,6 +585,8 @@ class FornecedoresPage(QWidget):
                     valor = valor.strip().lower()
                 elif ch == "duns":
                     valor = valor.strip()
+                elif ch == "observacao":
+                    valor = valor.strip()
                 novo_item[ch] = valor
 
             # validações
@@ -677,8 +681,8 @@ class FornecedoresPage(QWidget):
             self._popular_tabela()
         else:
             self._salvar_json()
-            # atualiza tooltip / background se email inválido
-            if chave == "email":
+            # atualiza tooltip / background se email ou observação alterados
+            if chave in ("email", "observacao"):
                 self._popular_tabela()
 
     # ── Busca / utilidades ───────────────────────────────────────────────
